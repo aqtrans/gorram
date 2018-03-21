@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+
+package gorram;
+
+service Reporter {
+    rpc Ping(PingMessage) returns (PingMessage) {}
+    rpc RecordIssue(stream Issue) returns (Submitted) {}
+}
+
+message PingMessage {
+    bool alive = 1;
+}
+
+message Submitted {
+    bool submitted = 1;
+}
+
+message Issue {
+    // Name of the client submitting the issue
+    string client = 1;
+    // Message itself
+    string message = 2;
+    // When issue was sent
+    google.protobuf.Timestamp time = 3;
+}
