@@ -52,6 +52,7 @@ func main() {
 	// Add client name metadata
 	ctx = metadata.AppendToOutgoingContext(ctx, "client", "client1")
 
+	// Ping and collect issues every 5 seconds
 	ticker := time.NewTicker(5 * time.Second)
 	quit := make(chan struct{})
 	go func() {
