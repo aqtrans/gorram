@@ -4,11 +4,26 @@ import (
 	"context"
 	"io"
 	"log"
-	"time"
 
 	"google.golang.org/grpc"
 	"jba.io/go/gorram/gorram"
 )
+
+func reportIssues() []*gorram.Issue {
+	issue1 := &gorram.Issue{
+		ClientName: "omg",
+		Message:    "woooo",
+	}
+	issue2 := &gorram.Issue{
+		ClientName: "omg",
+		Message:    "woooo1",
+	}
+	issue3 := &gorram.Issue{
+		ClientName: "omg",
+		Message:    "woooo2",
+	}
+	return []*gorram.Issue{issue1, issue2, issue3}
+}
 
 func main() {
 	// Set up a connection to the server.
@@ -21,18 +36,18 @@ func main() {
 	c := gorram.NewReporterClient(conn)
 
 	// Contact the server and print out its response.
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	ping, err := c.Ping(ctx, &gorram.PingMessage{ClientName: "omg", IsAlive: true})
 	if err != nil {
-		log.Println(err)
+		log.Fatalln(err)
 	}
 	log.Println(ping.GetIsAlive())
 
 	issueStream, err := c.RecordIssue(ctx)
 	if err != nil {
-		log.Println(err)
+		log.Fatalln(err)
 	}
 
 	waitc := make(chan struct{})
@@ -45,21 +60,25 @@ func main() {
 				return
 			}
 			if err != nil {
-				log.Println(err)
+				log.Fatalln("err receiving message back from server:", err)
 			}
 			log.Println("Server sent", b)
 		}
 	}()
-	err = issueStream.Send(&gorram.Issue{
-		ClientName: "omg",
-		Message:    "woooo",
-	})
-	if err != nil {
-		log.Println(err)
+
+	i := reportIssues()
+
+	for _, issue := range i {
+		err = issueStream.Send(issue)
+		log.Println(issue.Message)
+		if err != nil {
+			log.Fatalln("omg", err)
+		}
 	}
 	err = issueStream.CloseSend()
 	if err != nil {
 		log.Println(err)
 	}
+
 	<-waitc
 }

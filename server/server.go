@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"io"
 	"log"
 	"net"
 
@@ -18,15 +19,23 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.PingMessage) (*gorr
 }
 
 func (s *gorramServer) RecordIssue(reporter gorram.Reporter_RecordIssueServer) error {
-	i, err := reporter.Recv()
-	if err != nil {
-		log.Println(err)
+	for {
+		i, err := reporter.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Println(err)
+			break
+		}
+		err = reporter.SendAndClose(&gorram.Submitted{SuccessfullySubmitted: true})
+		if err != nil {
+			log.Println(err)
+			break
+		}
+		log.Println(i.ClientName, i.Message, i.TimeSubmitted)
 	}
-	err = reporter.SendAndClose(&gorram.Submitted{SuccessfullySubmitted: true})
-	if err != nil {
-		log.Println(err)
-	}
-	log.Println(i.ClientName, i.Message, i.TimeSubmitted)
+
 	return nil
 }
 
