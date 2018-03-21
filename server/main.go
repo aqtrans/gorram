@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net"
 	"os"
@@ -48,6 +49,7 @@ func (s *statHandler) TagConn(ctx context.Context, tagInfo *stats.ConnTagInfo) c
 	log.Println("Inbound connection from", tagInfo.RemoteAddr)
 	return ctx
 }
+
 func (s *statHandler) HandleConn(ctx context.Context, connStats stats.ConnStats) {
 
 }
@@ -78,6 +80,27 @@ func (s *gorramServer) RecordIssue(ctx context.Context, issue *gorram.Issue) (*g
 	return &gorram.Submitted{SuccessfullySubmitted: true}, nil
 }
 
+func authorize(ctx context.Context) error {
+	theSecret := "omg12345"
+
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		if len(md["secret"]) > 0 && md["secret"][0] == theSecret {
+			return nil
+		}
+	}
+	err := errors.New("Access Denied")
+	log.Println(err)
+	return err
+}
+
+func unaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	if err := authorize(ctx); err != nil {
+		return nil, err
+	}
+
+	return handler(ctx, req)
+}
+
 func main() {
 	// Catch Ctrl+C, sigint
 	sigs := make(chan os.Signal, 1)
@@ -93,7 +116,7 @@ func main() {
 
 	sh := statHandler{}
 
-	server := grpc.NewServer(grpc.StatsHandler(&sh))
+	server := grpc.NewServer(grpc.StatsHandler(&sh), grpc.UnaryInterceptor(unaryInterceptor))
 
 	gs := gorramServer{}
 
