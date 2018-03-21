@@ -13,7 +13,7 @@ type gorramServer struct {
 }
 
 func (s *gorramServer) Ping(ctx context.Context, msg *gorram.PingMessage) (*gorram.PingMessage, error) {
-	log.Println(msg.GetAlive())
+	log.Println(msg.ClientName, ":", msg.IsAlive)
 	return msg, nil
 }
 
@@ -22,11 +22,11 @@ func (s *gorramServer) RecordIssue(reporter gorram.Reporter_RecordIssueServer) e
 	if err != nil {
 		log.Println(err)
 	}
-	err = reporter.SendMsg("omg")
+	err = reporter.SendAndClose(&gorram.Submitted{SuccessfullySubmitted: true})
 	if err != nil {
 		log.Println(err)
 	}
-	log.Println(i.Client, i.Message, i.Time)
+	log.Println(i.ClientName, i.Message, i.TimeSubmitted)
 	return nil
 }
 
