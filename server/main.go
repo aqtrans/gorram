@@ -11,8 +11,46 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/stats"
 	"jba.io/go/gorram/proto"
 )
+
+type statHandler struct {
+	// TagRPC can attach some information to the given context.
+	// The context used for the rest lifetime of the RPC will be derived from
+	// the returned context.
+	//TagRPC(context.Context, *stats.RPCTagInfo) context.Context
+	// HandleRPC processes the RPC stats.
+	//HandleRPC(context.Context, RPCStats)
+
+	// TagConn can attach some information to the given context.
+	// The returned context will be used for stats handling.
+	// For conn stats handling, the context used in HandleConn for this
+	// connection will be derived from the context returned.
+	// For RPC stats handling,
+	//  - On server side, the context used in HandleRPC for all RPCs on this
+	// connection will be derived from the context returned.
+	//  - On client side, the context is not derived from the context returned.
+	//TagConn(context.Context, *ConnTagInfo) context.Context
+	// HandleConn processes the Conn stats.
+	//HandleConn(context.Context, ConnStats)
+}
+
+func (s *statHandler) TagRPC(ctx context.Context, tagInfo *stats.RPCTagInfo) context.Context {
+	return ctx
+}
+
+func (s *statHandler) HandleRPC(ctx context.Context, rpcStats stats.RPCStats) {
+
+}
+
+func (s *statHandler) TagConn(ctx context.Context, tagInfo *stats.ConnTagInfo) context.Context {
+	log.Println("Inbound connection from", tagInfo.RemoteAddr)
+	return ctx
+}
+func (s *statHandler) HandleConn(ctx context.Context, connStats stats.ConnStats) {
+
+}
 
 type gorramServer struct {
 }
@@ -53,7 +91,9 @@ func main() {
 	}
 	log.Println("Listening on 127.0.0.1:50000")
 
-	server := grpc.NewServer()
+	sh := statHandler{}
+
+	server := grpc.NewServer(grpc.StatsHandler(&sh))
 
 	gs := gorramServer{}
 
