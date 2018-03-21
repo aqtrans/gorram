@@ -10,18 +10,19 @@ service Reporter {
 }
 
 message PingMessage {
-    bool alive = 1;
+    string client_name = 1;
+    bool is_alive = 2;
 }
 
 message Submitted {
-    bool submitted = 1;
+    bool successfully_submitted = 2;
 }
 
 message Issue {
     // Name of the client submitting the issue
-    string client = 1;
+    string client_name = 1;
     // Message itself
     string message = 2;
     // When issue was sent
-    google.protobuf.Timestamp time = 3;
+    google.protobuf.Timestamp time_submitted = 3;
 }
