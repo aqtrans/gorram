@@ -50,35 +50,23 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	waitc := make(chan struct{})
-	go func() {
-		for {
-			var b gorram.Submitted
-			err := issueStream.RecvMsg(&b)
-			if err == io.EOF {
-				close(waitc)
-				return
-			}
-			if err != nil {
-				log.Fatalln("err receiving message back from server:", err)
-			}
-			log.Println("Server sent", b)
-		}
-	}()
-
 	i := reportIssues()
 
 	for _, issue := range i {
 		err = issueStream.Send(issue)
 		log.Println(issue.Message)
-		if err != nil {
+		if err != nil && err != io.EOF {
 			log.Fatalln("omg", err)
 		}
+
+		s, err := issueStream.CloseAndRecv()
+		if err != nil && err != io.EOF {
+			log.Println("omg2", err)
+		}
+		log.Println(s)
 	}
 	err = issueStream.CloseSend()
 	if err != nil {
 		log.Println(err)
 	}
-
-	<-waitc
 }
