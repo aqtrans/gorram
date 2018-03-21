@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"io"
 	"log"
 	"time"
 
@@ -22,9 +23,43 @@ func main() {
 	// Contact the server and print out its response.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	ping, err := c.Ping(ctx, &gorram.PingMessage{Alive: true})
+
+	ping, err := c.Ping(ctx, &gorram.PingMessage{ClientName: "omg", IsAlive: true})
 	if err != nil {
 		log.Println(err)
 	}
-	log.Println(ping.GetAlive())
+	log.Println(ping.GetIsAlive())
+
+	issueStream, err := c.RecordIssue(ctx)
+	if err != nil {
+		log.Println(err)
+	}
+
+	waitc := make(chan struct{})
+	go func() {
+		for {
+			var b gorram.Submitted
+			err := issueStream.RecvMsg(&b)
+			if err == io.EOF {
+				close(waitc)
+				return
+			}
+			if err != nil {
+				log.Println(err)
+			}
+			log.Println("Server sent", b)
+		}
+	}()
+	err = issueStream.Send(&gorram.Issue{
+		ClientName: "omg",
+		Message:    "woooo",
+	})
+	if err != nil {
+		log.Println(err)
+	}
+	err = issueStream.CloseSend()
+	if err != nil {
+		log.Println(err)
+	}
+	<-waitc
 }
