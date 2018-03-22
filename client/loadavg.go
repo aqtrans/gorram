@@ -11,7 +11,10 @@ import (
 	gorram "jba.io/go/gorram/proto"
 )
 
-func getLoadAvg(cfg *config) *gorram.Issue {
+type loadavg struct {
+}
+
+func (loadavg) doCheck(cfg *config) *gorram.Issue {
 	loadAvgRaw, err := ioutil.ReadFile("/proc/loadavg")
 	if err != nil {
 		return nil

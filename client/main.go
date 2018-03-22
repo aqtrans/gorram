@@ -19,9 +19,13 @@ type config struct {
 	loadavg float64
 }
 
+type check interface {
+	doCheck(config) *gorram.Issue
+}
+
 func reportIssues(cfg *config) []*gorram.Issue {
 	var issues []*gorram.Issue
-	issue := getLoadAvg(cfg)
+	issue := loadavg{}.doCheck(cfg)
 	if issue != nil {
 		issues = append(issues, issue)
 	}
