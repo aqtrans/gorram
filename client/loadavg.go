@@ -3,40 +3,26 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	pb "jba.io/go/gorram/proto"
 	"log"
 	"strconv"
 	"strings"
 	"time"
-
-	gorram "jba.io/go/gorram/proto"
 )
 
 type loadavg struct {
+	maxLoad float64
 }
 
-func (loadavg) doCheck(cfg *config) *gorram.Issue {
+func (l loadavg) doCheck() *checkData {
 	loadAvgRaw, err := ioutil.ReadFile("/proc/loadavg")
 	if err != nil {
 		return nil
 	}
 	loadAvgs := strings.Fields(string(loadAvgRaw))
-	/*
-		loadAvg1, err := strconv.ParseFloat(loadAvgs[0], 64)
-		if err != nil {
-			return nil
-		}
-		loadAvg5, err := strconv.ParseFloat(loadAvgs[1], 64)
-		if err != nil {
-			return nil
-		}
-		loadAvg15, err := strconv.ParseFloat(loadAvgs[2], 64)
-		if err != nil {
-			return nil
-		}
-	*/
 
 	for k, v := range loadAvgs {
-		if k > 3 {
+		if k > 2 {
 			break
 		}
 		loadAvg, err := strconv.ParseFloat(v, 64)
@@ -44,13 +30,20 @@ func (loadavg) doCheck(cfg *config) *gorram.Issue {
 			log.Println("Error parsing loadavg:", err)
 			return nil
 		}
-		if loadAvg >= cfg.loadavg {
-			log.Printf("Load average is greater than %f, %f", cfg.loadavg, loadAvg)
-			return &gorram.Issue{
-				Message:       fmt.Sprintf("Load average is greater than %f, %f", cfg.loadavg, loadAvg),
-				TimeSubmitted: time.Now().Unix(),
+		if loadAvg >= l.maxLoad {
+			log.Printf("Load average is greater than %f, %f", l.maxLoad, loadAvg)
+
+			return &checkData{
+				issue: &pb.Issue{
+					Message:       fmt.Sprintf("Load average is greater than %f, %f", l.maxLoad, loadAvg),
+					TimeSubmitted: time.Now().Unix(),
+				},
+				ok: false,
 			}
 		}
 	}
-	return nil
+	return &checkData{
+		issue: nil,
+		ok:    true,
+	}
 }
