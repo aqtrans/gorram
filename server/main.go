@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"log"
 	"net"
 	"os"
@@ -15,6 +16,10 @@ import (
 	"google.golang.org/grpc/stats"
 	"jba.io/go/gorram/proto"
 )
+
+type config struct {
+	secretKey string
+}
 
 type statHandler struct {
 	// TagRPC can attach some information to the given context.
@@ -80,11 +85,10 @@ func (s *gorramServer) RecordIssue(ctx context.Context, issue *gorram.Issue) (*g
 	return &gorram.Submitted{SuccessfullySubmitted: true}, nil
 }
 
-func authorize(ctx context.Context) error {
-	theSecret := "omg12345"
+func (cfg config) authorize(ctx context.Context) error {
 
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
-		if len(md["secret"]) > 0 && md["secret"][0] == theSecret {
+		if len(md["secret"]) > 0 && md["secret"][0] == cfg.secretKey {
 			return nil
 		}
 	}
@@ -93,8 +97,8 @@ func authorize(ctx context.Context) error {
 	return err
 }
 
-func unaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-	if err := authorize(ctx); err != nil {
+func (cfg config) unaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	if err := cfg.authorize(ctx); err != nil {
 		return nil, err
 	}
 
@@ -102,21 +106,31 @@ func unaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServ
 }
 
 func main() {
+
+	// Set config via flags
+	serverAddress := flag.String("listen-address", "127.0.0.1:50000", "Address and port to listen on.")
+	secret := flag.String("server-secret", "omg12345", "Secret key of the server.")
+	flag.Parse()
+
+	cfg := &config{
+		secretKey: *secret,
+	}
+
 	// Catch Ctrl+C, sigint
 	sigs := make(chan os.Signal, 1)
 	done := make(chan bool, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
 	// Setup the TCP port to listen on
-	lis, err := net.Listen("tcp", "127.0.0.1:50000")
+	lis, err := net.Listen("tcp", *serverAddress)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
-	log.Println("Listening on 127.0.0.1:50000")
+	log.Println("Listening on", *serverAddress)
 
 	sh := statHandler{}
 
-	server := grpc.NewServer(grpc.StatsHandler(&sh), grpc.UnaryInterceptor(unaryInterceptor))
+	server := grpc.NewServer(grpc.StatsHandler(&sh), grpc.UnaryInterceptor(cfg.unaryInterceptor))
 
 	gs := gorramServer{}
 
