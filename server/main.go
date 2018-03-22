@@ -136,6 +136,7 @@ func main() {
 		done <- true
 	}()
 
+	// When Ctrl+C is caught, do this
 	<-done
 	log.Println("Server exiting...")
 	server.GracefulStop()
