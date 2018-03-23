@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"flag"
-	"io"
 	"log"
 	"net"
 	"os"
@@ -61,31 +60,17 @@ func (s *statHandler) HandleConn(ctx context.Context, connStats stats.ConnStats)
 }
 
 type gorramServer struct {
-	connectedClients []string
 }
 
-func (s *gorramServer) Ping(stream gorram.Reporter_PingServer) error {
-	for {
-		in, err := stream.Recv()
-		if err == io.EOF {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
+func (s *gorramServer) Ping(ctx context.Context, msg *gorram.PingMessage) (*gorram.PingMessage, error) {
+	var client string
 
-		var client string
-		md, ok := metadata.FromIncomingContext(stream.Context())
-		if ok {
-			client = md["client"][0]
-		}
-
-		log.Println(client, "is", in.IsAlive)
-
-		if err := stream.Send(&gorram.PingMessage{IsAlive: true}); err != nil {
-			return err
-		}
+	md, ok := metadata.FromIncomingContext(ctx)
+	if ok {
+		client = md["client"][0]
 	}
+	log.Println(client, "is", msg.IsAlive)
+	return msg, nil
 }
 
 func (s *gorramServer) RecordIssue(ctx context.Context, issue *gorram.Issue) (*gorram.Submitted, error) {

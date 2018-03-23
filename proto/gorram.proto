@@ -3,7 +3,7 @@ syntax = "proto3";
 package gorram;
 
 service Reporter {
-    rpc Ping(stream PingMessage) returns (stream PingMessage) {}
+    rpc Ping(PingMessage) returns (PingMessage) {}
     rpc RecordIssue(Issue) returns (Submitted) {}
 }
 

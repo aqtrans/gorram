@@ -90,42 +90,19 @@ func main() {
 		maxLoad: *maxload,
 	}
 
-	stream, err := c.Ping(ctx)
-	waitc := make(chan struct{})
-	go func() {
-		for {
-			in, err := stream.Recv()
-			if err == io.EOF {
-				// read done.
-				close(waitc)
-				return
-			}
-			if err != nil {
-				log.Fatalf("Failed to receive a ping : %v", err)
-			}
-			log.Println("Ping:", in.IsAlive)
-		}
-	}()
-	if err := stream.Send(&gorram.PingMessage{IsAlive: true}); err != nil {
-		log.Fatalf("Failed to send a ping: %v", err)
-	}
-	if err := stream.Send(&gorram.PingMessage{IsAlive: true}); err != nil {
-		log.Fatalf("Failed to send a ping: %v", err)
-	}
-	time.Sleep(1 * time.Second)
-	if err := stream.Send(&gorram.PingMessage{IsAlive: true}); err != nil {
-		log.Fatalf("Failed to send a ping: %v", err)
-	}
-	stream.CloseSend()
-	<-waitc
-
-	// Collect issues every X seconds
+	// Ping and collect issues every X seconds
 	ticker := time.NewTicker(*interval)
 	quit := make(chan struct{})
 	go func() {
 		for {
 			select {
 			case <-ticker.C:
+				ping, err := c.Ping(ctx, &gorram.PingMessage{IsAlive: true})
+				if err != nil {
+					log.Fatalln(err)
+				}
+				log.Println("ping is", ping.GetIsAlive())
+
 				i := doChecks(cfg)
 				for _, issue := range i {
 					submitted, err := c.RecordIssue(ctx, issue)
