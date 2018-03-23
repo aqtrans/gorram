@@ -87,7 +87,10 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.PingMessage) (*gorr
 	} else {
 		log.Println("creating new timer for 10 seconds")
 		s.pingTimers[client] = time.AfterFunc(10*time.Second, func() {
-			log.Println(client, "PINGS NOT RECEIVED IN 360 SECONDS")
+			ticker := time.NewTicker(5 * time.Second)
+			for t := range ticker.C {
+				log.Println(client, "PINGS NOT RECEIVED IN 10 SECONDS", t)
+			}
 		})
 	}
 
