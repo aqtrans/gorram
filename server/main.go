@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 	"time"
 
@@ -60,27 +61,55 @@ func (s *statHandler) HandleConn(ctx context.Context, connStats stats.ConnStats)
 }
 
 type gorramServer struct {
+	pingTimers map[string]*time.Timer
+}
+
+func getClientName(ctx context.Context) string {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if ok {
+		return md["client"][0]
+	}
+	return "no-client-name"
 }
 
 func (s *gorramServer) Ping(ctx context.Context, msg *gorram.PingMessage) (*gorram.PingMessage, error) {
-	var client string
-
-	md, ok := metadata.FromIncomingContext(ctx)
-	if ok {
-		client = md["client"][0]
+	client := getClientName(ctx)
+	// This might be redundant since this should always be true
+	if msg.IsAlive {
+		log.Println(client, "is alive!")
 	}
-	log.Println(client, "is", msg.IsAlive)
+
+	// Setup a ping timer
+	clientTimer, ok := s.pingTimers[client]
+	if ok {
+		log.Println("timer found, adding 10 seconds.")
+		clientTimer.Reset(10 * time.Second)
+	} else {
+		log.Println("creating new timer for 10 seconds")
+		s.pingTimers[client] = time.AfterFunc(10*time.Second, func() {
+			log.Println(client, "PINGS NOT RECEIVED IN 360 SECONDS")
+		})
+	}
+
+	log.Println(runtime.NumGoroutine())
+
 	return msg, nil
 }
 
-func (s *gorramServer) RecordIssue(ctx context.Context, issue *gorram.Issue) (*gorram.Submitted, error) {
-	var client string
-
-	md, ok := metadata.FromIncomingContext(ctx)
-	if ok {
-		client = md["client"][0]
+func pingWait(client string, timer *time.Timer, reset chan bool) {
+	pingRecvd := <-reset
+	// If a ping was received, reset the timer
+	if pingRecvd {
+		stop := timer.Reset(time.Second * 10)
+		if !stop {
+			log.Println("Error stopping pingTimer")
+		}
 	}
-	log.Println(client, "sent", issue.Message, time.Unix(issue.TimeSubmitted, 0))
+	<-timer.C
+}
+
+func (s *gorramServer) RecordIssue(ctx context.Context, issue *gorram.Issue) (*gorram.Submitted, error) {
+	log.Println(getClientName(ctx), "sent", issue.Message, time.Unix(issue.TimeSubmitted, 0))
 
 	return &gorram.Submitted{SuccessfullySubmitted: true}, nil
 }
@@ -132,7 +161,9 @@ func main() {
 
 	server := grpc.NewServer(grpc.StatsHandler(&sh), grpc.UnaryInterceptor(cfg.unaryInterceptor))
 
-	gs := gorramServer{}
+	gs := gorramServer{
+		pingTimers: make(map[string]*time.Timer),
+	}
 
 	gorram.RegisterReporterServer(server, &gs)
 
