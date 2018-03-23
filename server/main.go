@@ -52,7 +52,7 @@ func (s *statHandler) HandleRPC(ctx context.Context, rpcStats stats.RPCStats) {
 }
 
 func (s *statHandler) TagConn(ctx context.Context, tagInfo *stats.ConnTagInfo) context.Context {
-	log.Println("Inbound connection from", tagInfo.RemoteAddr)
+	log.Println("Inbound connection from", getClientName(ctx), tagInfo.RemoteAddr)
 	return ctx
 }
 

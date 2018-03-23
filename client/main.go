@@ -67,6 +67,19 @@ func main() {
 	done := make(chan bool, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	/* Trying to send client-name as early as possible...
+		Doesn't seem to send on the Dial
+	// Metadata
+	md := metadata.New(map[string]string{
+		"client": "client1",
+		"secret": *secretKey,
+	})
+	err := grpc.SetHeader(ctx, md)
+	*/
+
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(*serverAddress, grpc.WithInsecure())
 	if err != nil {
@@ -75,10 +88,6 @@ func main() {
 	defer conn.Close()
 
 	c := gorram.NewReporterClient(conn)
-
-	// Contact the server and print out its response.
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	// Add client name metadata
 	ctx = metadata.AppendToOutgoingContext(ctx, "client", "client1")
