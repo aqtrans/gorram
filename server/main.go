@@ -61,7 +61,9 @@ func (s *statHandler) HandleConn(ctx context.Context, connStats stats.ConnStats)
 }
 
 type gorramServer struct {
-	pingTimers map[string]*time.Timer
+	pingTimers    map[string]*time.Timer
+	clientList    map[string]chan bool
+	clientTickers map[string]*time.Ticker
 }
 
 func getClientName(ctx context.Context) string {
@@ -73,6 +75,10 @@ func getClientName(ctx context.Context) string {
 }
 
 func (s *gorramServer) Ping(ctx context.Context, msg *gorram.PingMessage) (*gorram.PingMessage, error) {
+	// Variables to eventually change into config values:
+	tickerInterval := 5
+	pingInterval := 10
+
 	client := getClientName(ctx)
 	// This might be redundant since this should always be true
 	if msg.IsAlive {
@@ -81,14 +87,25 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.PingMessage) (*gorr
 
 	// Setup a ping timer
 	clientTimer, ok := s.pingTimers[client]
+
 	if ok {
-		log.Println("timer found, adding 10 seconds.")
-		clientTimer.Reset(10 * time.Second)
+		log.Println("Timer found, adding", pingInterval, "seconds.")
+		clientTimer.Reset(time.Duration(pingInterval) * time.Second)
+
 	} else {
-		log.Println("creating new timer for 10 seconds")
-		s.pingTimers[client] = time.AfterFunc(10*time.Second, func() {
-			ticker := time.NewTicker(5 * time.Second)
-			for t := range ticker.C {
+		log.Println("Creating new timer for", pingInterval, "seconds")
+		if ticker, ok := s.clientTickers[client]; ok {
+			log.Println("Found an existing ticker for client, stopping and deleting it")
+			ticker.Stop()
+			delete(s.clientTickers, client)
+		}
+
+		s.pingTimers[client] = time.AfterFunc(time.Duration(tickerInterval)*time.Second, func() {
+			// Delete the timer
+			delete(s.pingTimers, client)
+			// Create a ticker to notify about disconnected clients
+			s.clientTickers[client] = time.NewTicker(5 * time.Second)
+			for t := range s.clientTickers[client].C {
 				log.Println(client, "PINGS NOT RECEIVED IN 10 SECONDS", t)
 			}
 		})
@@ -165,7 +182,9 @@ func main() {
 	server := grpc.NewServer(grpc.StatsHandler(&sh), grpc.UnaryInterceptor(cfg.unaryInterceptor))
 
 	gs := gorramServer{
-		pingTimers: make(map[string]*time.Timer),
+		pingTimers:    make(map[string]*time.Timer),
+		clientList:    make(map[string]chan bool),
+		clientTickers: make(map[string]*time.Ticker),
 	}
 
 	gorram.RegisterReporterServer(server, &gs)
