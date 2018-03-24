@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"log"
 	"net"
 	"os"
@@ -22,7 +23,8 @@ import (
 )
 
 type config struct {
-	secretKey string
+	secretKey   string
+	alertMethod string
 }
 
 type statHandler struct {
@@ -67,6 +69,7 @@ type gorramServer struct {
 	pingTimers    sync.Map
 	clientList    sync.Map
 	clientTickers sync.Map
+	cfg           *config
 	/*
 		pingTimers    map[string]*time.Timer
 		clientList    map[string]chan bool
@@ -115,8 +118,10 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.PingMessage) (*gorr
 			s.clientTickers.Store(client, time.NewTicker(5*time.Second))
 			ticker, ok := s.clientTickers.Load(client)
 			if ok {
-				for t := range ticker.(*time.Ticker).C {
-					log.Println(client, "PINGS NOT RECEIVED IN 10 SECONDS", t)
+				for _ = range ticker.(*time.Ticker).C {
+					//log.Println(client, "PINGS NOT RECEIVED IN 10 SECONDS", t)
+
+					alert(*s.cfg, client, fmt.Sprintf("Pings not received in %v seconds", pingInterval))
 				}
 			}
 		}))
@@ -140,7 +145,8 @@ func pingWait(client string, timer *time.Timer, reset chan bool) {
 }
 
 func (s *gorramServer) RecordIssue(ctx context.Context, issue *gorram.Issue) (*gorram.Submitted, error) {
-	log.Println(getClientName(ctx), "sent", issue.Message, time.Unix(issue.TimeSubmitted, 0))
+	//log.Println(getClientName(ctx), "sent", issue.Message, time.Unix(issue.TimeSubmitted, 0))
+	alert(*s.cfg, getClientName(ctx), issue.Message)
 
 	return &gorram.Submitted{SuccessfullySubmitted: true}, nil
 }
@@ -165,6 +171,13 @@ func (cfg config) unaryInterceptor(ctx context.Context, req interface{}, info *g
 	return handler(ctx, req)
 }
 
+func alert(cfg config, client, message string) {
+	switch cfg.alertMethod {
+	case "log":
+		log.Println("ALERT: ["+client+"]:", message)
+	}
+}
+
 func main() {
 
 	// Set config via flags
@@ -175,10 +188,12 @@ func main() {
 	generate := flag.Bool("generate-certs", false, "Generate certs if given.")
 	generateHost := flag.String("tls-host", "127.0.0.1", "If generate-certs is specified, override the host in the cert.")
 	secret := flag.String("server-secret", "omg12345", "Secret key of the server.")
+	alertMethodF := flag.String("alert", "log", "Alert method to use. Right now, log. To come: pushover.")
 	flag.Parse()
 
 	cfg := &config{
-		secretKey: *secret,
+		secretKey:   *secret,
+		alertMethod: *alertMethodF,
 	}
 
 	// TLS stuff
@@ -217,7 +232,9 @@ func main() {
 		server = grpc.NewServer(grpc.Creds(creds), grpc.StatsHandler(&sh), grpc.UnaryInterceptor(cfg.unaryInterceptor))
 	}
 
-	gs := gorramServer{}
+	gs := gorramServer{
+		cfg: cfg,
+	}
 
 	gorram.RegisterReporterServer(server, &gs)
 
