@@ -16,12 +16,14 @@ import (
 )
 
 type config struct {
-	maxLoad float64
+	*loadavg
+	*diskspace
+	*delugeCheck
 }
 
 type checkData struct {
-	issue *gorram.Issue
-	ok    bool
+	issues []*gorram.Issue
+	ok     bool
 }
 
 type check interface {
@@ -31,24 +33,28 @@ type check interface {
 // This is where all the actual checks are done, and an array of "issues" are made
 func doChecks(cfg *config) []*gorram.Issue {
 	var checks []*gorram.Issue
-	loadCheck := getCheck(loadavg{maxLoad: cfg.maxLoad})
-	if loadCheck != nil {
-		checks = append(checks, loadCheck)
-	}
+	// Check loadavg
+	checks = getCheck(checks, cfg.loadavg)
+	// Check disk usage
+	checks = getCheck(checks, cfg.diskspace)
+	// Check Deluge
+	checks = getCheck(checks, cfg.delugeCheck)
 	return checks
 }
 
 // getCheck() is a function which all Checks should run through
-// It should only be called above by doCheck(), which then checks if the issue is nil
-func getCheck(c check) *gorram.Issue {
+// It should only be called above by doCheck().
+// If the check() is not OK, it appends the issues and returns it.
+func getCheck(checks []*gorram.Issue, c check) []*gorram.Issue {
 	//log.Println("Check:", c)
 	theCheck := c.doCheck()
 	if !theCheck.ok {
-		log.Println("Check is not OK:", theCheck)
-		return theCheck.issue
+		log.Println("Check is not OK:", theCheck.issues)
+		for _, issue := range theCheck.issues {
+			checks = append(checks, issue)
+		}
 	}
-
-	return nil
+	return checks
 }
 
 func main() {
@@ -59,6 +65,13 @@ func main() {
 
 	// These flags are issue-specific
 	maxload := flag.Float64("load-avg", 8, "The load average above which to alert on.")
+
+	delugeURL := "http://127.0.0.1:8112/json"
+	delugePassword := "deluge"
+	delugeMaxTorrents := 5
+
+	diskPartitions := []string{"/"}
+	diskMaxUsage := 50.0
 
 	flag.Parse()
 
@@ -96,7 +109,18 @@ func main() {
 	ctx = metadata.AppendToOutgoingContext(ctx, "secret", *secretKey)
 
 	cfg := &config{
-		maxLoad: *maxload,
+		loadavg: &loadavg{
+			maxLoad: *maxload,
+		},
+		diskspace: &diskspace{
+			Partitions: diskPartitions,
+			MaxUsage:   diskMaxUsage,
+		},
+		delugeCheck: &delugeCheck{
+			URL:         delugeURL,
+			Password:    delugePassword,
+			maxTorrents: delugeMaxTorrents,
+		},
 	}
 
 	// Ping and collect issues every X seconds
@@ -106,6 +130,7 @@ func main() {
 		for {
 			select {
 			case <-ticker.C:
+
 				ping, err := c.Ping(ctx, &gorram.PingMessage{IsAlive: true})
 				if err != nil {
 					log.Fatalln(err)
