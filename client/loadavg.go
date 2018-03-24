@@ -3,11 +3,12 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
-	pb "jba.io/go/gorram/proto"
 	"log"
 	"strconv"
 	"strings"
 	"time"
+
+	pb "jba.io/go/gorram/proto"
 )
 
 type loadavg struct {
@@ -34,16 +35,18 @@ func (l loadavg) doCheck() *checkData {
 			log.Printf("Load average is greater than %f, %f", l.maxLoad, loadAvg)
 
 			return &checkData{
-				issue: &pb.Issue{
-					Message:       fmt.Sprintf("Load average is greater than %f, %f", l.maxLoad, loadAvg),
-					TimeSubmitted: time.Now().Unix(),
+				issues: []*pb.Issue{
+					&pb.Issue{
+						Message:       fmt.Sprintf("Load average is greater than %f, %f", l.maxLoad, loadAvg),
+						TimeSubmitted: time.Now().Unix(),
+					},
 				},
 				ok: false,
 			}
 		}
 	}
 	return &checkData{
-		issue: nil,
-		ok:    true,
+		issues: nil,
+		ok:     true,
 	}
 }
