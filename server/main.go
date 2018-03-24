@@ -9,8 +9,11 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"sync"
 	"syscall"
 	"time"
+
+	"google.golang.org/grpc/credentials"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -52,7 +55,7 @@ func (s *statHandler) HandleRPC(ctx context.Context, rpcStats stats.RPCStats) {
 }
 
 func (s *statHandler) TagConn(ctx context.Context, tagInfo *stats.ConnTagInfo) context.Context {
-	log.Println("Inbound connection from", getClientName(ctx), tagInfo.RemoteAddr)
+	log.Println("Inbound connection from", tagInfo.RemoteAddr)
 	return ctx
 }
 
@@ -61,9 +64,14 @@ func (s *statHandler) HandleConn(ctx context.Context, connStats stats.ConnStats)
 }
 
 type gorramServer struct {
-	pingTimers    map[string]*time.Timer
-	clientList    map[string]chan bool
-	clientTickers map[string]*time.Ticker
+	pingTimers    sync.Map
+	clientList    sync.Map
+	clientTickers sync.Map
+	/*
+		pingTimers    map[string]*time.Timer
+		clientList    map[string]chan bool
+		clientTickers map[string]*time.Ticker
+	*/
 }
 
 func getClientName(ctx context.Context) string {
@@ -86,32 +94,35 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.PingMessage) (*gorr
 	}
 
 	// Setup a ping timer
-	clientTimer, ok := s.pingTimers[client]
+	clientTimer, ok := s.pingTimers.Load(client)
 
 	if ok {
 		log.Println("Timer found, adding", pingInterval, "seconds.")
-		clientTimer.Reset(time.Duration(pingInterval) * time.Second)
+		clientTimer.(*time.Timer).Reset(time.Duration(pingInterval) * time.Second)
 
 	} else {
 		log.Println("Creating new timer for", pingInterval, "seconds")
-		if ticker, ok := s.clientTickers[client]; ok {
+		if ticker, ok := s.clientTickers.Load(client); ok {
 			log.Println("Found an existing ticker for client, stopping and deleting it")
-			ticker.Stop()
-			delete(s.clientTickers, client)
+			ticker.(*time.Ticker).Stop()
+			s.clientTickers.Delete(client)
 		}
 
-		s.pingTimers[client] = time.AfterFunc(time.Duration(tickerInterval)*time.Second, func() {
+		s.pingTimers.Store(client, time.AfterFunc(time.Duration(tickerInterval)*time.Second, func() {
 			// Delete the timer
-			delete(s.pingTimers, client)
+			s.pingTimers.Delete(client)
 			// Create a ticker to notify about disconnected clients
-			s.clientTickers[client] = time.NewTicker(5 * time.Second)
-			for t := range s.clientTickers[client].C {
-				log.Println(client, "PINGS NOT RECEIVED IN 10 SECONDS", t)
+			s.clientTickers.Store(client, time.NewTicker(5*time.Second))
+			ticker, ok := s.clientTickers.Load(client)
+			if ok {
+				for t := range ticker.(*time.Ticker).C {
+					log.Println(client, "PINGS NOT RECEIVED IN 10 SECONDS", t)
+				}
 			}
-		})
+		}))
 	}
 
-	log.Println(runtime.NumGoroutine())
+	log.Println("Number of goroutines:", runtime.NumGoroutine())
 
 	return msg, nil
 }
@@ -157,12 +168,32 @@ func (cfg config) unaryInterceptor(ctx context.Context, req interface{}, info *g
 func main() {
 
 	// Set config via flags
+	insecure := flag.Bool("insecure", false, "Disable TLS. Allow insecure client connections.")
 	serverAddress := flag.String("listen-address", "127.0.0.1:50000", "Address and port to listen on.")
+	serverCert := flag.String("cert", "cert.pem", "Path to the server certificate.")
+	serverCertKey := flag.String("key", "cert.key", "Path to the server certificate key.")
+	generate := flag.Bool("generate-certs", false, "Generate certs if given.")
+	generateHost := flag.String("tls-host", "127.0.0.1", "If generate-certs is specified, override the host in the cert.")
 	secret := flag.String("server-secret", "omg12345", "Secret key of the server.")
 	flag.Parse()
 
 	cfg := &config{
 		secretKey: *secret,
+	}
+
+	// TLS stuff
+	var creds credentials.TransportCredentials
+	if *generate {
+		log.Println("Generating certs to ./cert.pem and ./cert.key")
+		generateCerts(*generateHost)
+	}
+
+	if !*insecure {
+		var err error
+		creds, err = credentials.NewServerTLSFromFile(*serverCert, *serverCertKey)
+		if err != nil {
+			log.Fatal("Error with certs:", err)
+		}
 	}
 
 	// Catch Ctrl+C, sigint
@@ -179,13 +210,14 @@ func main() {
 
 	sh := statHandler{}
 
-	server := grpc.NewServer(grpc.StatsHandler(&sh), grpc.UnaryInterceptor(cfg.unaryInterceptor))
-
-	gs := gorramServer{
-		pingTimers:    make(map[string]*time.Timer),
-		clientList:    make(map[string]chan bool),
-		clientTickers: make(map[string]*time.Ticker),
+	var server *grpc.Server
+	if *insecure {
+		server = grpc.NewServer(grpc.StatsHandler(&sh), grpc.UnaryInterceptor(cfg.unaryInterceptor))
+	} else {
+		server = grpc.NewServer(grpc.Creds(creds), grpc.StatsHandler(&sh), grpc.UnaryInterceptor(cfg.unaryInterceptor))
 	}
+
+	gs := gorramServer{}
 
 	gorram.RegisterReporterServer(server, &gs)
 

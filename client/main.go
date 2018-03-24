@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	"jba.io/go/gorram/proto"
 )
@@ -38,7 +39,7 @@ func doChecks(cfg *config) []*gorram.Issue {
 	// Check disk usage
 	checks = getCheck(checks, cfg.diskspace)
 	// Check Deluge
-	checks = getCheck(checks, cfg.delugeCheck)
+	//checks = getCheck(checks, cfg.delugeCheck)
 	return checks
 }
 
@@ -59,7 +60,10 @@ func getCheck(checks []*gorram.Issue, c check) []*gorram.Issue {
 
 func main() {
 	// Set config via flags
+	clientName := flag.String("name", "unnamed", "Name of the client, as seen by the server. Should be unique.")
 	serverAddress := flag.String("server-address", "127.0.0.1:50000", "Address and port of the server.")
+	insecure := flag.Bool("insecure", false, "Connect to server without TLS.")
+	serverCert := flag.String("cert", "cert.pem", "Path to the certificate from the server.")
 	secretKey := flag.String("server-secret", "omg12345", "Secret key of the server.")
 	interval := flag.Duration("interval", 60*time.Second, "Number of seconds to check for issues on.")
 
@@ -94,16 +98,28 @@ func main() {
 	*/
 
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(*serverAddress, grpc.WithInsecure())
-	if err != nil {
-		log.Fatalf("did not connect: %v", err)
+	var conn *grpc.ClientConn
+	var err error
+	var creds credentials.TransportCredentials
+	if *insecure {
+		conn, err = grpc.Dial(*serverAddress, grpc.WithInsecure())
+	} else {
+		creds, err = credentials.NewClientTLSFromFile(*serverCert, "")
+		if err != nil {
+			log.Fatal("Error parsing TLS cert:", err)
+		}
+		conn, err = grpc.Dial(*serverAddress, grpc.WithTransportCredentials(creds))
 	}
+	if err != nil {
+		log.Fatalf("Error connecting to server: %v", err)
+	}
+
 	defer conn.Close()
 
 	c := gorram.NewReporterClient(conn)
 
 	// Add client name metadata
-	ctx = metadata.AppendToOutgoingContext(ctx, "client", "client1")
+	ctx = metadata.AppendToOutgoingContext(ctx, "client", *clientName)
 
 	// Add secret key metadata
 	ctx = metadata.AppendToOutgoingContext(ctx, "secret", *secretKey)
