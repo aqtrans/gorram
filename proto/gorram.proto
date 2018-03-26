@@ -5,19 +5,29 @@ package gorram;
 service Reporter {
     rpc Ping(PingMessage) returns (PingMessage) {}
     rpc RecordIssue(Issue) returns (Submitted) {}
+    rpc SendConfig(Config) returns (Parsed) {}
 }
 
 message PingMessage {
-    bool is_alive = 2;
+    bool is_alive = 1;
 }
 
 message Submitted {
-    bool successfully_submitted = 2;
+    bool successfully_submitted = 1;
 }
 
 message Issue {
     // Message itself
-    string message = 2;
+    string message = 1;
     // When issue was sent
-    int64 time_submitted = 3;
+    int64 time_submitted = 2;
+}
+
+message Config {
+    // Raw config file
+    bytes cfg = 1;
+}
+
+message Parsed {
+    bool cfg_parsed = 1;
 }
