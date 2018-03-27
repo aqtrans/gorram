@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
@@ -85,9 +86,9 @@ func getClientName(ctx context.Context) string {
 	return "no-client-name"
 }
 
-func (s *gorramServer) Ping(ctx context.Context, msg *gorram.PingMessage) (*gorram.PingMessage, error) {
+func (s *gorramServer) Ping(ctx context.Context, msg *gorram.IsAlive) (*gorram.IsAlive, error) {
 	// Variables to eventually change into config values:
-	tickerInterval := 5
+	tickerInterval := 10
 	pingInterval := 10
 
 	client := getClientName(ctx)
@@ -113,12 +114,12 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.PingMessage) (*gorr
 
 		s.pingTimers.Store(client, time.AfterFunc(time.Duration(tickerInterval)*time.Second, func() {
 			// Delete the timer
-			s.pingTimers.Delete(client)
+			//s.pingTimers.Delete(client)
 			// Create a ticker to notify about disconnected clients
 			s.clientTickers.Store(client, time.NewTicker(5*time.Second))
 			ticker, ok := s.clientTickers.Load(client)
 			if ok {
-				for _ = range ticker.(*time.Ticker).C {
+				for range ticker.(*time.Ticker).C {
 					//log.Println(client, "PINGS NOT RECEIVED IN 10 SECONDS", t)
 
 					alert(*s.cfg, client, fmt.Sprintf("Pings not received in %v seconds", pingInterval))
@@ -144,11 +145,33 @@ func pingWait(client string, timer *time.Timer, reset chan bool) {
 	<-timer.C
 }
 
-func (s *gorramServer) RecordIssue(ctx context.Context, issue *gorram.Issue) (*gorram.Submitted, error) {
+func (s *gorramServer) RecordIssue(stream gorram.Reporter_RecordIssueServer) error {
 	//log.Println(getClientName(ctx), "sent", issue.Message, time.Unix(issue.TimeSubmitted, 0))
-	alert(*s.cfg, getClientName(ctx), issue.Message)
+	//alert(*s.cfg, getClientName(ctx), issue.Message)
 
-	return &gorram.Submitted{SuccessfullySubmitted: true}, nil
+	//return &gorram.Submitted{SuccessfullySubmitted: true}, nil
+
+	startTime := time.Now()
+	for {
+		issue, err := stream.Recv()
+		if err == io.EOF {
+			endTime := time.Now()
+			log.Println(endTime.Sub(startTime).Seconds())
+			return stream.SendAndClose(&gorram.Submitted{
+				SuccessfullySubmitted: true,
+			})
+		}
+		if err != nil {
+			return err
+		}
+		// Record issue
+		alert(*s.cfg, getClientName(stream.Context()), issue.Message)
+	}
+}
+
+func (s *gorramServer) SendConfig(ctx context.Context, req *gorram.ConfigRequest) (*gorram.Config, error) {
+
+	return nil, nil
 }
 
 func (cfg config) authorize(ctx context.Context) error {

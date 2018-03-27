@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-	"io"
 	"log"
 	"os"
 	"os/signal"
@@ -52,6 +51,7 @@ func getCheck(checks []*gorram.Issue, c check) []*gorram.Issue {
 	if !theCheck.ok {
 		log.Println("Check is not OK:", theCheck.issues)
 		for _, issue := range theCheck.issues {
+			log.Println(issue.Message)
 			checks = append(checks, issue)
 		}
 	}
@@ -147,21 +147,33 @@ func main() {
 			select {
 			case <-ticker.C:
 
-				ping, err := c.Ping(ctx, &gorram.PingMessage{IsAlive: true})
+				ping, err := c.Ping(ctx, &gorram.IsAlive{IsAlive: true})
 				if err != nil {
 					log.Fatalln(err)
 				}
 				log.Println("ping is", ping.GetIsAlive())
 
+				// Do checks
 				i := doChecks(cfg)
-				for _, issue := range i {
-					submitted, err := c.RecordIssue(ctx, issue)
-					if err != nil && err != io.EOF {
-						log.Fatalln("omg", err)
+				// If there are any checks, open a client-side stream and record them
+				if len(i) > 0 {
+					issueStream, err := c.RecordIssue(ctx)
+					if err != nil {
+						log.Fatalln(err)
 					}
 
-					log.Println(issue.Message, submitted)
+					for _, issue := range i {
+						if err := issueStream.Send(issue); err != nil {
+							log.Fatalln("Error submitting issue:", err)
+						}
+					}
+					reply, err := issueStream.CloseAndRecv()
+					if err != nil {
+						log.Fatalln("Error closing issueStream:", err)
+					}
+					log.Println("Reply from server:", reply.SuccessfullySubmitted)
 				}
+
 			case <-quit:
 				ticker.Stop()
 				return
