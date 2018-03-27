@@ -1,4 +1,4 @@
-package main
+package checks
 
 import (
 	"fmt"
@@ -11,11 +11,11 @@ import (
 	pb "jba.io/go/gorram/proto"
 )
 
-type loadavg struct {
-	maxLoad float64
+type LoadAvg struct {
+	MaxLoad float64
 }
 
-func (l loadavg) doCheck() *checkData {
+func (l LoadAvg) doCheck() *checkData {
 	loadAvgRaw, err := ioutil.ReadFile("/proc/loadavg")
 	if err != nil {
 		log.Println("Error reading load average:", err)
@@ -32,13 +32,13 @@ func (l loadavg) doCheck() *checkData {
 			log.Println("Error parsing loadavg:", err)
 			return nil
 		}
-		if loadAvg >= l.maxLoad {
-			log.Printf("Load average is greater than %f, %f", l.maxLoad, loadAvg)
+		if loadAvg >= l.MaxLoad {
+			log.Printf("Load average is greater than %f, %f", l.MaxLoad, loadAvg)
 
 			return &checkData{
 				issues: []*pb.Issue{
 					&pb.Issue{
-						Message:       fmt.Sprintf("Load average is greater than %f, %f", l.maxLoad, loadAvg),
+						Message:       fmt.Sprintf("Load average is greater than %f, %f", l.MaxLoad, loadAvg),
 						TimeSubmitted: time.Now().Unix(),
 					},
 				},
@@ -46,6 +46,7 @@ func (l loadavg) doCheck() *checkData {
 			}
 		}
 	}
+
 	return &checkData{
 		issues: nil,
 		ok:     true,

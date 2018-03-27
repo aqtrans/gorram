@@ -1,4 +1,4 @@
-package main
+package checks
 
 //USAGE: ./check-deluge -n [max number of torrents] -p [password for Deluge web ui]
 //This is a replacement for my bash-powered Deluge Sensu check, which was just using `deluge-console|grep`
@@ -19,10 +19,10 @@ import (
 	pb "jba.io/go/gorram/proto"
 )
 
-type delugeCheck struct {
+type DelugeCheck struct {
 	URL         string
 	Password    string
-	maxTorrents int
+	MaxTorrents int
 }
 
 var (
@@ -76,7 +76,7 @@ type updateJSON struct {
 	Error interface{} `json:"error"`
 }
 
-func (d delugeCheck) doCheck() *checkData {
+func (d DelugeCheck) doCheck() *checkData {
 
 	cookieJar, err := cookiejar.New(nil)
 	if err != nil {
@@ -160,15 +160,15 @@ func (d delugeCheck) doCheck() *checkData {
 	//fmt.Println(dlcnt)
 	//fmt.Println(chkcnt)
 	//fmt.Println(errcnt)
-	if dlcnt > d.maxTorrents {
+	if dlcnt > d.MaxTorrents {
 		isBad = true
 		badMsg = strconv.Itoa(dlcnt) + " downloading torrents is too many."
 	}
-	if chkcnt > d.maxTorrents {
+	if chkcnt > d.MaxTorrents {
 		isBad = true
 		badMsg = strconv.Itoa(chkcnt) + " checking torrents is too many."
 	}
-	if errcnt > d.maxTorrents {
+	if errcnt > d.MaxTorrents {
 		isBad = true
 		badMsg = strconv.Itoa(errcnt) + " errored torrents is too many."
 	}

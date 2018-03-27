@@ -1,4 +1,4 @@
-package main
+package checks
 
 import (
 	"fmt"
@@ -9,12 +9,12 @@ import (
 	pb "jba.io/go/gorram/proto"
 )
 
-type diskspace struct {
+type DiskSpace struct {
 	Partitions []string
 	MaxUsage   float64
 }
 
-func (p diskspace) doCheck() *checkData {
+func (p DiskSpace) doCheck() *checkData {
 	var issues []*pb.Issue
 	isOK := true
 
