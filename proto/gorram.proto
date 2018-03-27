@@ -17,10 +17,11 @@ message Submitted {
 }
 
 message Issue {
+    string title = 1;
     // Message itself
-    string message = 1;
+    string message = 2;
     // When issue was sent
-    int64 time_submitted = 2;
+    int64 time_submitted = 3;
 }
 
 message Config {
