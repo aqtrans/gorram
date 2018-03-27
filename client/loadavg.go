@@ -18,6 +18,7 @@ type loadavg struct {
 func (l loadavg) doCheck() *checkData {
 	loadAvgRaw, err := ioutil.ReadFile("/proc/loadavg")
 	if err != nil {
+		log.Println("Error reading load average:", err)
 		return nil
 	}
 	loadAvgs := strings.Fields(string(loadAvgRaw))
