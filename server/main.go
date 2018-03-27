@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/gob"
 	"errors"
 	"flag"
 	"fmt"
@@ -20,6 +22,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
+	"jba.io/go/gorram/checks"
 	"jba.io/go/gorram/proto"
 )
 
@@ -155,8 +158,8 @@ func (s *gorramServer) RecordIssue(stream gorram.Reporter_RecordIssueServer) err
 	for {
 		issue, err := stream.Recv()
 		if err == io.EOF {
-			endTime := time.Now()
-			log.Println(endTime.Sub(startTime).Seconds())
+			log.Println("Time since issues started being submitted:", time.Since(startTime).String())
+
 			return stream.SendAndClose(&gorram.Submitted{
 				SuccessfullySubmitted: true,
 			})
@@ -166,12 +169,43 @@ func (s *gorramServer) RecordIssue(stream gorram.Reporter_RecordIssueServer) err
 		}
 		// Record issue
 		alert(*s.cfg, getClientName(stream.Context()), issue.Message)
+		log.Println("Time since issue was submitted:", time.Since(time.Unix(issue.TimeSubmitted, 0)).String())
 	}
 }
 
 func (s *gorramServer) SendConfig(ctx context.Context, req *gorram.ConfigRequest) (*gorram.Config, error) {
-
-	return nil, nil
+	// TODO: Implement client-side SHA1 summing, once client-side config-reloading is implemented
+	/*
+		if req.CfgSha1Sum != "1a21a32" {
+			log.Println("config sha1 sum does not match server-side.")
+		}
+	*/
+	cfg := &checks.Config{
+		Load: &checks.LoadAvg{
+			MaxLoad: 0.5,
+		},
+		Disk: &checks.DiskSpace{
+			Partitions: []string{"/"},
+			MaxUsage:   10.0,
+		},
+		Deluge: &checks.DelugeCheck{
+			URL:         "http://127.0.0.1:8112/json",
+			Password:    "deluge",
+			MaxTorrents: 1,
+		},
+	}
+	var buf bytes.Buffer
+	encCfg := gob.NewEncoder(&buf)
+	err := encCfg.Encode(cfg)
+	if err != nil {
+		log.Println("Error encoding config, returning empty config.")
+		return &gorram.Config{
+			Cfg: []byte(""),
+		}, nil
+	}
+	return &gorram.Config{
+		Cfg: buf.Bytes(),
+	}, nil
 }
 
 func (cfg config) authorize(ctx context.Context) error {
