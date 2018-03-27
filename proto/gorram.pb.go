@@ -8,11 +8,11 @@ It is generated from these files:
 	proto/gorram.proto
 
 It has these top-level messages:
-	PingMessage
+	IsAlive
 	Submitted
 	Issue
 	Config
-	Parsed
+	ConfigRequest
 */
 package gorram
 
@@ -36,16 +36,16 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
-type PingMessage struct {
+type IsAlive struct {
 	IsAlive bool `protobuf:"varint,1,opt,name=is_alive,json=isAlive" json:"is_alive,omitempty"`
 }
 
-func (m *PingMessage) Reset()                    { *m = PingMessage{} }
-func (m *PingMessage) String() string            { return proto.CompactTextString(m) }
-func (*PingMessage) ProtoMessage()               {}
-func (*PingMessage) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
+func (m *IsAlive) Reset()                    { *m = IsAlive{} }
+func (m *IsAlive) String() string            { return proto.CompactTextString(m) }
+func (*IsAlive) ProtoMessage()               {}
+func (*IsAlive) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
-func (m *PingMessage) GetIsAlive() bool {
+func (m *IsAlive) GetIsAlive() bool {
 	if m != nil {
 		return m.IsAlive
 	}
@@ -111,28 +111,36 @@ func (m *Config) GetCfg() []byte {
 	return nil
 }
 
-type Parsed struct {
-	CfgParsed bool `protobuf:"varint,1,opt,name=cfg_parsed,json=cfgParsed" json:"cfg_parsed,omitempty"`
+type ConfigRequest struct {
+	ClientName string `protobuf:"bytes,1,opt,name=client_name,json=clientName" json:"client_name,omitempty"`
+	CfgSha1Sum string `protobuf:"bytes,2,opt,name=cfg_sha1sum,json=cfgSha1sum" json:"cfg_sha1sum,omitempty"`
 }
 
-func (m *Parsed) Reset()                    { *m = Parsed{} }
-func (m *Parsed) String() string            { return proto.CompactTextString(m) }
-func (*Parsed) ProtoMessage()               {}
-func (*Parsed) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{4} }
+func (m *ConfigRequest) Reset()                    { *m = ConfigRequest{} }
+func (m *ConfigRequest) String() string            { return proto.CompactTextString(m) }
+func (*ConfigRequest) ProtoMessage()               {}
+func (*ConfigRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{4} }
 
-func (m *Parsed) GetCfgParsed() bool {
+func (m *ConfigRequest) GetClientName() string {
 	if m != nil {
-		return m.CfgParsed
+		return m.ClientName
 	}
-	return false
+	return ""
+}
+
+func (m *ConfigRequest) GetCfgSha1Sum() string {
+	if m != nil {
+		return m.CfgSha1Sum
+	}
+	return ""
 }
 
 func init() {
-	proto.RegisterType((*PingMessage)(nil), "gorram.PingMessage")
+	proto.RegisterType((*IsAlive)(nil), "gorram.IsAlive")
 	proto.RegisterType((*Submitted)(nil), "gorram.Submitted")
 	proto.RegisterType((*Issue)(nil), "gorram.Issue")
 	proto.RegisterType((*Config)(nil), "gorram.Config")
-	proto.RegisterType((*Parsed)(nil), "gorram.Parsed")
+	proto.RegisterType((*ConfigRequest)(nil), "gorram.ConfigRequest")
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -146,9 +154,9 @@ const _ = grpc.SupportPackageIsVersion4
 // Client API for Reporter service
 
 type ReporterClient interface {
-	Ping(ctx context.Context, in *PingMessage, opts ...grpc.CallOption) (*PingMessage, error)
-	RecordIssue(ctx context.Context, in *Issue, opts ...grpc.CallOption) (*Submitted, error)
-	SendConfig(ctx context.Context, in *Config, opts ...grpc.CallOption) (*Parsed, error)
+	Ping(ctx context.Context, in *IsAlive, opts ...grpc.CallOption) (*IsAlive, error)
+	RecordIssue(ctx context.Context, opts ...grpc.CallOption) (Reporter_RecordIssueClient, error)
+	SendConfig(ctx context.Context, in *ConfigRequest, opts ...grpc.CallOption) (*Config, error)
 }
 
 type reporterClient struct {
@@ -159,8 +167,8 @@ func NewReporterClient(cc *grpc.ClientConn) ReporterClient {
 	return &reporterClient{cc}
 }
 
-func (c *reporterClient) Ping(ctx context.Context, in *PingMessage, opts ...grpc.CallOption) (*PingMessage, error) {
-	out := new(PingMessage)
+func (c *reporterClient) Ping(ctx context.Context, in *IsAlive, opts ...grpc.CallOption) (*IsAlive, error) {
+	out := new(IsAlive)
 	err := grpc.Invoke(ctx, "/gorram.Reporter/Ping", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
@@ -168,17 +176,42 @@ func (c *reporterClient) Ping(ctx context.Context, in *PingMessage, opts ...grpc
 	return out, nil
 }
 
-func (c *reporterClient) RecordIssue(ctx context.Context, in *Issue, opts ...grpc.CallOption) (*Submitted, error) {
-	out := new(Submitted)
-	err := grpc.Invoke(ctx, "/gorram.Reporter/RecordIssue", in, out, c.cc, opts...)
+func (c *reporterClient) RecordIssue(ctx context.Context, opts ...grpc.CallOption) (Reporter_RecordIssueClient, error) {
+	stream, err := grpc.NewClientStream(ctx, &_Reporter_serviceDesc.Streams[0], c.cc, "/gorram.Reporter/RecordIssue", opts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	x := &reporterRecordIssueClient{stream}
+	return x, nil
 }
 
-func (c *reporterClient) SendConfig(ctx context.Context, in *Config, opts ...grpc.CallOption) (*Parsed, error) {
-	out := new(Parsed)
+type Reporter_RecordIssueClient interface {
+	Send(*Issue) error
+	CloseAndRecv() (*Submitted, error)
+	grpc.ClientStream
+}
+
+type reporterRecordIssueClient struct {
+	grpc.ClientStream
+}
+
+func (x *reporterRecordIssueClient) Send(m *Issue) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *reporterRecordIssueClient) CloseAndRecv() (*Submitted, error) {
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	m := new(Submitted)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *reporterClient) SendConfig(ctx context.Context, in *ConfigRequest, opts ...grpc.CallOption) (*Config, error) {
+	out := new(Config)
 	err := grpc.Invoke(ctx, "/gorram.Reporter/SendConfig", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
@@ -189,9 +222,9 @@ func (c *reporterClient) SendConfig(ctx context.Context, in *Config, opts ...grp
 // Server API for Reporter service
 
 type ReporterServer interface {
-	Ping(context.Context, *PingMessage) (*PingMessage, error)
-	RecordIssue(context.Context, *Issue) (*Submitted, error)
-	SendConfig(context.Context, *Config) (*Parsed, error)
+	Ping(context.Context, *IsAlive) (*IsAlive, error)
+	RecordIssue(Reporter_RecordIssueServer) error
+	SendConfig(context.Context, *ConfigRequest) (*Config, error)
 }
 
 func RegisterReporterServer(s *grpc.Server, srv ReporterServer) {
@@ -199,7 +232,7 @@ func RegisterReporterServer(s *grpc.Server, srv ReporterServer) {
 }
 
 func _Reporter_Ping_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PingMessage)
+	in := new(IsAlive)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -211,31 +244,39 @@ func _Reporter_Ping_Handler(srv interface{}, ctx context.Context, dec func(inter
 		FullMethod: "/gorram.Reporter/Ping",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ReporterServer).Ping(ctx, req.(*PingMessage))
+		return srv.(ReporterServer).Ping(ctx, req.(*IsAlive))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Reporter_RecordIssue_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Issue)
-	if err := dec(in); err != nil {
+func _Reporter_RecordIssue_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(ReporterServer).RecordIssue(&reporterRecordIssueServer{stream})
+}
+
+type Reporter_RecordIssueServer interface {
+	SendAndClose(*Submitted) error
+	Recv() (*Issue, error)
+	grpc.ServerStream
+}
+
+type reporterRecordIssueServer struct {
+	grpc.ServerStream
+}
+
+func (x *reporterRecordIssueServer) SendAndClose(m *Submitted) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *reporterRecordIssueServer) Recv() (*Issue, error) {
+	m := new(Issue)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
-	if interceptor == nil {
-		return srv.(ReporterServer).RecordIssue(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/gorram.Reporter/RecordIssue",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ReporterServer).RecordIssue(ctx, req.(*Issue))
-	}
-	return interceptor(ctx, in, info, handler)
+	return m, nil
 }
 
 func _Reporter_SendConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Config)
+	in := new(ConfigRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -247,7 +288,7 @@ func _Reporter_SendConfig_Handler(srv interface{}, ctx context.Context, dec func
 		FullMethod: "/gorram.Reporter/SendConfig",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ReporterServer).SendConfig(ctx, req.(*Config))
+		return srv.(ReporterServer).SendConfig(ctx, req.(*ConfigRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -261,38 +302,42 @@ var _Reporter_serviceDesc = grpc.ServiceDesc{
 			Handler:    _Reporter_Ping_Handler,
 		},
 		{
-			MethodName: "RecordIssue",
-			Handler:    _Reporter_RecordIssue_Handler,
-		},
-		{
 			MethodName: "SendConfig",
 			Handler:    _Reporter_SendConfig_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "RecordIssue",
+			Handler:       _Reporter_RecordIssue_Handler,
+			ClientStreams: true,
+		},
+	},
 	Metadata: "proto/gorram.proto",
 }
 
 func init() { proto.RegisterFile("proto/gorram.proto", fileDescriptor0) }
 
 var fileDescriptor0 = []byte{
-	// 288 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x6c, 0x91, 0xdf, 0x4a, 0xc3, 0x30,
-	0x14, 0xc6, 0x57, 0xa7, 0xdd, 0x76, 0xe6, 0x86, 0x1e, 0x51, 0x66, 0x41, 0x18, 0x01, 0x71, 0x57,
-	0x13, 0x27, 0x3e, 0x80, 0x7a, 0xa3, 0x17, 0xc2, 0xc8, 0x1e, 0x60, 0x74, 0xe9, 0x69, 0x08, 0xac,
-	0x4d, 0x49, 0x5a, 0xc1, 0xc7, 0xf1, 0x4d, 0xa5, 0x49, 0xbb, 0xf5, 0xc2, 0xbb, 0xfc, 0xce, 0x9f,
-	0x2f, 0x5f, 0xbe, 0x00, 0x16, 0x46, 0x97, 0xfa, 0x51, 0x6a, 0x63, 0xe2, 0x6c, 0xe9, 0x00, 0x43,
-	0x4f, 0x6c, 0x01, 0xe3, 0xb5, 0xca, 0xe5, 0x17, 0x59, 0x1b, 0x4b, 0xc2, 0x5b, 0x18, 0x2a, 0xbb,
-	0x8d, 0xf7, 0xea, 0x9b, 0x66, 0xc1, 0x3c, 0x58, 0x0c, 0xf9, 0x40, 0xd9, 0xd7, 0x1a, 0xd9, 0x1b,
-	0x8c, 0x36, 0xd5, 0x2e, 0x53, 0x65, 0x49, 0x09, 0xbe, 0xc0, 0x8d, 0xad, 0x84, 0x20, 0x6b, 0xd3,
-	0x6a, 0xbf, 0xff, 0xd9, 0xda, 0xb6, 0xd3, 0x6c, 0x5d, 0x77, 0xbb, 0x87, 0x35, 0xf6, 0x01, 0x67,
-	0x9f, 0xd6, 0x56, 0x84, 0x33, 0x18, 0x64, 0xfe, 0x4a, 0xb7, 0x30, 0xe2, 0x2d, 0xe2, 0x3d, 0x4c,
-	0x4b, 0x95, 0x51, 0x47, 0xf1, 0x64, 0x1e, 0x2c, 0xfa, 0x7c, 0x52, 0x57, 0x8f, 0x4a, 0x11, 0x84,
-	0xef, 0x3a, 0x4f, 0x95, 0xc4, 0x0b, 0xe8, 0x8b, 0x54, 0x3a, 0x99, 0x73, 0x5e, 0x1f, 0xd9, 0x03,
-	0x84, 0xeb, 0xd8, 0x58, 0x4a, 0xf0, 0x0e, 0x40, 0xa4, 0x72, 0x5b, 0x38, 0x6a, 0xac, 0x8d, 0x44,
-	0x2a, 0x7d, 0x7b, 0xf5, 0x1b, 0xc0, 0x90, 0x53, 0xa1, 0x4d, 0x49, 0x06, 0x57, 0x70, 0x5a, 0x27,
-	0x81, 0x57, 0xcb, 0x26, 0xa8, 0x4e, 0x2e, 0xd1, 0x7f, 0x45, 0xd6, 0xc3, 0x27, 0x18, 0x73, 0x12,
-	0xda, 0x24, 0xfe, 0x55, 0x93, 0x76, 0xca, 0x61, 0x74, 0xd9, 0xe2, 0xd1, 0x76, 0x0f, 0x97, 0x00,
-	0x1b, 0xca, 0x93, 0xc6, 0xfc, 0xb4, 0x1d, 0xf1, 0x1c, 0x1d, 0xd8, 0x3b, 0x64, 0xbd, 0x5d, 0xe8,
-	0xfe, 0xeb, 0xf9, 0x2f, 0x00, 0x00, 0xff, 0xff, 0xa4, 0x0b, 0x3d, 0x94, 0xc5, 0x01, 0x00, 0x00,
+	// 310 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x5c, 0x51, 0xdd, 0x4e, 0xf2, 0x40,
+	0x10, 0xa5, 0x1f, 0x9f, 0xfc, 0x0c, 0x82, 0xba, 0x09, 0x06, 0x7b, 0x23, 0x69, 0x34, 0x21, 0x5e,
+	0x60, 0x94, 0xf0, 0x00, 0xea, 0x8d, 0xdc, 0x18, 0x5d, 0x1e, 0xa0, 0x29, 0x65, 0xba, 0x6e, 0xd2,
+	0x6d, 0x71, 0x67, 0xd7, 0xc4, 0xd7, 0xf1, 0x49, 0x4d, 0xbb, 0xad, 0x05, 0xef, 0xf6, 0xfc, 0xcc,
+	0x9c, 0x9c, 0x59, 0x60, 0x3b, 0x9d, 0x9b, 0xfc, 0x56, 0xe4, 0x5a, 0x47, 0x6a, 0x5e, 0x02, 0xd6,
+	0x71, 0x28, 0xb8, 0x82, 0xee, 0x8a, 0x1e, 0x52, 0xf9, 0x89, 0xec, 0x02, 0x7a, 0x92, 0xc2, 0xa8,
+	0x78, 0x4f, 0xbc, 0xa9, 0x37, 0xeb, 0xf1, 0xae, 0x74, 0x52, 0xf0, 0x08, 0xfd, 0xb5, 0xdd, 0x28,
+	0x69, 0x0c, 0x6e, 0xd9, 0x12, 0xce, 0xc9, 0xc6, 0x31, 0x12, 0x25, 0x36, 0x4d, 0xbf, 0x42, 0xaa,
+	0x95, 0x6a, 0x6a, 0xbc, 0xaf, 0xfe, 0x8e, 0x05, 0xcf, 0x70, 0xb4, 0x22, 0xb2, 0xc8, 0x26, 0xd0,
+	0x55, 0x48, 0x14, 0x09, 0x17, 0xd3, 0xe7, 0x35, 0x64, 0xd7, 0x30, 0x32, 0x52, 0xe1, 0xde, 0xc6,
+	0x7f, 0x53, 0x6f, 0xd6, 0xe6, 0xc3, 0x82, 0x6d, 0x36, 0xf9, 0xd0, 0x79, 0xca, 0xb3, 0x44, 0x0a,
+	0x76, 0x0a, 0xed, 0x38, 0x11, 0xe5, 0x9a, 0x63, 0x5e, 0x3c, 0x83, 0x37, 0x18, 0x3a, 0x8d, 0xe3,
+	0x87, 0x45, 0x32, 0xec, 0x12, 0x06, 0x71, 0x2a, 0x31, 0x33, 0x61, 0x16, 0xa9, 0x3a, 0x11, 0x1c,
+	0xf5, 0x12, 0x29, 0x2c, 0x0d, 0x89, 0x08, 0xe9, 0x3d, 0xba, 0x23, 0xab, 0xca, 0xc4, 0xc2, 0x90,
+	0x88, 0xb5, 0x63, 0xee, 0xbf, 0x3d, 0xe8, 0x71, 0xdc, 0xe5, 0xda, 0xa0, 0x66, 0x37, 0xf0, 0xff,
+	0x55, 0x66, 0x82, 0x9d, 0xcc, 0xab, 0x73, 0x56, 0xd7, 0xf3, 0xff, 0x12, 0x41, 0x8b, 0x2d, 0x60,
+	0xc0, 0x31, 0xce, 0xf5, 0xd6, 0xf5, 0x1e, 0x36, 0x0e, 0xb2, 0xe8, 0x9f, 0xd5, 0xb0, 0x29, 0xd6,
+	0x9a, 0x79, 0x6c, 0x09, 0xb0, 0xc6, 0x6c, 0x5b, 0x15, 0x1c, 0xd7, 0xa6, 0x83, 0x52, 0xfe, 0xe8,
+	0x90, 0x0e, 0x5a, 0x9b, 0x4e, 0xf9, 0xad, 0x8b, 0x9f, 0x00, 0x00, 0x00, 0xff, 0xff, 0x25, 0x65,
+	0x7d, 0x14, 0xec, 0x01, 0x00, 0x00,
 }

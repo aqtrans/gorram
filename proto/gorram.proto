@@ -3,12 +3,12 @@ syntax = "proto3";
 package gorram;
 
 service Reporter {
-    rpc Ping(PingMessage) returns (PingMessage) {}
-    rpc RecordIssue(Issue) returns (Submitted) {}
-    rpc SendConfig(Config) returns (Parsed) {}
+    rpc Ping(IsAlive) returns (IsAlive) {}
+    rpc RecordIssue(stream Issue) returns (Submitted) {}
+    rpc SendConfig(ConfigRequest) returns (Config) {}
 }
 
-message PingMessage {
+message IsAlive {
     bool is_alive = 1;
 }
 
@@ -28,6 +28,7 @@ message Config {
     bytes cfg = 1;
 }
 
-message Parsed {
-    bool cfg_parsed = 1;
+message ConfigRequest {
+    string client_name = 1;
+    string cfg_sha1sum = 2;
 }
