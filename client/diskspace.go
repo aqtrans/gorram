@@ -16,7 +16,7 @@ type diskspace struct {
 
 func (p diskspace) doCheck() *checkData {
 	var issues []*pb.Issue
-	var isOK bool
+	isOK := true
 
 	for _, partition := range p.Partitions {
 		usage, err := disk.Usage(partition)
