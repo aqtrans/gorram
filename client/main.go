@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/gob"
 	"flag"
 	"log"
 	"os"
@@ -12,50 +14,20 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
+	"jba.io/go/gorram/checks"
 	"jba.io/go/gorram/proto"
 )
 
-type config struct {
-	*loadavg
-	*diskspace
-	*delugeCheck
-}
-
-type checkData struct {
-	issues []*gorram.Issue
-	ok     bool
-}
-
-type check interface {
-	doCheck() *checkData
-}
-
 // This is where all the actual checks are done, and an array of "issues" are made
-func doChecks(cfg *config) []*gorram.Issue {
-	var checks []*gorram.Issue
+func doChecks(cfg *checks.Config) []*gorram.Issue {
+	var issues []*gorram.Issue
 	// Check loadavg
-	checks = getCheck(checks, cfg.loadavg)
+	issues = checks.GetCheck(issues, cfg.Load)
 	// Check disk usage
-	checks = getCheck(checks, cfg.diskspace)
+	issues = checks.GetCheck(issues, cfg.Disk)
 	// Check Deluge
 	//checks = getCheck(checks, cfg.delugeCheck)
-	return checks
-}
-
-// getCheck() is a function which all Checks should run through
-// It should only be called above by doCheck().
-// If the check() is not OK, it appends the issues and returns it.
-func getCheck(checks []*gorram.Issue, c check) []*gorram.Issue {
-	//log.Println("Check:", c)
-	theCheck := c.doCheck()
-	if !theCheck.ok {
-		log.Println("Check is not OK:", theCheck.issues)
-		for _, issue := range theCheck.issues {
-			log.Println(issue.Message)
-			checks = append(checks, issue)
-		}
-	}
-	return checks
+	return issues
 }
 
 func main() {
@@ -66,16 +38,6 @@ func main() {
 	serverCert := flag.String("cert", "cert.pem", "Path to the certificate from the server.")
 	secretKey := flag.String("server-secret", "omg12345", "Secret key of the server.")
 	interval := flag.Duration("interval", 60*time.Second, "Number of seconds to check for issues on.")
-
-	// These flags are issue-specific
-	maxload := flag.Float64("load-avg", 8, "The load average above which to alert on.")
-
-	delugeURL := "http://127.0.0.1:8112/json"
-	delugePassword := "deluge"
-	delugeMaxTorrents := 5
-
-	diskPartitions := []string{"/"}
-	diskMaxUsage := 50.0
 
 	flag.Parse()
 
@@ -124,19 +86,20 @@ func main() {
 	// Add secret key metadata
 	ctx = metadata.AppendToOutgoingContext(ctx, "secret", *secretKey)
 
-	cfg := &config{
-		loadavg: &loadavg{
-			maxLoad: *maxload,
-		},
-		diskspace: &diskspace{
-			Partitions: diskPartitions,
-			MaxUsage:   diskMaxUsage,
-		},
-		delugeCheck: &delugeCheck{
-			URL:         delugeURL,
-			Password:    delugePassword,
-			maxTorrents: delugeMaxTorrents,
-		},
+	// Get config from server
+	cfgBytes, err := c.SendConfig(ctx, &gorram.ConfigRequest{
+		ClientName: *clientName,
+		CfgSha1Sum: "1a21a3",
+	})
+	if err != nil {
+		log.Fatalln(err)
+	}
+	buf := bytes.NewBuffer(cfgBytes.Cfg)
+	dec := gob.NewDecoder(buf)
+	var cfg checks.Config
+	err = dec.Decode(&cfg)
+	if err != nil {
+		log.Fatalln("error decoding config from server:", err)
 	}
 
 	// Ping and collect issues every X seconds
@@ -147,14 +110,13 @@ func main() {
 			select {
 			case <-ticker.C:
 
-				ping, err := c.Ping(ctx, &gorram.IsAlive{IsAlive: true})
+				_, err := c.Ping(ctx, &gorram.IsAlive{IsAlive: true})
 				if err != nil {
 					log.Fatalln(err)
 				}
-				log.Println("ping is", ping.GetIsAlive())
 
 				// Do checks
-				i := doChecks(cfg)
+				i := doChecks(&cfg)
 				// If there are any checks, open a client-side stream and record them
 				if len(i) > 0 {
 					issueStream, err := c.RecordIssue(ctx)
@@ -171,7 +133,9 @@ func main() {
 					if err != nil {
 						log.Fatalln("Error closing issueStream:", err)
 					}
-					log.Println("Reply from server:", reply.SuccessfullySubmitted)
+					if !reply.SuccessfullySubmitted {
+						log.Fatalln("Error submitting issue; Check server logs.", reply.SuccessfullySubmitted)
+					}
 				}
 
 			case <-quit:
