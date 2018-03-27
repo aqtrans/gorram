@@ -17,6 +17,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/pelletier/go-toml"
+
 	"google.golang.org/grpc/credentials"
 
 	"google.golang.org/grpc"
@@ -29,6 +31,7 @@ import (
 type config struct {
 	secretKey   string
 	alertMethod string
+	configFile  string
 }
 
 type statHandler struct {
@@ -180,23 +183,45 @@ func (s *gorramServer) SendConfig(ctx context.Context, req *gorram.ConfigRequest
 			log.Println("config sha1 sum does not match server-side.")
 		}
 	*/
-	cfg := &checks.Config{
-		Load: &checks.LoadAvg{
-			MaxLoad: 0.5,
-		},
-		Disk: &checks.DiskSpace{
-			Partitions: []string{"/"},
-			MaxUsage:   10.0,
-		},
-		Deluge: &checks.DelugeCheck{
-			URL:         "http://127.0.0.1:8112/json",
-			Password:    "deluge",
-			MaxTorrents: 1,
-		},
+	clientName := getClientName(ctx)
+
+	var cfg *checks.Config
+
+	// Attempt to read the config.toml, and then if it has [clientname] in it, unmarshal the config from there
+	cfgTree, err := toml.LoadFile(s.cfg.configFile)
+	if err != nil {
+		log.Fatalln("Error reading config.toml", err)
 	}
+	if cfgTree.Has(clientName) {
+		log.Println("loading config for", clientName, "from config.toml...")
+		clientCfgTree := cfgTree.Get(clientName).(*toml.Tree)
+		clientCfg := checks.Config{}
+		err := clientCfgTree.Unmarshal(&clientCfg)
+		if err != nil {
+			log.Fatalln("Error unmarshaling clientCfgTree:", err)
+		}
+		cfg = &clientCfg
+	} else {
+		// Default config values:
+		cfg = &checks.Config{
+			Load: &checks.LoadAvg{
+				MaxLoad: 0.5,
+			},
+			Disk: &checks.DiskSpace{
+				Partitions: []string{"/"},
+				MaxUsage:   10.0,
+			},
+			Deluge: &checks.DelugeCheck{
+				URL:         "http://127.0.0.1:8112/json",
+				Password:    "deluge",
+				MaxTorrents: 1,
+			},
+		}
+	}
+
 	var buf bytes.Buffer
 	encCfg := gob.NewEncoder(&buf)
-	err := encCfg.Encode(cfg)
+	err = encCfg.Encode(cfg)
 	if err != nil {
 		log.Println("Error encoding config, returning empty config.")
 		return &gorram.Config{
@@ -238,6 +263,7 @@ func alert(cfg config, client, message string) {
 func main() {
 
 	// Set config via flags
+	confFile := flag.String("conf", "config.toml", "Path to the TOML config file.")
 	insecure := flag.Bool("insecure", false, "Disable TLS. Allow insecure client connections.")
 	serverAddress := flag.String("listen-address", "127.0.0.1:50000", "Address and port to listen on.")
 	serverCert := flag.String("cert", "cert.pem", "Path to the server certificate.")
@@ -251,6 +277,7 @@ func main() {
 	cfg := &config{
 		secretKey:   *secret,
 		alertMethod: *alertMethodF,
+		configFile:  *confFile,
 	}
 
 	// TLS stuff
