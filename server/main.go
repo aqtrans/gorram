@@ -6,7 +6,6 @@ import (
 	"encoding/gob"
 	"errors"
 	"flag"
-	"fmt"
 	"io"
 	"log"
 	"net"
@@ -73,15 +72,19 @@ func (s *statHandler) HandleConn(ctx context.Context, connStats stats.ConnStats)
 }
 
 type gorramServer struct {
-	pingTimers    sync.Map
-	clientList    sync.Map
-	clientTickers sync.Map
-	cfg           *config
+	clientTimers
+	clientList sync.Map
+	cfg        *config
 	/*
 		pingTimers    map[string]*time.Timer
 		clientList    map[string]chan bool
 		clientTickers map[string]*time.Ticker
 	*/
+}
+
+type clientTimers struct {
+	tickers sync.Map
+	timers  sync.Map
 }
 
 func getClientName(ctx context.Context) string {
@@ -93,9 +96,14 @@ func getClientName(ctx context.Context) string {
 }
 
 func (s *gorramServer) Ping(ctx context.Context, msg *gorram.IsAlive) (*gorram.IsAlive, error) {
-	// Variables to eventually change into config values:
-	tickerInterval := 10
-	pingInterval := 10
+	// Variables to eventually change into config values, fetched from the client's configured interval
+	// deadClienttime is the time to wait between alerting after a client has been declared dead
+	var deadClienttime time.Duration
+	deadClienttime = 30 * time.Second
+	// pingTime is the time to wait before declaring a client dead
+	//   Eventually this should be the client's configured interval + 10 seconds or so
+	var pingTime time.Duration
+	pingTime = 60 * time.Second
 
 	client := getClientName(ctx)
 	// This might be redundant since this should always be true
@@ -104,34 +112,29 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.IsAlive) (*gorram.I
 	}
 
 	// Setup a ping timer
-	clientTimer, ok := s.pingTimers.Load(client)
+	clientTimer, ok := s.clientTimers.timers.Load(client)
 
 	if ok {
-		log.Println("Timer found, adding", pingInterval, "seconds.")
-		clientTimer.(*time.Timer).Reset(time.Duration(pingInterval) * time.Second)
+		log.Println("Timer found, resetting.")
+		// Reset the client's timer
+		clientTimer.(*time.Timer).Reset(pingTime)
 
 	} else {
-		log.Println("Creating new timer for", pingInterval, "seconds")
-		if ticker, ok := s.clientTickers.Load(client); ok {
-			log.Println("Found an existing ticker for client, stopping and deleting it")
-			ticker.(*time.Ticker).Stop()
-			s.clientTickers.Delete(client)
+		log.Println("Creating new timer for", pingTime, "seconds")
+		// Check if the client was dead, and reset it's ticker
+		if clientTicker, ok := s.clientTimers.tickers.Load(client); ok {
+			log.Println("Existing clientTimers.tickers found, stopping it")
+			clientTicker.(*time.Ticker).Stop()
 		}
+		// create a ticker to store and reference
+		ticker := time.NewTicker(deadClienttime)
+		s.clientTimers.tickers.Store(client, ticker)
+		// Create a timer to store and reference
+		timer := time.NewTimer(pingTime)
+		s.clientTimers.timers.Store(client, timer)
 
-		s.pingTimers.Store(client, time.AfterFunc(time.Duration(tickerInterval)*time.Second, func() {
-			// Delete the timer
-			//s.pingTimers.Delete(client)
-			// Create a ticker to notify about disconnected clients
-			s.clientTickers.Store(client, time.NewTicker(5*time.Second))
-			ticker, ok := s.clientTickers.Load(client)
-			if ok {
-				for range ticker.(*time.Ticker).C {
-					//log.Println(client, "PINGS NOT RECEIVED IN 10 SECONDS", t)
-
-					alert(*s.cfg, client, fmt.Sprintf("Pings not received in %v seconds", pingInterval))
-				}
-			}
-		}))
+		// Fire off a goroutine that expires in 60 seconds, then ticking every 30 seconds
+		go deadClientTicker(client, &s.clientTimers)
 	}
 
 	log.Println("Number of goroutines:", runtime.NumGoroutine())
@@ -139,16 +142,24 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.IsAlive) (*gorram.I
 	return msg, nil
 }
 
-func pingWait(client string, timer *time.Timer, reset chan bool) {
-	pingRecvd := <-reset
-	// If a ping was received, reset the timer
-	if pingRecvd {
-		stop := timer.Reset(time.Second * 10)
-		if !stop {
-			log.Println("Error stopping pingTimer")
-		}
+func deadClientTicker(clientName string, c *clientTimers) {
+	timer, ok := c.timers.Load(clientName)
+	if !ok {
+		log.Fatalln("Error: no timer for", clientName)
 	}
-	<-timer.C
+	ticker, ok := c.tickers.Load(clientName)
+	if !ok {
+		log.Fatalln("Error: no ticker for", clientName)
+	}
+
+	<-timer.(*time.Timer).C
+	log.Println(clientName, "is dead. Deleting it's timer.")
+	c.timers.Delete(clientName)
+
+	for t := range ticker.(*time.Ticker).C {
+		log.Println(t, clientName, "is dead")
+	}
+
 }
 
 func (s *gorramServer) RecordIssue(stream gorram.Reporter_RecordIssueServer) error {
