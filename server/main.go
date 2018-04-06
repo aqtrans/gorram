@@ -6,6 +6,7 @@ import (
 	"encoding/gob"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -117,15 +118,15 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.IsAlive) (*gorram.I
 	clientTimer, ok := s.clientTimers.timers.Load(client)
 
 	if ok {
-		log.Println("[TIMER] Timer found, resetting.")
+		log.Println("[TIMER]", client, "timer found, resetting.")
 		// Reset the client's timer
 		clientTimer.(*time.Timer).Reset(pingTime)
 
 	} else {
-		log.Println("[TIMER] Creating new timer for", pingTime, "seconds")
+		log.Println("[TIMER]", client, "creating new timer for", pingTime, "seconds")
 		// Check if the client was dead, and reset it's ticker
 		if clientTicker, ok := s.clientTimers.tickers.Load(client); ok {
-			log.Println("[TIMER] Existing clientTimers.tickers found, stopping it")
+			log.Println("[TIMER]", client, "is alive again. Stopping it's deadClientTicker.")
 			clientTicker.(*time.Ticker).Stop()
 		}
 		// create a ticker to store and reference
@@ -136,7 +137,7 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.IsAlive) (*gorram.I
 		s.clientTimers.timers.Store(client, timer)
 
 		// Fire off a goroutine that expires in 60 seconds, then ticking every 30 seconds
-		go deadClientTicker(client, &s.clientTimers)
+		go deadClientTicker(client, &s.clientTimers, *s.cfg)
 	}
 
 	log.Println("[TIMER] Number of goroutines:", runtime.NumGoroutine())
@@ -144,7 +145,7 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.IsAlive) (*gorram.I
 	return msg, nil
 }
 
-func deadClientTicker(clientName string, c *clientTimers) {
+func deadClientTicker(clientName string, c *clientTimers, cfg config) {
 	timer, ok := c.timers.Load(clientName)
 	if !ok {
 		log.Fatalln("[TIMER] Error: no timer for", clientName)
@@ -155,11 +156,14 @@ func deadClientTicker(clientName string, c *clientTimers) {
 	}
 
 	<-timer.(*time.Timer).C
+
 	log.Println("[TIMER]", clientName, "is dead. Deleting it's timer.")
 	c.timers.Delete(clientName)
 
 	for t := range ticker.(*time.Ticker).C {
-		log.Println("[TIMER]", t, clientName, "is dead")
+		//log.Println("[TIMER]", t, clientName, "is dead")
+
+		alert(cfg, clientName, fmt.Sprintf("%v is dead, since %v", clientName, t))
 	}
 
 }
