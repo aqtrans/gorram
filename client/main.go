@@ -21,10 +21,15 @@ import (
 // This is where all the actual checks are done, and an array of "issues" are made
 func doChecks(cfg *checks.Config) []*gorram.Issue {
 	var issues []*gorram.Issue
+
 	// Check loadavg
-	issues = checks.GetCheck(issues, cfg.Load)
+	if cfg.Load != nil {
+		issues = checks.GetCheck(issues, cfg.Load)
+	}
 	// Check disk usage
-	issues = checks.GetCheck(issues, cfg.Disk)
+	if cfg.Disk != nil {
+		issues = checks.GetCheck(issues, cfg.Disk)
+	}
 	// Check Deluge
 	//checks = getCheck(checks, cfg.delugeCheck)
 	return issues
@@ -89,7 +94,6 @@ func main() {
 	// Get config from server
 	cfgBytes, err := c.SendConfig(ctx, &gorram.ConfigRequest{
 		ClientName: *clientName,
-		CfgSha1Sum: "1a21a3",
 	})
 	if err != nil {
 		log.Fatalln(err)
