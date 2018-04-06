@@ -25,7 +25,8 @@ message Issue {
 }
 
 message Config {
-    // Raw config file
+    // Raw gob-encoded config file
+    // Passing via gob/bytes so the checks/ libs hold the structs
     bytes cfg = 1;
 }
 
