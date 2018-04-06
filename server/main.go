@@ -194,30 +194,30 @@ func loadConfig(client, configFile string) checks.Config {
 		log.Fatalln("Error reading config.toml", err)
 	}
 	if cfgTree.Has(client) {
-		log.Println("loading config for", client, "from config.toml...")
+		log.Println("Loading config for", client, "from config.toml...")
 		clientCfgTree := cfgTree.Get(client).(*toml.Tree)
 		clientCfg := checks.Config{}
 		err := clientCfgTree.Unmarshal(&clientCfg)
 		if err != nil {
 			log.Fatalln("Error unmarshaling clientCfgTree:", err)
 		}
-		return clientCfg
-	} else {
-		// Default config values:
-		return checks.Config{
-			Load: &checks.LoadAvg{
-				MaxLoad: 0.5,
-			},
-			Disk: &checks.DiskSpace{
-				Partitions: []string{"/"},
-				MaxUsage:   10.0,
-			},
-			Deluge: &checks.DelugeCheck{
-				URL:         "http://127.0.0.1:8112/json",
-				Password:    "deluge",
-				MaxTorrents: 1,
-			},
+		if clientCfg.Interval == 0 {
+			log.Println("No interval configured for", client, " Setting to 60 seconds.")
+			clientCfg.Interval = 60
 		}
+		return clientCfg
+	}
+
+	// Default config values:
+	return checks.Config{
+		Interval: 60,
+		Load: &checks.LoadAvg{
+			MaxLoad: 0.5,
+		},
+		Disk: &checks.DiskSpace{
+			Partitions: []string{"/"},
+			MaxUsage:   10.0,
+		},
 	}
 }
 

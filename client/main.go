@@ -42,7 +42,7 @@ func main() {
 	insecure := flag.Bool("insecure", false, "Connect to server without TLS.")
 	serverCert := flag.String("cert", "cert.pem", "Path to the certificate from the server.")
 	secretKey := flag.String("server-secret", "omg12345", "Secret key of the server.")
-	interval := flag.Duration("interval", 60*time.Second, "Number of seconds to check for issues on.")
+	//interval := flag.Duration("interval", 60*time.Second, "Number of seconds to check for issues on.")
 
 	flag.Parse()
 
@@ -106,8 +106,10 @@ func main() {
 		log.Fatalln("error decoding config from server:", err)
 	}
 
+	log.Println("Interval:", cfg.Interval)
+
 	// Ping and collect issues every X seconds
-	ticker := time.NewTicker(*interval)
+	ticker := time.NewTicker(time.Duration(cfg.Interval) * time.Second)
 	quit := make(chan struct{})
 	go func() {
 		for {

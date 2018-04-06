@@ -14,9 +14,10 @@ type check interface {
 }
 
 type Config struct {
-	Load   *LoadAvg
-	Disk   *DiskSpace
-	Deluge *DelugeCheck
+	Interval int64
+	Load     *LoadAvg
+	Disk     *DiskSpace
+	Deluge   *DelugeCheck
 }
 
 // GetCheck is a function which all checks should run through
