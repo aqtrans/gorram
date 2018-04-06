@@ -73,8 +73,8 @@ func (s *statHandler) HandleConn(ctx context.Context, connStats stats.ConnStats)
 
 type gorramServer struct {
 	clientTimers
-	clientList sync.Map
-	cfg        *config
+	clientCfg sync.Map
+	cfg       *config
 	/*
 		pingTimers    map[string]*time.Timer
 		clientList    map[string]chan bool
@@ -302,6 +302,10 @@ func main() {
 	// TLS stuff
 	var creds credentials.TransportCredentials
 	if *generate {
+		// Only generate cert.pem if it do not exist
+		if _, err := os.Stat("./cert.pem"); err == nil {
+			log.Fatalln("./cert.pem already exists. Not overwriting. Manually remove it and cert.key if you need to re-generate them.")
+		}
 		log.Println("Generating certs to ./cert.pem and ./cert.key")
 		generateCerts(*generateHost)
 	}
