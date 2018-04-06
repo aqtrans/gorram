@@ -73,7 +73,7 @@ func (s *statHandler) HandleConn(ctx context.Context, connStats stats.ConnStats)
 
 type gorramServer struct {
 	clientTimers
-	clientCfg sync.Map
+	clientCfg *sync.Map
 	cfg       *config
 	/*
 		pingTimers    map[string]*time.Timer
@@ -103,13 +103,10 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.IsAlive) (*gorram.I
 
 	client := getClientName(ctx)
 
-	// Load config to get Interval
-	cfg := loadConfig(client, s.cfg.configFile)
-
 	// pingTime is the time to wait before declaring a client dead
 	//   Eventually this should be the client's configured interval + 10 seconds or so
 	var pingTime time.Duration
-	pingTime = time.Duration(cfg.Interval+10) * time.Second
+	pingTime = time.Duration(s.loadConfig(client).Interval+10) * time.Second
 
 	// This might be redundant since this should always be true
 	if msg.IsAlive {
@@ -192,25 +189,11 @@ func (s *gorramServer) RecordIssue(stream gorram.Reporter_RecordIssueServer) err
 	}
 }
 
-func loadConfig(client, configFile string) checks.Config {
+func (s *gorramServer) loadConfig(client string) checks.Config {
 	// Attempt to read the config.toml, and then if it has [clientname] in it, unmarshal the config from there
-	cfgTree, err := toml.LoadFile(configFile)
-	if err != nil {
-		log.Fatalln("Error reading config.toml", err)
-	}
-	if cfgTree.Has(client) {
-		log.Println("Loading config for", client, "from config.toml...")
-		clientCfgTree := cfgTree.Get(client).(*toml.Tree)
-		clientCfg := checks.Config{}
-		err := clientCfgTree.Unmarshal(&clientCfg)
-		if err != nil {
-			log.Fatalln("Error unmarshaling clientCfgTree:", err)
-		}
-		if clientCfg.Interval == 0 {
-			log.Println("No interval configured for", client, " Setting to 60 seconds.")
-			clientCfg.Interval = 60
-		}
-		return clientCfg
+	clientCfg, isThere := s.clientCfg.Load(client)
+	if isThere {
+		return *clientCfg.(*checks.Config)
 	}
 
 	// Default config values:
@@ -238,7 +221,7 @@ func (s *gorramServer) SendConfig(ctx context.Context, req *gorram.ConfigRequest
 	var buf bytes.Buffer
 	encCfg := gob.NewEncoder(&buf)
 	// Load config
-	cfg := loadConfig(clientName, s.cfg.configFile)
+	cfg := s.loadConfig(clientName)
 	err := encCfg.Encode(cfg)
 	if err != nil {
 		log.Println("Error encoding config, returning empty config.")
@@ -339,8 +322,30 @@ func main() {
 		server = grpc.NewServer(grpc.Creds(creds), grpc.StatsHandler(&sh), grpc.UnaryInterceptor(cfg.unaryInterceptor))
 	}
 
+	// Load config.toml here
+	var clientCfgs sync.Map
+	cfgTree, err := toml.LoadFile(*confFile)
+	if err != nil {
+		log.Fatalln("Error reading config.toml", err)
+	}
+	for _, clientName := range cfgTree.Keys() {
+		log.Println("Loading config for", clientName, "from config.toml...")
+		clientCfgTree := cfgTree.Get(clientName).(*toml.Tree)
+		clientCfg := checks.Config{}
+		err := clientCfgTree.Unmarshal(&clientCfg)
+		if err != nil {
+			log.Fatalln("Error unmarshaling clientCfgTree:", err)
+		}
+		if clientCfg.Interval == 0 {
+			log.Println(clientName, "has no interval configured. Setting to 60 seconds.")
+			clientCfg.Interval = 60
+		}
+		clientCfgs.Store(clientName, &clientCfg)
+	}
+
 	gs := gorramServer{
-		cfg: cfg,
+		cfg:       cfg,
+		clientCfg: &clientCfgs,
 	}
 
 	gorram.RegisterReporterServer(server, &gs)
