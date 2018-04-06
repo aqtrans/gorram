@@ -33,7 +33,6 @@ func (l LoadAvg) doCheck() *checkData {
 			return nil
 		}
 		if loadAvg >= l.MaxLoad {
-			log.Printf("Load average is greater than %f, %f", l.MaxLoad, loadAvg)
 
 			return &checkData{
 				issues: []*pb.Issue{
