@@ -187,34 +187,24 @@ func (s *gorramServer) RecordIssue(stream gorram.Reporter_RecordIssueServer) err
 	}
 }
 
-func (s *gorramServer) SendConfig(ctx context.Context, req *gorram.ConfigRequest) (*gorram.Config, error) {
-	// TODO: Implement client-side SHA1 summing, once client-side config-reloading is implemented
-	/*
-		if req.CfgSha1Sum != "1a21a32" {
-			log.Println("config sha1 sum does not match server-side.")
-		}
-	*/
-	clientName := getClientName(ctx)
-
-	var cfg *checks.Config
-
+func loadConfig(client, configFile string) checks.Config {
 	// Attempt to read the config.toml, and then if it has [clientname] in it, unmarshal the config from there
-	cfgTree, err := toml.LoadFile(s.cfg.configFile)
+	cfgTree, err := toml.LoadFile(configFile)
 	if err != nil {
 		log.Fatalln("Error reading config.toml", err)
 	}
-	if cfgTree.Has(clientName) {
-		log.Println("loading config for", clientName, "from config.toml...")
-		clientCfgTree := cfgTree.Get(clientName).(*toml.Tree)
+	if cfgTree.Has(client) {
+		log.Println("loading config for", client, "from config.toml...")
+		clientCfgTree := cfgTree.Get(client).(*toml.Tree)
 		clientCfg := checks.Config{}
 		err := clientCfgTree.Unmarshal(&clientCfg)
 		if err != nil {
 			log.Fatalln("Error unmarshaling clientCfgTree:", err)
 		}
-		cfg = &clientCfg
+		return clientCfg
 	} else {
 		// Default config values:
-		cfg = &checks.Config{
+		return checks.Config{
 			Load: &checks.LoadAvg{
 				MaxLoad: 0.5,
 			},
@@ -229,16 +219,29 @@ func (s *gorramServer) SendConfig(ctx context.Context, req *gorram.ConfigRequest
 			},
 		}
 	}
+}
+
+func (s *gorramServer) SendConfig(ctx context.Context, req *gorram.ConfigRequest) (*gorram.Config, error) {
+	// TODO: Implement client-side SHA1 summing, once client-side config-reloading is implemented
+	/*
+		if req.CfgSha1Sum != "1a21a32" {
+			log.Println("config sha1 sum does not match server-side.")
+		}
+	*/
+	clientName := getClientName(ctx)
 
 	var buf bytes.Buffer
 	encCfg := gob.NewEncoder(&buf)
-	err = encCfg.Encode(cfg)
+	// Load config
+	cfg := loadConfig(clientName, s.cfg.configFile)
+	err := encCfg.Encode(cfg)
 	if err != nil {
 		log.Println("Error encoding config, returning empty config.")
 		return &gorram.Config{
 			Cfg: []byte(""),
 		}, nil
 	}
+
 	return &gorram.Config{
 		Cfg: buf.Bytes(),
 	}, nil
