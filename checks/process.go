@@ -10,7 +10,7 @@ import (
 )
 
 type ProcessExists struct {
-	Names []string
+	FullPaths []string
 }
 
 func getProcList() map[string]bool {
@@ -21,10 +21,14 @@ func getProcList() map[string]bool {
 	}
 	procMap := make(map[string]bool)
 	for _, proc := range procs {
-		name, err := proc.Name()
+		// Don't try to read PID 1
+		if proc.Pid == 1 {
+			continue
+		}
+		// Recording full executable path, using Exe() instead of Name() here:
+		name, err := proc.Exe()
 		if err != nil {
-			log.Println("Error with process name", err, proc.Pid)
-			break
+			continue
 		}
 		procMap[name] = true
 	}
@@ -37,11 +41,13 @@ func (p ProcessExists) doCheck() *checkData {
 
 	procList := getProcList()
 
-	for _, expectedName := range p.Names {
+	log.Println(procList)
+
+	for _, expectedName := range p.FullPaths {
 		if !procList[expectedName] {
 			issues = append(issues, &pb.Issue{
 				Title:         "Process Exists",
-				Message:       fmt.Sprintf("%v is not running", expectedName),
+				Message:       fmt.Sprintf("%v is not running. Check that the full path is specified.", expectedName),
 				TimeSubmitted: time.Now().Unix(),
 			})
 			isOK = false
