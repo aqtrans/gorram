@@ -18,6 +18,7 @@ type Config struct {
 	Load     *LoadAvg
 	Disk     *DiskSpace
 	Deluge   *DelugeCheck
+	Ps       *ProcessExists
 }
 
 // GetCheck is a function which all checks should run through

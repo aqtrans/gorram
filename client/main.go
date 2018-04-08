@@ -31,7 +31,14 @@ func doChecks(cfg *checks.Config) []*gorram.Issue {
 		issues = checks.GetCheck(issues, cfg.Disk)
 	}
 	// Check Deluge
-	//checks = getCheck(checks, cfg.delugeCheck)
+	if cfg.Deluge != nil {
+		issues = checks.GetCheck(issues, cfg.Deluge)
+	}
+	// Check ps faux
+	if cfg.Ps != nil {
+		issues = checks.GetCheck(issues, cfg.Ps)
+	}
+
 	return issues
 }
 
