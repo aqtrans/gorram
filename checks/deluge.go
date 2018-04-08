@@ -179,6 +179,7 @@ func (d DelugeCheck) doCheck() *checkData {
 		return &checkData{
 			issues: []*pb.Issue{
 				&pb.Issue{
+					Title:         "Deluge",
 					Message:       badMsg,
 					TimeSubmitted: time.Now().Unix(),
 				},

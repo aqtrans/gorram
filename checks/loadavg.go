@@ -37,6 +37,7 @@ func (l LoadAvg) doCheck() *checkData {
 			return &checkData{
 				issues: []*pb.Issue{
 					&pb.Issue{
+						Title:         "Load Average",
 						Message:       fmt.Sprintf("Load average is greater than %f, %f", l.MaxLoad, loadAvg),
 						TimeSubmitted: time.Now().Unix(),
 					},

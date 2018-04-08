@@ -26,6 +26,7 @@ func (p DiskSpace) doCheck() *checkData {
 		}
 		if usage.UsedPercent > p.MaxUsage {
 			issues = append(issues, &pb.Issue{
+				Title:         "Disk Usage",
 				Message:       fmt.Sprintf("Disk usage of %s is greater than %f, %f", partition, p.MaxUsage, usage.UsedPercent),
 				TimeSubmitted: time.Now().Unix(),
 			})
