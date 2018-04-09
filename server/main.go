@@ -1,9 +1,7 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/gob"
 	"errors"
 	"flag"
 	"fmt"
@@ -24,7 +22,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
-	"jba.io/go/gorram/checks"
 	"jba.io/go/gorram/proto"
 )
 
@@ -193,20 +190,20 @@ func (s *gorramServer) RecordIssue(stream gorram.Reporter_RecordIssueServer) err
 	}
 }
 
-func (s *gorramServer) loadConfig(client string) checks.Config {
+func (s *gorramServer) loadConfig(client string) gorram.Config {
 	// Attempt to read the config.toml, and then if it has [clientname] in it, unmarshal the config from there
 	clientCfg, isThere := s.clientCfg.Load(client)
 	if isThere {
-		return *clientCfg.(*checks.Config)
+		return *clientCfg.(*gorram.Config)
 	}
 
 	// Default config values:
-	return checks.Config{
+	return gorram.Config{
 		Interval: 60,
-		Load: &checks.LoadAvg{
+		Load: &gorram.Load{
 			MaxLoad: 0.5,
 		},
-		Disk: &checks.DiskSpace{
+		Disk: &gorram.DiskSpace{
 			Partitions: []string{"/"},
 			MaxUsage:   10.0,
 		},
@@ -222,21 +219,10 @@ func (s *gorramServer) SendConfig(ctx context.Context, req *gorram.ConfigRequest
 	*/
 	clientName := getClientName(ctx)
 
-	var buf bytes.Buffer
-	encCfg := gob.NewEncoder(&buf)
 	// Load config
 	cfg := s.loadConfig(clientName)
-	err := encCfg.Encode(cfg)
-	if err != nil {
-		log.Println("Error encoding config, returning empty config.")
-		return &gorram.Config{
-			Cfg: []byte(""),
-		}, nil
-	}
 
-	return &gorram.Config{
-		Cfg: buf.Bytes(),
-	}, nil
+	return &cfg, nil
 }
 
 func (cfg config) authorize(ctx context.Context) error {
@@ -335,7 +321,7 @@ func main() {
 	for _, clientName := range cfgTree.Keys() {
 		log.Println("Loading config for", clientName, "from config.toml...")
 		clientCfgTree := cfgTree.Get(clientName).(*toml.Tree)
-		clientCfg := checks.Config{}
+		clientCfg := gorram.Config{}
 		err := clientCfgTree.Unmarshal(&clientCfg)
 		if err != nil {
 			log.Fatalln("Error unmarshaling clientCfgTree:", err)

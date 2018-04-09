@@ -1,9 +1,7 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/gob"
 	"flag"
 	"log"
 	"os"
@@ -19,24 +17,24 @@ import (
 )
 
 // This is where all the actual checks are done, and an array of "issues" are made
-func doChecks(cfg *checks.Config) []*gorram.Issue {
+func doChecks(cfg *gorram.Config) []*gorram.Issue {
 	var issues []*gorram.Issue
 
 	// Check loadavg
 	if cfg.Load != nil {
-		issues = checks.GetCheck(issues, cfg.Load)
+		issues = checks.GetCheck(issues, checks.LoadAvg{Cfg: *cfg.Load})
 	}
 	// Check disk usage
 	if cfg.Disk != nil {
-		issues = checks.GetCheck(issues, cfg.Disk)
+		issues = checks.GetCheck(issues, checks.DiskSpace{Cfg: *cfg.Disk})
 	}
 	// Check Deluge
 	if cfg.Deluge != nil {
-		issues = checks.GetCheck(issues, cfg.Deluge)
+		issues = checks.GetCheck(issues, checks.DelugeCheck{Cfg: *cfg.Deluge})
 	}
 	// Check ps faux
 	if cfg.Ps != nil {
-		issues = checks.GetCheck(issues, cfg.Ps)
+		issues = checks.GetCheck(issues, checks.ProcessExists{Cfg: *cfg.Ps})
 	}
 
 	return issues
@@ -99,18 +97,11 @@ func main() {
 	ctx = metadata.AppendToOutgoingContext(ctx, "secret", *secretKey)
 
 	// Get config from server
-	cfgBytes, err := c.SendConfig(ctx, &gorram.ConfigRequest{
+	cfg, err := c.SendConfig(ctx, &gorram.ConfigRequest{
 		ClientName: *clientName,
 	})
 	if err != nil {
 		log.Fatalln(err)
-	}
-	buf := bytes.NewBuffer(cfgBytes.Cfg)
-	dec := gob.NewDecoder(buf)
-	var cfg checks.Config
-	err = dec.Decode(&cfg)
-	if err != nil {
-		log.Fatalln("error decoding config from server:", err)
 	}
 
 	log.Println("Interval:", cfg.Interval)
@@ -129,7 +120,7 @@ func main() {
 				}
 
 				// Do checks
-				i := doChecks(&cfg)
+				i := doChecks(cfg)
 				// If there are any checks, open a client-side stream and record them
 				if len(i) > 0 {
 					issueStream, err := c.RecordIssue(ctx)
