@@ -203,9 +203,11 @@ func (s *gorramServer) loadConfig(client string) gorram.Config {
 		Load: &gorram.Load{
 			MaxLoad: 0.5,
 		},
-		Disk: &gorram.DiskSpace{
-			Partitions: []string{"/"},
-			MaxUsage:   10.0,
+		Disk: []*gorram.DiskSpace{
+			&gorram.DiskSpace{
+				Partition: "/",
+				MaxUsage:  10.0,
+			},
 		},
 	}
 }

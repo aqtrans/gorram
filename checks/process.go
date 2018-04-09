@@ -43,16 +43,15 @@ func (p ProcessExists) doCheck() *checkData {
 
 	log.Println(procList)
 
-	for _, expectedName := range p.Cfg.FullPaths {
-		if !procList[expectedName] {
-			issues = append(issues, &pb.Issue{
-				Title:         "Process Exists",
-				Message:       fmt.Sprintf("%v is not running. Check that the full path is specified.", expectedName),
-				TimeSubmitted: time.Now().Unix(),
-			})
-			isOK = false
-		}
+	if !procList[p.Cfg.FullPath] {
+		issues = append(issues, &pb.Issue{
+			Title:         "Process Exists",
+			Message:       fmt.Sprintf("%v is not running. Check that the full path is specified.", p.Cfg.FullPath),
+			TimeSubmitted: time.Now().Unix(),
+		})
+		isOK = false
 	}
+
 	return &checkData{
 		issues: issues,
 		ok:     isOK,

@@ -26,7 +26,10 @@ func doChecks(cfg *gorram.Config) []*gorram.Issue {
 	}
 	// Check disk usage
 	if cfg.Disk != nil {
-		issues = checks.GetCheck(issues, checks.DiskSpace{Cfg: *cfg.Disk})
+		for _, diskCheck := range cfg.Disk {
+			issues = checks.GetCheck(issues, checks.DiskSpace{Cfg: *diskCheck})
+		}
+
 	}
 	// Check Deluge
 	if cfg.Deluge != nil {
@@ -34,7 +37,9 @@ func doChecks(cfg *gorram.Config) []*gorram.Issue {
 	}
 	// Check ps faux
 	if cfg.Ps != nil {
-		issues = checks.GetCheck(issues, checks.ProcessExists{Cfg: *cfg.Ps})
+		for _, psCheck := range cfg.Ps {
+			issues = checks.GetCheck(issues, checks.ProcessExists{Cfg: *psCheck})
+		}
 	}
 
 	return issues
