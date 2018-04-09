@@ -326,7 +326,7 @@ func main() {
 		clientCfg := gorram.Config{}
 		err := clientCfgTree.Unmarshal(&clientCfg)
 		if err != nil {
-			log.Fatalln("Error unmarshaling clientCfgTree:", err)
+			log.Fatalln("Error unmarshaling config.toml for client "+clientName+":", err)
 		}
 		if clientCfg.Interval == 0 {
 			log.Println(clientName, "has no interval configured. Setting to 60 seconds.")
