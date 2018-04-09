@@ -13,6 +13,7 @@ type check interface {
 	doCheck() *checkData
 }
 
+/*
 type Config struct {
 	Interval int64
 	Load     *LoadAvg
@@ -20,6 +21,7 @@ type Config struct {
 	Deluge   *DelugeCheck
 	Ps       *ProcessExists
 }
+*/
 
 // GetCheck is a function which all checks should run through
 // It should only be called in client.go by doCheck().

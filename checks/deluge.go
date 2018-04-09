@@ -20,9 +20,7 @@ import (
 )
 
 type DelugeCheck struct {
-	URL         string
-	Password    string
-	MaxTorrents int
+	Cfg pb.Deluge
 }
 
 var (
@@ -91,10 +89,10 @@ func (d DelugeCheck) doCheck() *checkData {
 
 	// auth.login: Login and set the cookie
 	var loginJSON delugeResponse
-	_, _, reqErr := goreq.New().Post(d.URL).SendStruct(&delugeRequest{
+	_, _, reqErr := goreq.New().Post(d.Cfg.Url).SendStruct(&delugeRequest{
 		ID:     "1",
 		Method: "auth.login",
-		Params: []string{d.Password},
+		Params: []string{d.Cfg.Password},
 	}).BindBody(&loginJSON).SetClient(client).End()
 
 	if reqErr != nil {
@@ -108,7 +106,7 @@ func (d DelugeCheck) doCheck() *checkData {
 
 	// auth.check_session: Should definitely return true if the cookie set above is set correctly
 	var loginOkayJSON delugeResponse
-	_, _, reqErr = goreq.New().Post(d.URL).SendStruct(&delugeRequest{
+	_, _, reqErr = goreq.New().Post(d.Cfg.Url).SendStruct(&delugeRequest{
 		ID:     "1",
 		Method: "auth.check_session",
 		Params: []string{},
@@ -125,7 +123,7 @@ func (d DelugeCheck) doCheck() *checkData {
 
 	// web.update_ui: Try and retrieve data
 	var updateResp updateJSON
-	resp, _, reqErr := goreq.New().Post(d.URL).SendStruct(&delugeRequest{
+	resp, _, reqErr := goreq.New().Post(d.Cfg.Url).SendStruct(&delugeRequest{
 		ID:     "1",
 		Method: "web.update_ui",
 		Params: []string{"name", "time_added"},
@@ -151,26 +149,27 @@ func (d DelugeCheck) doCheck() *checkData {
 	// updateres.Result.Filters spits out [[All 941] [Downloading 1] [Seeding 794] [Active 1] [Paused 146] [Queued 0] [Checking 0] [Error 0]]
 	// An array of arrays, handy!
 	downloading := updateResp.Result.Filters.State[1]
-	dlcnt := int(downloading[1].(float64))
+	dlcnt := int64(downloading[1].(float64))
 	checking := updateResp.Result.Filters.State[6]
-	chkcnt := int(checking[1].(float64))
+	chkcnt := int64(checking[1].(float64))
 	erroring := updateResp.Result.Filters.State[7]
-	errcnt := int(erroring[1].(float64))
+	errcnt := int64(erroring[1].(float64))
 
 	//fmt.Println(dlcnt)
 	//fmt.Println(chkcnt)
 	//fmt.Println(errcnt)
-	if dlcnt > d.MaxTorrents {
+	if dlcnt > d.Cfg.MaxTorrents {
 		isBad = true
-		badMsg = strconv.Itoa(dlcnt) + " downloading torrents is too many."
+		badMsg = strconv.FormatInt(dlcnt, 10) + " downloading torrents is too many."
+
 	}
-	if chkcnt > d.MaxTorrents {
+	if chkcnt > d.Cfg.MaxTorrents {
 		isBad = true
-		badMsg = strconv.Itoa(chkcnt) + " checking torrents is too many."
+		badMsg = strconv.FormatInt(chkcnt, 10) + " checking torrents is too many."
 	}
-	if errcnt > d.MaxTorrents {
+	if errcnt > d.Cfg.MaxTorrents {
 		isBad = true
-		badMsg = strconv.Itoa(errcnt) + " errored torrents is too many."
+		badMsg = strconv.FormatInt(errcnt, 10) + " errored torrents is too many."
 	}
 	//fmt.Println(isBad)
 	//fmt.Println(badMsg)

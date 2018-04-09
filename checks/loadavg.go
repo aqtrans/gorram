@@ -12,7 +12,7 @@ import (
 )
 
 type LoadAvg struct {
-	MaxLoad float64
+	Cfg pb.Load
 }
 
 func (l LoadAvg) doCheck() *checkData {
@@ -32,13 +32,13 @@ func (l LoadAvg) doCheck() *checkData {
 			log.Println("Error parsing loadavg:", err)
 			return nil
 		}
-		if loadAvg >= l.MaxLoad {
+		if loadAvg >= l.Cfg.MaxLoad {
 
 			return &checkData{
 				issues: []*pb.Issue{
 					&pb.Issue{
 						Title:         "Load Average",
-						Message:       fmt.Sprintf("Load average is greater than %f, %f", l.MaxLoad, loadAvg),
+						Message:       fmt.Sprintf("Load average is greater than %f, %f", l.Cfg.MaxLoad, loadAvg),
 						TimeSubmitted: time.Now().Unix(),
 					},
 				},

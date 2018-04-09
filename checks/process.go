@@ -10,7 +10,7 @@ import (
 )
 
 type ProcessExists struct {
-	FullPaths []string
+	Cfg pb.ProcessExists
 }
 
 func getProcList() map[string]bool {
@@ -43,7 +43,7 @@ func (p ProcessExists) doCheck() *checkData {
 
 	log.Println(procList)
 
-	for _, expectedName := range p.FullPaths {
+	for _, expectedName := range p.Cfg.FullPaths {
 		if !procList[expectedName] {
 			issues = append(issues, &pb.Issue{
 				Title:         "Process Exists",
