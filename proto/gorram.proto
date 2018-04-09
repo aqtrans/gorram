@@ -25,14 +25,14 @@ message Issue {
 }
 
 message Config {
-    // Raw gob-encoded config file
-    // Passing via gob/bytes so the checks/ libs hold the structs
-    bytes cfg = 1;
-    int64 interval = 2;
-    Deluge deluge = 3;
-    DiskSpace disk = 4;
-    Load load = 5;
-    ProcessExists ps = 6;
+    int64 interval = 1;
+    // Only allow one Deluge check per-host
+    Deluge deluge = 2;
+    // Only one load check per-host
+    Load load = 3;
+    // Allow multiple instances of disk space and process checks
+    repeated DiskSpace disk = 4;
+    repeated ProcessExists ps = 5;
 }
 
 message Deluge {
@@ -42,7 +42,7 @@ message Deluge {
 }
 
 message DiskSpace {
-    repeated string partitions = 1;
+    string partition = 1;
     double max_usage = 2;
 }
 
@@ -51,7 +51,7 @@ message Load {
 }
 
 message ProcessExists {
-    repeated string full_paths = 1;
+    string full_path = 1;
 }
 
 message ConfigRequest {
