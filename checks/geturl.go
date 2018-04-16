@@ -34,5 +34,7 @@ func (g GetURL) doCheck() *checkData {
 			ok: false,
 		}
 	}
-	return nil
+	return &checkData{
+		ok: true,
+	}
 }

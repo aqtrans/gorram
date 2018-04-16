@@ -41,6 +41,12 @@ func doChecks(cfg *gorram.Config) []*gorram.Issue {
 			issues = checks.GetCheck(issues, checks.ProcessExists{Cfg: *psCheck})
 		}
 	}
+	// Check GET URLs, looping throug list of given URLs
+	if cfg.Get != nil {
+		for _, urlCheck := range cfg.Get {
+			issues = checks.GetCheck(issues, checks.GetURL{Cfg: *urlCheck})
+		}
+	}
 
 	return issues
 }
@@ -51,7 +57,7 @@ type secret struct {
 }
 
 func (s *secret) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
-	log.Println(uri, ctx)
+	//log.Println(uri, ctx)
 	return map[string]string{
 		"secret": s.Secret,
 	}, nil
