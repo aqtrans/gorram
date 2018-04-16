@@ -228,14 +228,18 @@ func (s *gorramServer) SendConfig(ctx context.Context, req *gorram.ConfigRequest
 }
 
 func (cfg config) authorize(ctx context.Context) error {
-
+	var clientName string
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
 		if len(md["secret"]) > 0 && md["secret"][0] == cfg.secretKey {
 			return nil
 		}
+		// Set client name if applicable
+		if len(md["client"]) > 0 {
+			clientName = md["client"][0]
+		}
 	}
 	err := errors.New("Access Denied")
-	log.Println(err)
+	log.Println(err, "To Client: "+clientName)
 	return err
 }
 
@@ -245,6 +249,13 @@ func (cfg config) unaryInterceptor(ctx context.Context, req interface{}, info *g
 	}
 
 	return handler(ctx, req)
+}
+
+func (cfg config) streamInterceptor(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	if err := cfg.authorize(stream.Context()); err != nil {
+		return err
+	}
+	return handler(srv, stream)
 }
 
 func alert(cfg config, client, message string) {
