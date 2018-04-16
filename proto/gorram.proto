@@ -30,9 +30,10 @@ message Config {
     Deluge deluge = 2;
     // Only one load check per-host
     Load load = 3;
-    // Allow multiple instances of disk space and process checks
+    // Allow multiple instances of other checks
     repeated DiskSpace disk = 4;
     repeated ProcessExists ps = 5;
+    repeated GetURL get = 6;
 }
 
 message Deluge {
@@ -52,6 +53,11 @@ message Load {
 
 message ProcessExists {
     string full_path = 1;
+}
+
+message GetURL {
+    string url = 1;
+    string expected_body = 2;
 }
 
 message ConfigRequest {
