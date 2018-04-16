@@ -16,6 +16,22 @@ import (
 	"jba.io/go/gorram/proto"
 )
 
+type secret struct {
+	Secret string
+	TLS    bool
+}
+
+func (s *secret) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+	log.Println(uri, ctx)
+	return map[string]string{
+		"secret": s.Secret,
+	}, nil
+}
+
+func (s *secret) RequireTransportSecurity() bool {
+	return s.TLS
+}
+
 // This is where all the actual checks are done, and an array of "issues" are made
 func doChecks(cfg *gorram.Config) []*gorram.Issue {
 	var issues []*gorram.Issue
@@ -79,13 +95,19 @@ func main() {
 	var err error
 	var creds credentials.TransportCredentials
 	if *insecure {
-		conn, err = grpc.Dial(*serverAddress, grpc.WithInsecure())
+		conn, err = grpc.Dial(*serverAddress, grpc.WithInsecure(), grpc.WithPerRPCCredentials(&secret{
+			Secret: *secretKey,
+			TLS:    false,
+		}))
 	} else {
 		creds, err = credentials.NewClientTLSFromFile(*serverCert, "")
 		if err != nil {
 			log.Fatal("Error parsing TLS cert:", err)
 		}
-		conn, err = grpc.Dial(*serverAddress, grpc.WithTransportCredentials(creds))
+		conn, err = grpc.Dial(*serverAddress, grpc.WithTransportCredentials(creds), grpc.WithPerRPCCredentials(&secret{
+			Secret: *secretKey,
+			TLS:    true,
+		}))
 	}
 	if err != nil {
 		log.Fatalf("Error connecting to server: %v", err)
@@ -99,7 +121,7 @@ func main() {
 	ctx = metadata.AppendToOutgoingContext(ctx, "client", *clientName)
 
 	// Add secret key metadata
-	ctx = metadata.AppendToOutgoingContext(ctx, "secret", *secretKey)
+	//ctx = metadata.AppendToOutgoingContext(ctx, "secret", *secretKey)
 
 	// Get config from server
 	cfg, err := c.SendConfig(ctx, &gorram.ConfigRequest{
