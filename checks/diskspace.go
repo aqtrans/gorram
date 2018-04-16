@@ -14,8 +14,6 @@ type DiskSpace struct {
 }
 
 func (p DiskSpace) doCheck() *checkData {
-	var issues []*pb.Issue
-	isOK := true
 
 	usage, err := disk.Usage(p.Cfg.Partition)
 	if err != nil {
@@ -23,17 +21,18 @@ func (p DiskSpace) doCheck() *checkData {
 		return nil
 	}
 	if usage.UsedPercent > p.Cfg.MaxUsage {
-		issues = append(issues, &pb.Issue{
-			Title:         "Disk Usage",
-			Message:       fmt.Sprintf("Disk usage of %s is greater than %f, %f", p.Cfg.Partition, p.Cfg.MaxUsage, usage.UsedPercent),
-			TimeSubmitted: time.Now().Unix(),
-		})
-		isOK = false
+		return &checkData{
+			issue: &pb.Issue{
+				Title:         "Disk Usage",
+				Message:       fmt.Sprintf("Disk usage of %s is greater than %f, %f", p.Cfg.Partition, p.Cfg.MaxUsage, usage.UsedPercent),
+				TimeSubmitted: time.Now().Unix(),
+			},
+			ok: false,
+		}
 	}
 
 	return &checkData{
-		issues: issues,
-		ok:     isOK,
+		ok: true,
 	}
 
 }

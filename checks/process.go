@@ -36,22 +36,20 @@ func getProcList() map[string]bool {
 }
 
 func (p ProcessExists) doCheck() *checkData {
-	var issues []*pb.Issue
-	isOK := true
-
 	procList := getProcList()
 
 	if !procList[p.Cfg.FullPath] {
-		issues = append(issues, &pb.Issue{
-			Title:         "Process Exists",
-			Message:       fmt.Sprintf("%v is not running. Check that the full path is specified.", p.Cfg.FullPath),
-			TimeSubmitted: time.Now().Unix(),
-		})
-		isOK = false
+		return &checkData{
+			issue: &pb.Issue{
+				Title:         "Process Exists",
+				Message:       fmt.Sprintf("%v is not running. Check that the full path is specified.", p.Cfg.FullPath),
+				TimeSubmitted: time.Now().Unix(),
+			},
+			ok: false,
+		}
 	}
 
 	return &checkData{
-		issues: issues,
-		ok:     isOK,
+		ok: true,
 	}
 }

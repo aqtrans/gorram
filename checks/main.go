@@ -5,8 +5,8 @@ import (
 )
 
 type checkData struct {
-	issues []*gorram.Issue
-	ok     bool
+	issue *gorram.Issue
+	ok    bool
 }
 
 type check interface {
@@ -26,13 +26,11 @@ type Config struct {
 // GetCheck is a function which all checks should run through
 // It should only be called in client.go by doCheck().
 // If the check() is not OK, it appends the issues and returns it.
-func GetCheck(checks []*gorram.Issue, c check) []*gorram.Issue {
+func GetCheck(issues []*gorram.Issue, c check) []*gorram.Issue {
 	//log.Println("Check:", c)
 	theCheck := c.doCheck()
 	if !theCheck.ok {
-		for _, issue := range theCheck.issues {
-			checks = append(checks, issue)
-		}
+		issues = append(issues, theCheck.issue)
 	}
-	return checks
+	return issues
 }

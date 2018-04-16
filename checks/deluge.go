@@ -223,20 +223,17 @@ func (d DelugeCheck) doCheck() *checkData {
 
 	if isBad {
 		return &checkData{
-			issues: []*pb.Issue{
-				&pb.Issue{
-					Title:         "Deluge",
-					Message:       badMsg,
-					TimeSubmitted: time.Now().Unix(),
-				},
+			issue: &pb.Issue{
+				Title:         "Deluge",
+				Message:       badMsg,
+				TimeSubmitted: time.Now().Unix(),
 			},
 			ok: false,
 		}
 	}
 
 	return &checkData{
-		issues: nil,
-		ok:     true,
+		ok: true,
 	}
 
 }
