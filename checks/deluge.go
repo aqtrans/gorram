@@ -6,8 +6,10 @@ package checks
 //To keep things simple, it sets a bool variable to true, which is finally what determines the exit status of the program, telling Sensu what to do
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"net/http/cookiejar"
 	"os"
@@ -15,7 +17,7 @@ import (
 	"time"
 	//"strings"
 
-	"github.com/smallnest/goreq"
+	//"github.com/smallnest/goreq"
 	pb "jba.io/go/gorram/proto"
 )
 
@@ -74,6 +76,23 @@ type updateJSON struct {
 	Error interface{} `json:"error"`
 }
 
+func (d DelugeCheck) post(c *http.Client, req *delugeRequest, resp interface{}) {
+	reqJSON, err := json.Marshal(req)
+	if err != nil {
+		log.Fatalln("error encoding request to JSON:", err)
+	}
+	r, err := c.Post(d.Cfg.Url, "application/json", bytes.NewBuffer(reqJSON))
+	if err != nil {
+		log.Fatalln("error sending request to Deluge:", err)
+	}
+	if r.Body != nil {
+		err := json.NewDecoder(r.Body).Decode(resp)
+		if err != nil {
+			log.Fatalln("error decoding request to JSON:", err)
+		}
+	}
+}
+
 func (d DelugeCheck) doCheck() *checkData {
 
 	cookieJar, err := cookiejar.New(nil)
@@ -88,34 +107,52 @@ func (d DelugeCheck) doCheck() *checkData {
 	}
 
 	// auth.login: Login and set the cookie
+	/*
+		var loginJSON delugeResponse
+		_, _, reqErr := goreq.New().Post(d.Cfg.Url).SendStruct(&delugeRequest{
+			ID:     "1",
+			Method: "auth.login",
+			Params: []string{d.Cfg.Password},
+		}).BindBody(&loginJSON).SetClient(client).End()
+
+		if reqErr != nil {
+			fmt.Println(reqErr)
+			os.Exit(2)
+		}
+	*/
 	var loginJSON delugeResponse
-	_, _, reqErr := goreq.New().Post(d.Cfg.Url).SendStruct(&delugeRequest{
+	d.post(client, &delugeRequest{
 		ID:     "1",
 		Method: "auth.login",
 		Params: []string{d.Cfg.Password},
-	}).BindBody(&loginJSON).SetClient(client).End()
+	}, &loginJSON)
 
-	if reqErr != nil {
-		fmt.Println(reqErr)
-		os.Exit(2)
-	}
 	if !loginJSON.Result {
 		fmt.Println("Error logging into Deluge. Check password.")
 		os.Exit(2)
 	}
 
 	// auth.check_session: Should definitely return true if the cookie set above is set correctly
+	/*
+		var loginOkayJSON delugeResponse
+		_, _, reqErr = goreq.New().Post(d.Cfg.Url).SendStruct(&delugeRequest{
+			ID:     "1",
+			Method: "auth.check_session",
+			Params: []string{},
+		}).BindBody(&loginOkayJSON).SetClient(client).End()
+
+		if reqErr != nil {
+			fmt.Println(reqErr)
+			os.Exit(2)
+		}
+	*/
 	var loginOkayJSON delugeResponse
-	_, _, reqErr = goreq.New().Post(d.Cfg.Url).SendStruct(&delugeRequest{
+	d.post(client, &delugeRequest{
 		ID:     "1",
 		Method: "auth.check_session",
 		Params: []string{},
-	}).BindBody(&loginOkayJSON).SetClient(client).End()
+	}, &loginOkayJSON)
 
-	if reqErr != nil {
-		fmt.Println(reqErr)
-		os.Exit(2)
-	}
 	if !loginOkayJSON.Result {
 		fmt.Println("Error logging into Deluge. Check password.")
 		os.Exit(2)
@@ -123,21 +160,31 @@ func (d DelugeCheck) doCheck() *checkData {
 
 	// web.update_ui: Try and retrieve data
 	var updateResp updateJSON
-	resp, _, reqErr := goreq.New().Post(d.Cfg.Url).SendStruct(&delugeRequest{
+	/*
+		resp, _, reqErr := goreq.New().Post(d.Cfg.Url).SendStruct(&delugeRequest{
+			ID:     "1",
+			Method: "web.update_ui",
+			Params: []string{"name", "time_added"},
+		}).BindBody(&updateResp).SetClient(client).End()
+
+		if reqErr != nil {
+			fmt.Println(reqErr)
+			os.Exit(2)
+		}
+	*/
+	d.post(client, &delugeRequest{
 		ID:     "1",
 		Method: "web.update_ui",
 		Params: []string{"name", "time_added"},
-	}).BindBody(&updateResp).SetClient(client).End()
+	}, &updateResp)
 
-	if reqErr != nil {
-		fmt.Println(reqErr)
-		os.Exit(2)
-	}
-	// Check that this returned 200
-	if resp.StatusCode != 200 {
-		fmt.Println("web.update_ui did not return 200:", resp.Status)
-		os.Exit(2)
-	}
+	/*
+		// Check that this returned 200
+		if resp.StatusCode != 200 {
+			fmt.Println("web.update_ui did not return 200:", resp.Status)
+			os.Exit(2)
+		}
+	*/
 
 	if len(updateResp.Result.Filters.State) == 0 {
 		fmt.Println("Error: Deluge web-ui likely waiting to connect to a host. Visit the web-ui manually.")
