@@ -16,6 +16,35 @@ import (
 	"jba.io/go/gorram/proto"
 )
 
+// This is where all the actual checks are done, and an array of "issues" is made
+func doChecks(cfg *gorram.Config) []*gorram.Issue {
+	var issues []*gorram.Issue
+
+	// Check loadavg
+	if cfg.Load != nil {
+		issues = checks.GetCheck(issues, checks.LoadAvg{Cfg: *cfg.Load})
+	}
+	// Check disk usage, looping through given list of disks
+	if cfg.Disk != nil {
+		for _, diskCheck := range cfg.Disk {
+			issues = checks.GetCheck(issues, checks.DiskSpace{Cfg: *diskCheck})
+		}
+
+	}
+	// Check Deluge
+	if cfg.Deluge != nil {
+		issues = checks.GetCheck(issues, checks.DelugeCheck{Cfg: *cfg.Deluge})
+	}
+	// Check ps faux, looping through given list of full process names
+	if cfg.Ps != nil {
+		for _, psCheck := range cfg.Ps {
+			issues = checks.GetCheck(issues, checks.ProcessExists{Cfg: *psCheck})
+		}
+	}
+
+	return issues
+}
+
 type secret struct {
 	Secret string
 	TLS    bool
@@ -30,35 +59,6 @@ func (s *secret) GetRequestMetadata(ctx context.Context, uri ...string) (map[str
 
 func (s *secret) RequireTransportSecurity() bool {
 	return s.TLS
-}
-
-// This is where all the actual checks are done, and an array of "issues" are made
-func doChecks(cfg *gorram.Config) []*gorram.Issue {
-	var issues []*gorram.Issue
-
-	// Check loadavg
-	if cfg.Load != nil {
-		issues = checks.GetCheck(issues, checks.LoadAvg{Cfg: *cfg.Load})
-	}
-	// Check disk usage
-	if cfg.Disk != nil {
-		for _, diskCheck := range cfg.Disk {
-			issues = checks.GetCheck(issues, checks.DiskSpace{Cfg: *diskCheck})
-		}
-
-	}
-	// Check Deluge
-	if cfg.Deluge != nil {
-		issues = checks.GetCheck(issues, checks.DelugeCheck{Cfg: *cfg.Deluge})
-	}
-	// Check ps faux
-	if cfg.Ps != nil {
-		for _, psCheck := range cfg.Ps {
-			issues = checks.GetCheck(issues, checks.ProcessExists{Cfg: *psCheck})
-		}
-	}
-
-	return issues
 }
 
 func main() {
