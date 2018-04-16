@@ -41,8 +41,6 @@ func (p ProcessExists) doCheck() *checkData {
 
 	procList := getProcList()
 
-	log.Println(procList)
-
 	if !procList[p.Cfg.FullPath] {
 		issues = append(issues, &pb.Issue{
 			Title:         "Process Exists",
