@@ -3,7 +3,6 @@ package checks
 import (
 	"fmt"
 	"log"
-	"strings"
 	"time"
 
 	"github.com/shirou/gopsutil/process"
@@ -14,13 +13,14 @@ type ProcessExists struct {
 	Cfg pb.ProcessExists
 }
 
-func getProcList() string {
+func checkForProc(c pb.ProcessExists) bool {
+	var procExists bool
+
 	procs, err := process.Processes()
 	if err != nil {
 		log.Fatalln("Error fetching process list", err)
-		return ""
+		return false
 	}
-	var procSlice []string
 	for _, proc := range procs {
 		// Don't try to read PID 1
 		if proc.Pid == 1 {
@@ -29,17 +29,33 @@ func getProcList() string {
 		// Recording full executable path, using Cmdline() instead of Name() here:
 		name, err := proc.Cmdline()
 		if err != nil {
+			log.Println("error retrieving cmdline for proc", err)
 			continue
 		}
-		procSlice = append(procSlice, name)
+		if name == c.Path {
+			if c.User != "" {
+				user, err := proc.Username()
+				if err != nil {
+					log.Println("error retrieving user for proc", err)
+					continue
+				}
+				if user == c.User {
+					procExists = true
+					break
+				}
+			} else {
+				procExists = true
+				break
+			}
+		}
 	}
-	return strings.Join(procSlice, ",")
+	return procExists
 }
 
 func (p ProcessExists) doCheck() *checkData {
-	procList := getProcList()
+	//procList := getProcList()
 
-	if !strings.Contains(procList, p.Cfg.Path) {
+	if !checkForProc(p.Cfg) {
 		return &checkData{
 			issue: &pb.Issue{
 				Title:         "Process Exists",
