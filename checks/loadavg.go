@@ -2,12 +2,9 @@ package checks
 
 import (
 	"fmt"
-	"io/ioutil"
-	"log"
-	"strconv"
-	"strings"
 	"time"
 
+	"github.com/shirou/gopsutil/load"
 	pb "jba.io/go/gorram/proto"
 )
 
@@ -16,32 +13,52 @@ type LoadAvg struct {
 }
 
 func (l LoadAvg) doCheck() *checkData {
-	loadAvgRaw, err := ioutil.ReadFile("/proc/loadavg")
+
+	loadAvgs, err := load.Avg()
 	if err != nil {
-		log.Println("Error reading load average:", err)
-		return nil
+		return &checkData{
+			issue: &pb.Issue{
+				Title:         "Load Average",
+				Message:       fmt.Sprintf("Error fetching load average, %v", err),
+				TimeSubmitted: time.Now().Unix(),
+			},
+			ok: false,
+		}
 	}
-	loadAvgs := strings.Fields(string(loadAvgRaw))
 
-	for k, v := range loadAvgs {
-		if k > 2 {
-			break
-		}
-		loadAvg, err := strconv.ParseFloat(v, 64)
-		if err != nil {
-			log.Println("Error parsing loadavg:", err)
-			return nil
-		}
-		if loadAvg >= l.Cfg.MaxLoad {
+	if loadAvgs.Load15 >= l.Cfg.MaxLoad {
 
-			return &checkData{
-				issue: &pb.Issue{
-					Title:         "Load Average",
-					Message:       fmt.Sprintf("Load average is greater than %f, %f", l.Cfg.MaxLoad, loadAvg),
-					TimeSubmitted: time.Now().Unix(),
-				},
-				ok: false,
-			}
+		return &checkData{
+			issue: &pb.Issue{
+				Title:         "Load Average",
+				Message:       fmt.Sprintf("Load average is greater than %f, %f", l.Cfg.MaxLoad, loadAvgs.Load1),
+				TimeSubmitted: time.Now().Unix(),
+			},
+			ok: false,
+		}
+	}
+
+	if loadAvgs.Load5 >= l.Cfg.MaxLoad {
+
+		return &checkData{
+			issue: &pb.Issue{
+				Title:         "Load Average",
+				Message:       fmt.Sprintf("Load average is greater than %f, %f", l.Cfg.MaxLoad, loadAvgs.Load5),
+				TimeSubmitted: time.Now().Unix(),
+			},
+			ok: false,
+		}
+	}
+
+	if loadAvgs.Load1 >= l.Cfg.MaxLoad {
+
+		return &checkData{
+			issue: &pb.Issue{
+				Title:         "Load Average",
+				Message:       fmt.Sprintf("Load average is greater than %f, %f", l.Cfg.MaxLoad, loadAvgs.Load1),
+				TimeSubmitted: time.Now().Unix(),
+			},
+			ok: false,
 		}
 	}
 
