@@ -137,6 +137,8 @@ func main() {
 		log.Fatalln(err)
 	}
 
+	//log.Println(cfg.LastUpdated)
+
 	log.Println("Interval:", cfg.Interval)
 
 	// Ping and collect issues every X seconds
@@ -147,9 +149,13 @@ func main() {
 			select {
 			case <-ticker.C:
 
-				_, err := c.Ping(ctx, &gorram.IsAlive{IsAlive: true})
+				newCfg, err := c.Ping(ctx, &gorram.IsAlive{IsAlive: true, LastUpdated: cfg.LastUpdated})
 				if err != nil {
 					log.Fatalln(err)
+				}
+				if newCfg.String() != "" {
+					log.Println("Loading new config from server...")
+					cfg = newCfg
 				}
 
 				// Do checks

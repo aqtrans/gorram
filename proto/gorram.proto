@@ -3,13 +3,14 @@ syntax = "proto3";
 package gorram;
 
 service Reporter {
-    rpc Ping(IsAlive) returns (IsAlive) {}
+    rpc Ping(IsAlive) returns (Config) {}
     rpc RecordIssue(stream Issue) returns (Submitted) {}
     rpc SendConfig(ConfigRequest) returns (Config) {}
 }
 
 message IsAlive {
     bool is_alive = 1;
+    int64 last_updated = 2;
 }
 
 message Submitted {
@@ -25,15 +26,17 @@ message Issue {
 }
 
 message Config {
-    int64 interval = 1;
+    // Used internally to tell when 
+    int64 last_updated = 1;
+    int64 interval = 2;
     // Only allow one Deluge check per-host
-    Deluge deluge = 2;
+    Deluge deluge = 3;
     // Only one load check per-host
-    Load load = 3;
+    Load load = 4;
     // Allow multiple instances of other checks
-    repeated DiskSpace disk = 4;
-    repeated ProcessExists ps = 5;
-    repeated GetURL get_url = 6;
+    repeated DiskSpace disk = 5;
+    repeated ProcessExists ps = 6;
+    repeated GetURL get_url = 7;
 }
 
 message Deluge {

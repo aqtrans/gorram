@@ -15,11 +15,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/pelletier/go-toml"
 
-	"google.golang.org/grpc/credentials"
-
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
 	"jba.io/go/gorram/proto"
@@ -93,7 +93,7 @@ func getClientName(ctx context.Context) string {
 	return "no-client-name"
 }
 
-func (s *gorramServer) Ping(ctx context.Context, msg *gorram.IsAlive) (*gorram.IsAlive, error) {
+func (s *gorramServer) Ping(ctx context.Context, msg *gorram.IsAlive) (*gorram.Config, error) {
 	// Variables to eventually change into config values, fetched from the client's configured interval
 	// deadClienttime is the time to wait between alerting after a client has been declared dead
 	var deadClienttime time.Duration
@@ -101,10 +101,16 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.IsAlive) (*gorram.I
 
 	client := getClientName(ctx)
 
+	var clientCfg gorram.Config
+	if msg.LastUpdated != s.loadClientConfig(client).LastUpdated {
+		log.Println("Config mismatch. Sending new config to client...")
+		clientCfg = s.loadClientConfig(client)
+	}
+
 	// pingTime is the time to wait before declaring a client dead
 	//   Eventually this should be the client's configured interval + 10 seconds or so
 	var pingTime time.Duration
-	pingTime = time.Duration(s.loadConfig(client).Interval+10) * time.Second
+	pingTime = time.Duration(s.loadClientConfig(client).Interval+10) * time.Second
 
 	// This might be redundant since this should always be true
 	/*
@@ -145,7 +151,7 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.IsAlive) (*gorram.I
 
 	log.Println("[TIMER] Number of goroutines:", runtime.NumGoroutine())
 
-	return msg, nil
+	return &clientCfg, nil
 }
 
 func deadClientTicker(clientName string, c *clientTimers, cfg config) {
@@ -200,7 +206,7 @@ func (s *gorramServer) RecordIssue(stream gorram.Reporter_RecordIssueServer) err
 	}
 }
 
-func (s *gorramServer) loadConfig(client string) gorram.Config {
+func (s *gorramServer) loadClientConfig(client string) gorram.Config {
 	// Attempt to read the config.toml, and then if it has [clientname] in it, unmarshal the config from there
 	clientCfg, isThere := s.clientCfg.Load(client)
 	if isThere {
@@ -227,7 +233,7 @@ func (s *gorramServer) SendConfig(ctx context.Context, req *gorram.ConfigRequest
 	clientName := getClientName(ctx)
 
 	// Load config
-	cfg := s.loadConfig(clientName)
+	cfg := s.loadClientConfig(clientName)
 
 	return &cfg, nil
 }
@@ -267,6 +273,29 @@ func alert(cfg config, client string, issue gorram.Issue) {
 	switch cfg.alertMethod {
 	case "log":
 		log.Println("ALERT: ["+client+"]: "+issue.Title+":", issue.Message)
+	}
+}
+
+func (s *gorramServer) loadConfig(confFile string) {
+	// Load config.toml here
+	cfgTree, err := toml.LoadFile(confFile)
+	if err != nil {
+		log.Fatalln("Error reading config.toml", err)
+	}
+	for _, clientName := range cfgTree.Keys() {
+		log.Println("Loading config for", clientName, "from config.toml...")
+		clientCfgTree := cfgTree.Get(clientName).(*toml.Tree)
+		clientCfg := gorram.Config{}
+		err := clientCfgTree.Unmarshal(&clientCfg)
+		if err != nil {
+			log.Fatalln("Error unmarshaling config.toml for client "+clientName+":", err)
+		}
+		if clientCfg.Interval == 0 {
+			log.Println(clientName, "has no interval configured. Setting to 60 seconds.")
+			clientCfg.Interval = 60
+		}
+		clientCfg.LastUpdated = time.Now().Unix()
+		s.clientCfg.Store(clientName, &clientCfg)
 	}
 }
 
@@ -330,31 +359,12 @@ func main() {
 		server = grpc.NewServer(grpc.Creds(creds), grpc.StatsHandler(&sh), grpc.UnaryInterceptor(cfg.unaryInterceptor))
 	}
 
-	// Load config.toml here
-	var clientCfgs sync.Map
-	cfgTree, err := toml.LoadFile(*confFile)
-	if err != nil {
-		log.Fatalln("Error reading config.toml", err)
-	}
-	for _, clientName := range cfgTree.Keys() {
-		log.Println("Loading config for", clientName, "from config.toml...")
-		clientCfgTree := cfgTree.Get(clientName).(*toml.Tree)
-		clientCfg := gorram.Config{}
-		err := clientCfgTree.Unmarshal(&clientCfg)
-		if err != nil {
-			log.Fatalln("Error unmarshaling config.toml for client "+clientName+":", err)
-		}
-		if clientCfg.Interval == 0 {
-			log.Println(clientName, "has no interval configured. Setting to 60 seconds.")
-			clientCfg.Interval = 60
-		}
-		clientCfgs.Store(clientName, &clientCfg)
-	}
-
 	gs := gorramServer{
 		cfg:       cfg,
-		clientCfg: &clientCfgs,
+		clientCfg: new(sync.Map),
 	}
+
+	gs.loadConfig(*confFile)
 
 	gorram.RegisterReporterServer(server, &gs)
 
@@ -364,6 +374,32 @@ func main() {
 			log.Fatalf("failed to serve: %v", err)
 		}
 	}()
+
+	// Watch for config.toml changes
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	go func() {
+		for {
+			select {
+			case event := <-watcher.Events:
+				if event.Op&fsnotify.Write == fsnotify.Write {
+					gs.loadConfig(*confFile)
+				}
+			case err := <-watcher.Errors:
+				if err != nil {
+					log.Println("error:", err)
+				}
+			}
+		}
+	}()
+
+	err = watcher.Add(*confFile)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// Listen for Ctrl+C
 	go func() {
@@ -375,6 +411,7 @@ func main() {
 	// When Ctrl+C is caught, do this
 	<-done
 	log.Println("Server exiting...")
+	watcher.Close()
 	server.GracefulStop()
 
 }
