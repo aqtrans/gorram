@@ -3,6 +3,7 @@ package checks
 import (
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/shirou/gopsutil/process"
@@ -13,13 +14,13 @@ type ProcessExists struct {
 	Cfg pb.ProcessExists
 }
 
-func getProcList() map[string]bool {
+func getProcList() string {
 	procs, err := process.Processes()
 	if err != nil {
 		log.Fatalln("Error fetching process list", err)
-		return nil
+		return ""
 	}
-	procMap := make(map[string]bool)
+	var procSlice []string
 	for _, proc := range procs {
 		// Don't try to read PID 1
 		if proc.Pid == 1 {
@@ -30,15 +31,15 @@ func getProcList() map[string]bool {
 		if err != nil {
 			continue
 		}
-		procMap[name] = true
+		procSlice = append(procSlice, name)
 	}
-	return procMap
+	return strings.Join(procSlice, ",")
 }
 
 func (p ProcessExists) doCheck() *checkData {
 	procList := getProcList()
 
-	if !procList[p.Cfg.Path] {
+	if !strings.Contains(procList, p.Cfg.Path) {
 		return &checkData{
 			issue: &pb.Issue{
 				Title:         "Process Exists",
