@@ -107,23 +107,29 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.IsAlive) (*gorram.I
 	pingTime = time.Duration(s.loadConfig(client).Interval+10) * time.Second
 
 	// This might be redundant since this should always be true
-	if msg.IsAlive {
-		log.Println("[TIMER]", client, "is alive!")
-	}
+	/*
+		if msg.IsAlive {
+			log.Println("[TIMER]", client, "is alive!")
+		}
+	*/
 
 	// Setup a ping timer
 	clientTimer, ok := s.clientTimers.timers.Load(client)
 
 	if ok {
-		log.Println("[TIMER]", client, "timer found, resetting.")
+		//log.Println("[TIMER]", client, "timer found, resetting.")
+
 		// Reset the client's timer
 		clientTimer.(*time.Timer).Reset(pingTime)
 
 	} else {
-		log.Println("[TIMER]", client, "creating new timer for", pingTime, "seconds")
+		//log.Println("[TIMER]", client, "creating new timer for", pingTime, "seconds")
+
 		// Check if the client was dead, and reset it's ticker
 		if clientTicker, ok := s.clientTimers.tickers.Load(client); ok {
-			log.Println("[TIMER]", client, "is alive again. Stopping it's deadClientTicker.")
+
+			//log.Println("[TIMER]", client, "is alive again. Stopping it's deadClientTicker.")
+
 			clientTicker.(*time.Ticker).Stop()
 		}
 		// create a ticker to store and reference
@@ -154,28 +160,30 @@ func deadClientTicker(clientName string, c *clientTimers, cfg config) {
 
 	<-timer.(*time.Timer).C
 
-	log.Println("[TIMER]", clientName, "is dead. Deleting it's timer.")
+	//log.Println("[TIMER]", clientName, "is dead. Deleting it's timer.")
+
 	c.timers.Delete(clientName)
 
 	for t := range ticker.(*time.Ticker).C {
 		//log.Println("[TIMER]", t, clientName, "is dead")
 
-		alert(cfg, clientName, fmt.Sprintf("%v is dead, since %v", clientName, t))
+		alert(cfg, clientName, gorram.Issue{
+			Title:   "Dead Client",
+			Message: fmt.Sprintf("%v is dead, since %v", clientName, t),
+		})
 	}
 
 }
 
 func (s *gorramServer) RecordIssue(stream gorram.Reporter_RecordIssueServer) error {
-	//log.Println(getClientName(ctx), "sent", issue.Message, time.Unix(issue.TimeSubmitted, 0))
-	//alert(*s.cfg, getClientName(ctx), issue.Message)
 
-	//return &gorram.Submitted{SuccessfullySubmitted: true}, nil
+	//startTime := time.Now()
 
-	startTime := time.Now()
 	for {
 		issue, err := stream.Recv()
 		if err == io.EOF {
-			log.Println("Time since issues started being submitted:", time.Since(startTime).String())
+
+			//log.Println("Time since issues started being submitted:", time.Since(startTime).String())
 
 			return stream.SendAndClose(&gorram.Submitted{
 				SuccessfullySubmitted: true,
@@ -185,8 +193,10 @@ func (s *gorramServer) RecordIssue(stream gorram.Reporter_RecordIssueServer) err
 			return err
 		}
 		// Record issue
-		alert(*s.cfg, getClientName(stream.Context()), issue.Message)
-		log.Println("Time since issue was submitted:", time.Since(time.Unix(issue.TimeSubmitted, 0)).String())
+		alert(*s.cfg, getClientName(stream.Context()), *issue)
+
+		//log.Println("Time since issue was submitted:", time.Since(time.Unix(issue.TimeSubmitted, 0)).String())
+
 	}
 }
 
@@ -258,10 +268,10 @@ func (cfg config) streamInterceptor(srv interface{}, stream grpc.ServerStream, i
 	return handler(srv, stream)
 }
 
-func alert(cfg config, client, message string) {
+func alert(cfg config, client string, issue gorram.Issue) {
 	switch cfg.alertMethod {
 	case "log":
-		log.Println("ALERT: ["+client+"]:", message)
+		log.Println("ALERT: ["+client+"]: "+issue.Title+":", issue.Message)
 	}
 }
 
