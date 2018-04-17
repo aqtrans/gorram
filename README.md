@@ -1,4 +1,4 @@
-# Gorram - a simple monitoring system
+# Gorram - a simple monitoring system written in Golang
 
 *So you know when the primary buffer panel falls off your gorram ship*
 
@@ -17,21 +17,38 @@ A very basic heartbeat is implemented, with the server waiting for a ping from t
 ## Config file:
 ```
 [clientName]
+    Interval = 5
+
     [clientName.Deluge]
     URL = "http://127.0.0.1:8112/json"
     Password = "deluge"
     MaxTorrents = 5
-    [clientName.Disk]
-    Partitions = ["/"]
+
+    [[clientName.Disk]]
+    Partition = "/"
+
+    [[clientName.Disk]]
+    Partition = "/media/USB"    
     MaxUsage = 10.0
+
+    [[clientName.Ps]]
+    FullPath = "/usr/lib/firefox/firefox"
+
     [clientName.Load]
     MaxLoad = 0.50
+
+    [[clientName.GetUrl]]
+    Url = "https://example.tld/health"
+    # Quotes must be escaped, per TOML spec:
+    ExpectedBody = "{\"alive\": true}"    
 ```  
 
 ## Currently implemented checks:
 - Deluge: max number of torrents in an error, checking, or downloading state.  
 - Disk Space: max percentage of disk space used on multiple mounts.  
 - Load Average: max load average.  
+- Process Existence: check that a given process is running, full path to the binary.  
+- HTTP GET: checks that a specified URL returns a 200, and optionally, checks that the response body matches a given string.  
 
 ## Todo:  
 - [ ] Add additional alerting mechanisms (Pushover, email, etc). 
@@ -39,3 +56,5 @@ A very basic heartbeat is implemented, with the server waiting for a ping from t
 - [ ] Add client expiration/deletion.  
     - Right now if a client disappears, the server will start alerting and never stop until the client re-appears. 
     - Might implement some hold-off mechanism so the alerts get longer and longer apart, but still allow a manual deletion.
+- [ ] Related to the above, implement some kind of frontend to interact with the server; manually delete clients, reload config, etc.  
+    - Thinking of either a web UI or CLI
