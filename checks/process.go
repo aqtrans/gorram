@@ -25,8 +25,8 @@ func getProcList() map[string]bool {
 		if proc.Pid == 1 {
 			continue
 		}
-		// Recording full executable path, using Exe() instead of Name() here:
-		name, err := proc.Exe()
+		// Recording full executable path, using Cmdline() instead of Name() here:
+		name, err := proc.Cmdline()
 		if err != nil {
 			continue
 		}
@@ -38,11 +38,11 @@ func getProcList() map[string]bool {
 func (p ProcessExists) doCheck() *checkData {
 	procList := getProcList()
 
-	if !procList[p.Cfg.FullPath] {
+	if !procList[p.Cfg.Path] {
 		return &checkData{
 			issue: &pb.Issue{
 				Title:         "Process Exists",
-				Message:       fmt.Sprintf("%v is not running. Check that the full path is specified.", p.Cfg.FullPath),
+				Message:       fmt.Sprintf("%v is not running. Check that the full path is specified.", p.Cfg.Path),
 				TimeSubmitted: time.Now().Unix(),
 			},
 			ok: false,
