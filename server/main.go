@@ -10,7 +10,6 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"runtime"
 	"sync"
 	"syscall"
 	"time"
@@ -149,7 +148,7 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.IsAlive) (*gorram.C
 		go deadClientTicker(client, &s.clientTimers, *s.cfg)
 	}
 
-	log.Println("[TIMER] Number of goroutines:", runtime.NumGoroutine())
+	//log.Println("[TIMER] Number of goroutines:", runtime.NumGoroutine())
 
 	return &clientCfg, nil
 }
