@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/gregdel/pushover"
 	"io"
 	"log"
 	"net"
@@ -24,10 +25,13 @@ import (
 	"jba.io/go/gorram/proto"
 )
 
-type config struct {
-	secretKey   string
-	alertMethod string
-	configFile  string
+type serverConfig struct {
+	secretKey       string
+	alertMethod     string
+	configFile      string
+	pushoverAppKey  string
+	pushoverUserKey string
+	pushoverDevice  string
 }
 
 type statHandler struct {
@@ -71,7 +75,7 @@ func (s *statHandler) HandleConn(ctx context.Context, connStats stats.ConnStats)
 type gorramServer struct {
 	clientTimers
 	clientCfg *sync.Map
-	cfg       *config
+	cfg       *serverConfig
 	/*
 		pingTimers    map[string]*time.Timer
 		clientList    map[string]chan bool
@@ -153,7 +157,7 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.IsAlive) (*gorram.C
 	return &clientCfg, nil
 }
 
-func deadClientTicker(clientName string, c *clientTimers, cfg config) {
+func deadClientTicker(clientName string, c *clientTimers, cfg serverConfig) {
 	timer, ok := c.timers.Load(clientName)
 	if !ok {
 		log.Fatalln("[TIMER] Error: no timer for", clientName)
@@ -237,7 +241,7 @@ func (s *gorramServer) SendConfig(ctx context.Context, req *gorram.ConfigRequest
 	return &cfg, nil
 }
 
-func (cfg config) authorize(ctx context.Context) error {
+func (cfg serverConfig) authorize(ctx context.Context) error {
 	var clientName string
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
 		if len(md["secret"]) > 0 && md["secret"][0] == cfg.secretKey {
@@ -253,7 +257,7 @@ func (cfg config) authorize(ctx context.Context) error {
 	return err
 }
 
-func (cfg config) unaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+func (cfg serverConfig) unaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	if err := cfg.authorize(ctx); err != nil {
 		return nil, err
 	}
@@ -261,17 +265,35 @@ func (cfg config) unaryInterceptor(ctx context.Context, req interface{}, info *g
 	return handler(ctx, req)
 }
 
-func (cfg config) streamInterceptor(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+func (cfg serverConfig) streamInterceptor(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	if err := cfg.authorize(stream.Context()); err != nil {
 		return err
 	}
 	return handler(srv, stream)
 }
 
-func alert(cfg config, client string, issue gorram.Issue) {
+func alert(cfg serverConfig, client string, issue gorram.Issue) {
 	switch cfg.alertMethod {
 	case "log":
 		log.Println("ALERT: ["+client+"]: "+issue.Title+":", issue.Message)
+	case "pushover":
+		log.Println("ALERT: ["+client+"]: "+issue.Title+":", issue.Message)
+		app := pushover.New(cfg.pushoverAppKey)
+		recipient := pushover.NewRecipient(cfg.pushoverUserKey)
+		message := pushover.NewMessageWithTitle(issue.Message, "["+client+"]: "+issue.Title)
+		// Set an optional device name to send alerts to
+		if cfg.pushoverDevice != "" {
+			message.DeviceName = cfg.pushoverDevice
+		}
+		response, err := app.SendMessage(message, recipient)
+		if err != nil {
+			log.Println("error sending alert to pushover:", err)
+			return
+		}
+		if response.Errors != nil {
+			log.Println("Pushover returned error(s):", response.Errors.Error())
+			return
+		}
 	}
 }
 
@@ -282,7 +304,27 @@ func (s *gorramServer) loadConfig(confFile string) {
 		log.Fatalln("Error reading config.toml", err)
 	}
 	for _, clientName := range cfgTree.Keys() {
-		log.Println("Loading config for", clientName, "from config.toml...")
+		// Allow configuring server-specific variables inside a ServerConfig table
+		if clientName == "ServerConfig" {
+			serverCfgTree := cfgTree.Get(clientName).(*toml.Tree)
+			if serverCfgTree.Has("secretKey") {
+				s.cfg.secretKey = serverCfgTree.Get("secretKey").(string)
+			}
+			if serverCfgTree.Has("pushoverAppKey") {
+				s.cfg.pushoverAppKey = serverCfgTree.Get("pushoverAppKey").(string)
+			}
+			if serverCfgTree.Has("pushoverUserKey") {
+				s.cfg.pushoverUserKey = serverCfgTree.Get("pushoverUserKey").(string)
+			}
+			if serverCfgTree.Has("pushoverDevice") {
+				s.cfg.pushoverDevice = serverCfgTree.Get("pushoverDevice").(string)
+			}
+			if serverCfgTree.Has("alertMethod") {
+				s.cfg.alertMethod = serverCfgTree.Get("alertMethod").(string)
+			}
+			continue
+		}
+		log.Println("Loaded config for", clientName, "from config.toml...")
 		clientCfgTree := cfgTree.Get(clientName).(*toml.Tree)
 		clientCfg := gorram.Config{}
 		err := clientCfgTree.Unmarshal(&clientCfg)
@@ -312,7 +354,7 @@ func main() {
 	alertMethodF := flag.String("alert", "log", "Alert method to use. Right now, log. To come: pushover.")
 	flag.Parse()
 
-	cfg := &config{
+	cfg := &serverConfig{
 		secretKey:   *secret,
 		alertMethod: *alertMethodF,
 		configFile:  *confFile,
