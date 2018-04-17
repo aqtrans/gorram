@@ -223,12 +223,7 @@ func (s *gorramServer) loadConfig(client string) gorram.Config {
 }
 
 func (s *gorramServer) SendConfig(ctx context.Context, req *gorram.ConfigRequest) (*gorram.Config, error) {
-	// TODO: Implement client-side SHA1 summing, once client-side config-reloading is implemented
-	/*
-		if req.CfgSha1Sum != "1a21a32" {
-			log.Println("config sha1 sum does not match server-side.")
-		}
-	*/
+
 	clientName := getClientName(ctx)
 
 	// Load config
