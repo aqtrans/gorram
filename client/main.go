@@ -42,8 +42,8 @@ func doChecks(cfg *gorram.Config) []*gorram.Issue {
 		}
 	}
 	// Check GET URLs, looping throug list of given URLs
-	if cfg.Get != nil {
-		for _, urlCheck := range cfg.Get {
+	if cfg.GetUrl != nil {
+		for _, urlCheck := range cfg.GetUrl {
 			issues = checks.GetCheck(issues, checks.GetURL{Cfg: *urlCheck})
 		}
 	}

@@ -33,7 +33,7 @@ message Config {
     // Allow multiple instances of other checks
     repeated DiskSpace disk = 4;
     repeated ProcessExists ps = 5;
-    repeated GetURL get = 6;
+    repeated GetURL get_url = 6;
 }
 
 message Deluge {
@@ -62,5 +62,4 @@ message GetURL {
 
 message ConfigRequest {
     string client_name = 1;
-    string cfg_sha1sum = 2;
 }
