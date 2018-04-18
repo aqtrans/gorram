@@ -3,6 +3,7 @@ package checks
 import (
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/shirou/gopsutil/process"
@@ -32,13 +33,15 @@ func checkForProc(c pb.ProcessExists) bool {
 			log.Println("error retrieving cmdline for proc", err)
 			continue
 		}
-		if name == c.Path {
+		// Using strings.Contains() here to allow partial matching, for Nginx, Sidekiq, and others that use fancy /proc/$PID/cmdline's
+		if strings.Contains(name, c.Path) {
 			if c.User != "" {
 				user, err := proc.Username()
 				if err != nil {
 					log.Println("error retrieving user for proc", err)
 					continue
 				}
+
 				if user == c.User {
 					procExists = true
 					break
