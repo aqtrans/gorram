@@ -17,7 +17,7 @@ func (p DiskSpace) doCheck() *checkData {
 
 	usage, err := disk.Usage(p.Cfg.Partition)
 	if err != nil {
-		log.Println("Error getting disk usage:", err)
+		log.Println("Error getting disk usage for "+p.Cfg.Partition+":", err)
 		return nil
 	}
 	if usage.UsedPercent > p.Cfg.MaxUsage {
