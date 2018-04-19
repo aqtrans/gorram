@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"time"
 
@@ -28,11 +27,19 @@ func (g GetURL) doCheck() *checkData {
 			ok: false,
 		}
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode == 200 && g.Cfg.ExpectedBody != "" {
 		body, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			log.Fatalln("error reading body:", err)
+			return &checkData{
+				issue: &pb.Issue{
+					Title:         "Get URL",
+					Message:       fmt.Sprintf("%v error reading body: %v", g.Cfg.Url, err),
+					TimeSubmitted: time.Now().Unix(),
+				},
+				ok: false,
+			}
 		}
 		if !bytes.Equal(body, []byte(g.Cfg.ExpectedBody)) {
 			return &checkData{
