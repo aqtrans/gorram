@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/gregdel/pushover"
 	"io"
 	"log"
 	"net"
@@ -16,6 +15,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/gregdel/pushover"
 	"github.com/pelletier/go-toml"
 
 	"google.golang.org/grpc"
@@ -104,6 +104,7 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.IsAlive) (*gorram.C
 
 	client := getClientName(ctx)
 
+	// Sync up the config here if necessary
 	var clientCfg gorram.Config
 	if msg.LastUpdated != s.loadClientConfig(client).LastUpdated {
 		log.Println("Config mismatch. Sending new config to client...")
@@ -138,6 +139,10 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.IsAlive) (*gorram.C
 		if clientTicker, ok := s.clientTimers.tickers.Load(client); ok {
 
 			//log.Println("[TIMER]", client, "is alive again. Stopping it's deadClientTicker.")
+			alert(*s.cfg, client, gorram.Issue{
+				Title:   "Dead Client Alive",
+				Message: fmt.Sprintf("%v is alive again!", client),
+			})
 
 			clientTicker.(*time.Ticker).Stop()
 		}
