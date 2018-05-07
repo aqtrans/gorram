@@ -9,10 +9,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"net/http/cookiejar"
-	"os"
 	"strconv"
 	"time"
 	//"strings"
@@ -76,6 +74,7 @@ type updateJSON struct {
 	Error interface{} `json:"error"`
 }
 
+/*
 func (d DelugeCheck) post(c *http.Client, req *delugeRequest, resp interface{}) {
 	reqJSON, err := json.Marshal(req)
 	if err != nil {
@@ -92,13 +91,17 @@ func (d DelugeCheck) post(c *http.Client, req *delugeRequest, resp interface{}) 
 		}
 	}
 }
+*/
+
+func (d DelugeCheck) title() string {
+	return "Deluge"
+}
 
 func (d DelugeCheck) doCheck() string {
 
 	cookieJar, err := cookiejar.New(nil)
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(2)
+		return fmt.Sprintf("Error creating cookiejar:", err)
 	}
 
 	client := &http.Client{
@@ -121,15 +124,35 @@ func (d DelugeCheck) doCheck() string {
 		}
 	*/
 	var loginJSON delugeResponse
-	d.post(client, &delugeRequest{
+	/*
+		d.post(client, &delugeRequest{
+			ID:     "1",
+			Method: "auth.login",
+			Params: []string{d.Cfg.Password},
+		}, &loginJSON)
+	*/
+
+	reqJSON, err := json.Marshal(&delugeRequest{
 		ID:     "1",
 		Method: "auth.login",
 		Params: []string{d.Cfg.Password},
-	}, &loginJSON)
+	})
+	if err != nil {
+		return fmt.Sprint("Error encoding request to JSON:", err)
+	}
+	r, err := client.Post(d.Cfg.Url, "application/json", bytes.NewBuffer(reqJSON))
+	if err != nil {
+		return fmt.Sprint("Error sending request to Deluge:", err)
+	}
+	if r.Body != nil {
+		err := json.NewDecoder(r.Body).Decode(&loginJSON)
+		if err != nil {
+			return fmt.Sprint("Error decoding request to JSON:", err)
+		}
+	}
 
 	if !loginJSON.Result {
-		fmt.Println("Error logging into Deluge. Check password.")
-		os.Exit(2)
+		return "Error logging into Deluge. Check password."
 	}
 
 	// auth.check_session: Should definitely return true if the cookie set above is set correctly
@@ -147,15 +170,35 @@ func (d DelugeCheck) doCheck() string {
 		}
 	*/
 	var loginOkayJSON delugeResponse
-	d.post(client, &delugeRequest{
+	/*
+		d.post(client, &delugeRequest{
+			ID:     "1",
+			Method: "auth.check_session",
+			Params: []string{},
+		}, &loginOkayJSON)
+	*/
+
+	reqJSON2, err := json.Marshal(&delugeRequest{
 		ID:     "1",
 		Method: "auth.check_session",
 		Params: []string{},
-	}, &loginOkayJSON)
+	})
+	if err != nil {
+		return fmt.Sprint("Error encoding request to JSON:", err)
+	}
+	r2, err := client.Post(d.Cfg.Url, "application/json", bytes.NewBuffer(reqJSON2))
+	if err != nil {
+		return fmt.Sprint("Error sending request to Deluge:", err)
+	}
+	if r2.Body != nil {
+		err := json.NewDecoder(r2.Body).Decode(&loginOkayJSON)
+		if err != nil {
+			return fmt.Sprint("Error decoding request to JSON:", err)
+		}
+	}
 
 	if !loginOkayJSON.Result {
-		fmt.Println("Error logging into Deluge. Check password.")
-		os.Exit(2)
+		return "Error logging into Deluge. Check password."
 	}
 
 	// web.update_ui: Try and retrieve data
@@ -172,11 +215,32 @@ func (d DelugeCheck) doCheck() string {
 			os.Exit(2)
 		}
 	*/
-	d.post(client, &delugeRequest{
+	/*
+		d.post(client, &delugeRequest{
+			ID:     "1",
+			Method: "web.update_ui",
+			Params: []string{"name", "time_added"},
+		}, &updateResp)
+	*/
+
+	reqJSON3, err := json.Marshal(&delugeRequest{
 		ID:     "1",
 		Method: "web.update_ui",
 		Params: []string{"name", "time_added"},
-	}, &updateResp)
+	})
+	if err != nil {
+		return fmt.Sprint("Error encoding request to JSON:", err)
+	}
+	r3, err := client.Post(d.Cfg.Url, "application/json", bytes.NewBuffer(reqJSON3))
+	if err != nil {
+		return fmt.Sprint("Error sending request to Deluge:", err)
+	}
+	if r3.Body != nil {
+		err := json.NewDecoder(r3.Body).Decode(&updateResp)
+		if err != nil {
+			return fmt.Sprint("Error decoding request to JSON:", err)
+		}
+	}
 
 	/*
 		// Check that this returned 200
@@ -187,8 +251,7 @@ func (d DelugeCheck) doCheck() string {
 	*/
 
 	if len(updateResp.Result.Filters.State) == 0 {
-		fmt.Println("Error: Deluge web-ui likely waiting to connect to a host. Visit the web-ui manually.")
-		os.Exit(2)
+		return "Error: Deluge web-ui likely waiting to connect to a host. Visit the web-ui manually."
 	}
 
 	//fmt.Println(updateResp.Result.TorrentsJson)
