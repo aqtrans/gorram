@@ -3,7 +3,6 @@ package checks
 import (
 	"fmt"
 	"log"
-	"time"
 
 	"github.com/shirou/gopsutil/disk"
 	pb "jba.io/go/gorram/proto"
