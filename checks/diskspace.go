@@ -12,6 +12,10 @@ type DiskSpace struct {
 	Cfg pb.DiskSpace
 }
 
+func (p DiskSpace) title() string {
+	return "Disk Space"
+}
+
 func (p DiskSpace) doCheck() string {
 
 	usage, err := disk.Usage(p.Cfg.Partition)

@@ -11,6 +11,10 @@ type LoadAvg struct {
 	Cfg pb.Load
 }
 
+func (l LoadAvg) title() string {
+	return "Load Avg"
+}
+
 func (l LoadAvg) doCheck() string {
 
 	loadAvgs, err := load.Avg()

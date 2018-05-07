@@ -13,6 +13,10 @@ type GetURL struct {
 	Cfg pb.GetURL
 }
 
+func (g GetURL) title() string {
+	return "Get URL"
+}
+
 func (g GetURL) doCheck() string {
 
 	resp, err := http.Get(g.Cfg.Url)

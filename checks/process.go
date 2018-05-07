@@ -54,6 +54,10 @@ func checkForProc(c pb.ProcessExists) bool {
 	return procExists
 }
 
+func (p ProcessExists) title() string {
+	return "Process"
+}
+
 func (p ProcessExists) doCheck() string {
 	//procList := getProcList()
 
