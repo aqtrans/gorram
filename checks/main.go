@@ -2,15 +2,16 @@ package checks
 
 import (
 	gorram "jba.io/go/gorram/proto"
+	"time"
 )
 
 type checkData struct {
 	issue *gorram.Issue
-	ok    bool
 }
 
 type check interface {
-	doCheck() *checkData
+	doCheck() string
+	title() string
 }
 
 /*
@@ -29,8 +30,12 @@ type Config struct {
 func GetCheck(issues []*gorram.Issue, c check) []*gorram.Issue {
 	//log.Println("Check:", c)
 	theCheck := c.doCheck()
-	if !theCheck.ok {
-		issues = append(issues, theCheck.issue)
+	if theCheck != "" {
+		issues = append(issues, &gorram.Issue{
+			Title:         c.title(),
+			Message:       theCheck,
+			TimeSubmitted: time.Now().Unix(),
+		})
 	}
 	return issues
 }

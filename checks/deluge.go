@@ -93,7 +93,7 @@ func (d DelugeCheck) post(c *http.Client, req *delugeRequest, resp interface{}) 
 	}
 }
 
-func (d DelugeCheck) doCheck() *checkData {
+func (d DelugeCheck) doCheck() string {
 
 	cookieJar, err := cookiejar.New(nil)
 	if err != nil {
@@ -222,18 +222,9 @@ func (d DelugeCheck) doCheck() *checkData {
 	//fmt.Println(badMsg)
 
 	if isBad {
-		return &checkData{
-			issue: &pb.Issue{
-				Title:         "Deluge",
-				Message:       badMsg,
-				TimeSubmitted: time.Now().Unix(),
-			},
-			ok: false,
-		}
+		return badMsg
 	}
 
-	return &checkData{
-		ok: true,
-	}
+	return ""
 
 }

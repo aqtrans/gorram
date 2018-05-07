@@ -13,26 +13,17 @@ type DiskSpace struct {
 	Cfg pb.DiskSpace
 }
 
-func (p DiskSpace) doCheck() *checkData {
+func (p DiskSpace) doCheck() string {
 
 	usage, err := disk.Usage(p.Cfg.Partition)
 	if err != nil {
 		log.Println("Error getting disk usage for "+p.Cfg.Partition+":", err)
-		return nil
+		return ""
 	}
 	if usage.UsedPercent > p.Cfg.MaxUsage {
-		return &checkData{
-			issue: &pb.Issue{
-				Title:         "Disk Usage",
-				Message:       fmt.Sprintf("Disk usage of %s is greater than %f, %f", p.Cfg.Partition, p.Cfg.MaxUsage, usage.UsedPercent),
-				TimeSubmitted: time.Now().Unix(),
-			},
-			ok: false,
-		}
+		return fmt.Sprintf("Disk usage of %s is greater than %f, %f", p.Cfg.Partition, p.Cfg.MaxUsage, usage.UsedPercent)
 	}
 
-	return &checkData{
-		ok: true,
-	}
+	return ""
 
 }

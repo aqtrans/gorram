@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"time"
 
 	"github.com/shirou/gopsutil/process"
 	pb "jba.io/go/gorram/proto"
@@ -55,21 +54,12 @@ func checkForProc(c pb.ProcessExists) bool {
 	return procExists
 }
 
-func (p ProcessExists) doCheck() *checkData {
+func (p ProcessExists) doCheck() string {
 	//procList := getProcList()
 
 	if !checkForProc(p.Cfg) {
-		return &checkData{
-			issue: &pb.Issue{
-				Title:         "Process Exists",
-				Message:       fmt.Sprintf("%v is not running. Check that the full path is specified.", p.Cfg.Path),
-				TimeSubmitted: time.Now().Unix(),
-			},
-			ok: false,
-		}
+		return fmt.Sprintf("%v is not running. Check that the full path is specified.", p.Cfg.Path)
 	}
 
-	return &checkData{
-		ok: true,
-	}
+	return ""
 }
