@@ -77,16 +77,20 @@ test-server:
 deploy_prod:
   stage: deploy
   script:
+    # Stop client and server on Frink
+    - ssh gorram@frink.jba.io sudo systemctl stop gorram-server gorram-client  
     # scp client to /opt/gorram/gorram-client on Frink
     - scp gorram-client gorram@frink.jba.io:/opt/gorram/gorram-client  
     # scp server to /opt/gorram/gorram-server on Frink
     - scp gorram-server gorram@frink.jba.io:/opt/gorram/gorram-server
-    # Restart app
-    - ssh gorram@frink.jba.io sudo systemctl restart gorram-server gorram-client
+    # Restart client and server on Rick
+    - ssh gorram@frink.jba.io sudo systemctl start gorram-server gorram-client
+    # Stop client on Rick
+    - ssh gorram@rick.jba.io sudo systemctl stop gorram-client    
     # scp client to /opt/gorram/gorram-client on Rick
     - scp gorram-client gorram@rick.jba.io:/opt/gorram/gorram-client
-    # Restart app
-    - ssh gorram@rick.jba.io sudo systemctl restart gorram-client
+    # Restart client on Rick
+    - ssh gorram@rick.jba.io sudo systemctl start gorram-client
   environment:
     name: production
   only:
