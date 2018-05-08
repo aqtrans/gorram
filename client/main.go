@@ -101,7 +101,7 @@ func main() {
 	var err error
 	var creds credentials.TransportCredentials
 	if *insecure {
-		conn, err = grpc.Dial(*serverAddress, grpc.WithInsecure(), grpc.WithPerRPCCredentials(&secret{
+		conn, err = grpc.Dial(*serverAddress, grpc.WithBlock(), grpc.WithInsecure(), grpc.WithPerRPCCredentials(&secret{
 			Secret: *secretKey,
 			TLS:    false,
 		}))
@@ -110,13 +110,13 @@ func main() {
 		if err != nil {
 			log.Fatal("Error parsing TLS cert:", err)
 		}
-		conn, err = grpc.Dial(*serverAddress, grpc.WithTransportCredentials(creds), grpc.WithPerRPCCredentials(&secret{
+		conn, err = grpc.Dial(*serverAddress, grpc.WithBlock(), grpc.WithTransportCredentials(creds), grpc.WithPerRPCCredentials(&secret{
 			Secret: *secretKey,
 			TLS:    true,
 		}))
 	}
 	if err != nil {
-		log.Fatalf("Error connecting to server: %v", err)
+		log.Printf("Error connecting to server: %v", err)
 	}
 
 	defer conn.Close()
