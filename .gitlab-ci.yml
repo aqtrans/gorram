@@ -41,8 +41,12 @@ build-my-project:
     - chmod +x dep
     - cd server
     - ../dep ensure
+    - go get -d
     - cd ../checks
     - ../dep ensure
+    - go get -d
+    - cd ../client
+    - go get -d
     - cd ../
     - go get -u github.com/golang/protobuf/protoc-gen-go
     - go generate
