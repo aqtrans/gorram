@@ -86,11 +86,11 @@ deploy_prod:
     # Restart client and server on Rick
     - ssh gorram@frink.jba.io sudo systemctl start gorram-server gorram-client
     # Stop client on Rick
-    - ssh gorram@rick.jba.io sudo systemctl stop gorram-client    
+    - ssh gorram@192.168.1.100 sudo systemctl stop gorram-client    
     # scp client to /opt/gorram/gorram-client on Rick
-    - scp gorram-client gorram@rick.jba.io:/opt/gorram/gorram-client
+    - scp gorram-client gorram@192.168.1.100:/opt/gorram/gorram-client
     # Restart client on Rick
-    - ssh gorram@rick.jba.io sudo systemctl start gorram-client
+    - ssh gorram@192.168.1.100 sudo systemctl start gorram-client
   environment:
     name: production
   only:
