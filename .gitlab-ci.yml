@@ -47,8 +47,8 @@ build-my-project:
     - go get -u github.com/golang/protobuf/protoc-gen-go
     - go generate
     - go get -d
-    - go build jba.io/go/gorram/server -o ./gorram-server
-    - go build jba.io/go/gorram/client -o ./gorram-client
+    - go build -o ./gorram-server jba.io/go/gorram/server
+    - go build -o ./gorram-client jba.io/go/gorram/client
   artifacts:
     expire_in: 1 day
     paths:
