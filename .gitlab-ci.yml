@@ -44,6 +44,7 @@ build-my-project:
     - cd ../checks
     - ../dep ensure
     - cd ../
+    - go get -u github.com/golang/protobuf/protoc-gen-go
     - go generate
     - go get -d
     - go build jba.io/go/gorram/server -o ./gorram-server
