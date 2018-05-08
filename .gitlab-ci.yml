@@ -1,0 +1,83 @@
+image: golang:latest
+
+cache:
+  key: "$CI_COMMIT_REF_NAME"
+  paths:
+    - vendor/
+
+before_script:
+  - curl -o protoc.zip -sL https://github.com/google/protobuf/releases/download/v3.5.1/protoc-3.5.1-linux-x86_64.zip
+  - unzip protoc.zip -d /protoc
+  - echo deb http://pubmirrors.dal.corespace.com/debian/ stretch main > /etc/apt/sources.list
+  - ln -s /builds /go/src/jba.io
+  - cd /go/src/jba.io/go/gorram
+  - 'which ssh-agent || ( apt-get update -y && apt-get install openssh-client -y )'
+  - eval $(ssh-agent -s)
+  - ssh-add <(echo "$SSH_PRIVATE_KEY")
+  - mkdir -p ~/.ssh
+  - '[[ -f /.dockerenv ]] && echo "$SSH_SERVER_HOSTKEYS" > ~/.ssh/known_hosts'
+  - export PATH=$PATH:/protoc/bin:$GOPATH/bin
+
+stages:
+  - install-environment
+  - build
+  - test
+  - deploy  
+
+install-go:
+  stage: install-environment
+  script:
+    - go version
+    - echo $PATH
+    - echo $GOPATH
+    - go env
+    - which go
+
+build-my-project:
+  stage: build
+  script:
+    - curl -o dep -sL https://github.com/golang/dep/releases/download/v0.4.1/dep-linux-amd64
+    - chmod +x dep
+    - ./dep ensure
+    - go generate    
+    - go get -d
+    - go build jba.io/go/gorram/server -o ./gorram-server
+    - go build jba.io/go/gorram/client -o ./gorram-client
+  artifacts:
+    expire_in: 1 day
+    paths:
+      - gorram-server
+      - gorram-client
+
+test-server:
+  stage: test
+  coverage: '/coverage: \d+\.\d+/'
+  script:
+    - cd server
+    - go get -d  
+    - go test -v
+    - go test -race
+    - go test -cover
+    - cd ../client
+    - go get -d  
+    - go test -v
+    - go test -race
+    - go test -cover
+
+deploy_prod:
+  stage: deploy
+  script:
+    # scp client to /opt/gorram/gorram-client on Frink
+    - scp gorram-client gorram@frink.jba.io:/opt/gorram/gorram-client  
+    # scp server to /opt/gorram/gorram-server on Frink
+    - scp gorram-server gorram@frink.jba.io:/opt/gorram/gorram-server
+    # Restart app
+    - ssh gorram@frink.jba.io sudo systemctl restart gorram-server gorram-client
+    # scp client to /opt/gorram/gorram-client on Rick
+    - scp gorram-client gorram@rick.jba.io:/opt/gorram/gorram-client
+    # Restart app
+    - ssh gorram@rick.jba.io sudo systemctl restart gorram-client
+  environment:
+    name: production
+  only:
+    - master
