@@ -69,7 +69,12 @@ func (s *statHandler) TagConn(ctx context.Context, tagInfo *stats.ConnTagInfo) c
 }
 
 func (s *statHandler) HandleConn(ctx context.Context, connStats stats.ConnStats) {
-
+	switch connStats.(type) {
+	case *stats.ConnBegin:
+		log.Println("Connection has begun")
+	case *stats.ConnEnd:
+		log.Println("Connection has ended")
+	}
 }
 
 type gorramServer struct {
