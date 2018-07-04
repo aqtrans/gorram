@@ -3,14 +3,20 @@ syntax = "proto3";
 package gorram;
 
 service Reporter {
-    rpc Ping(IsAlive) returns (Config) {}
+    // Ping is a heartbeat check, ran every X seconds to ensure a client is still alive
+    // The cfg_last_updated variable sent, and cfg_out_of_sync received also allow syncing the config
+    rpc Ping(PingMsg) returns (PingResponse) {}
     rpc RecordIssue(stream Issue) returns (Submitted) {}
-    rpc SendConfig(ConfigRequest) returns (Config) {}
+    rpc ConfigSync(ConfigRequest) returns (Config) {}
 }
 
-message IsAlive {
+message PingMsg {
     bool is_alive = 1;
-    int64 last_updated = 2;
+    int64 cfg_last_updated = 2;
+}
+
+message PingResponse {
+    bool cfg_out_of_sync = 1;
 }
 
 message Submitted {
@@ -23,6 +29,10 @@ message Issue {
     string message = 2;
     // When issue was sent
     int64 time_submitted = 3;
+}
+
+message ConfigRequest {
+    string client_name = 1;
 }
 
 message Config {
@@ -62,8 +72,4 @@ message ProcessExists {
 message GetURL {
     string url = 1;
     string expected_body = 2;
-}
-
-message ConfigRequest {
-    string client_name = 1;
 }

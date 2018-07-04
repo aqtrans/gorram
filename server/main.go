@@ -102,7 +102,7 @@ func getClientName(ctx context.Context) string {
 	return "no-client-name"
 }
 
-func (s *gorramServer) Ping(ctx context.Context, msg *gorram.IsAlive) (*gorram.Config, error) {
+func (s *gorramServer) Ping(ctx context.Context, msg *gorram.PingMsg) (*gorram.PingResponse, error) {
 	/*
 		// Variables to eventually change into config values, fetched from the client's configured interval
 		// deadClienttime is the time to wait between alerting after a client has been declared dead
@@ -112,24 +112,16 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.IsAlive) (*gorram.C
 
 	client := getClientName(ctx)
 
-	// Sync up the config here if necessary
-	var clientCfg gorram.Config
-	if msg.LastUpdated != s.loadClientConfig(client).LastUpdated {
-		log.Println("Config mismatch. Sending new config to client...")
-		clientCfg = s.loadClientConfig(client)
+	// Compare the config last updated time and the last updated received in the ping message
+	var cfgOutOfDate gorram.PingResponse
+	if msg.CfgLastUpdated != s.loadClientConfig(client).LastUpdated {
+		log.Println("Config mismatch. Setting cfgOutOfDate to true.")
+		cfgOutOfDate.CfgOutOfSync = true
 	}
 
 	// pingTime is the time to wait before declaring a client dead
-	//   Eventually this should be the client's configured interval + 10 seconds or so
 	var pingTime time.Duration
 	pingTime = time.Duration(s.loadClientConfig(client).Interval+10) * time.Second
-
-	// This might be redundant since this should always be true
-	/*
-		if msg.IsAlive {
-			log.Println("[TIMER]", client, "is alive!")
-		}
-	*/
 
 	// Setup a ping timer
 	clientTimer, ok := s.clientTimers.timers.Load(client)
@@ -167,7 +159,7 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.IsAlive) (*gorram.C
 
 	//log.Println("[TIMER] Number of goroutines:", runtime.NumGoroutine())
 
-	return &clientCfg, nil
+	return &cfgOutOfDate, nil
 }
 
 func deadClientTicker(clientName string, c *clientTimers, cfg serverConfig) {
@@ -244,7 +236,7 @@ func (s *gorramServer) loadClientConfig(client string) gorram.Config {
 	}
 }
 
-func (s *gorramServer) SendConfig(ctx context.Context, req *gorram.ConfigRequest) (*gorram.Config, error) {
+func (s *gorramServer) ConfigSync(ctx context.Context, req *gorram.ConfigRequest) (*gorram.Config, error) {
 
 	clientName := getClientName(ctx)
 

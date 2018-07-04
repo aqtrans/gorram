@@ -130,11 +130,11 @@ func main() {
 	//ctx = metadata.AppendToOutgoingContext(ctx, "secret", *secretKey)
 
 	// Get config from server
-	cfg, err := c.SendConfig(ctx, &gorram.ConfigRequest{
+	cfg, err := c.ConfigSync(ctx, &gorram.ConfigRequest{
 		ClientName: *clientName,
 	})
 	if err != nil {
-		log.Fatalln(err)
+		log.Fatalln("Error with c.ConfigSync:", err)
 	}
 
 	//log.Println(cfg.LastUpdated)
@@ -149,13 +149,21 @@ func main() {
 			select {
 			case <-ticker.C:
 
-				newCfg, err := c.Ping(ctx, &gorram.IsAlive{IsAlive: true, LastUpdated: cfg.LastUpdated})
+				pingResp, err := c.Ping(ctx, &gorram.PingMsg{IsAlive: true, CfgLastUpdated: cfg.LastUpdated})
 				if err != nil {
-					log.Fatalln(err)
+					log.Fatalln("Error with c.Ping:", err)
 				}
-				if newCfg.String() != "" {
-					log.Println("Loading new config from server...")
-					cfg = newCfg
+				// This variable should be true if the config is out of sync
+				if pingResp.CfgOutOfSync {
+					// Fetch and set the new config
+					log.Println("Configuration out of sync. Fetching new config from server.")
+					var err error
+					cfg, err = c.ConfigSync(ctx, &gorram.ConfigRequest{
+						ClientName: *clientName,
+					})
+					if err != nil {
+						log.Fatalln("Error with c.ConfigSync:", err)
+					}
 				}
 
 				// Do checks
@@ -164,7 +172,7 @@ func main() {
 				if len(i) > 0 {
 					issueStream, err := c.RecordIssue(ctx)
 					if err != nil {
-						log.Fatalln(err)
+						log.Fatalln("Error recording issue:", err)
 					}
 
 					for _, issue := range i {
