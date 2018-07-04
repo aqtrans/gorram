@@ -79,8 +79,9 @@ func (s *statHandler) HandleConn(ctx context.Context, connStats stats.ConnStats)
 
 type gorramServer struct {
 	clientTimers
-	clientCfg *sync.Map
-	cfg       *serverConfig
+	clientCfg        *sync.Map
+	cfg              *serverConfig
+	connectedClients map[string]int64
 	/*
 		pingTimers    map[string]*time.Timer
 		clientList    map[string]chan bool
@@ -246,6 +247,10 @@ func (s *gorramServer) loadClientConfig(client string) gorram.Config {
 func (s *gorramServer) SendConfig(ctx context.Context, req *gorram.ConfigRequest) (*gorram.Config, error) {
 
 	clientName := getClientName(ctx)
+
+	// Record time, as SendConfig is only called upon initial connection
+	s.connectedClients[clientName] = time.Now().Unix()
+	log.Println(clientName, "has connected.")
 
 	// Load config
 	cfg := s.loadClientConfig(clientName)
@@ -413,8 +418,9 @@ func main() {
 	}
 
 	gs := gorramServer{
-		cfg:       cfg,
-		clientCfg: new(sync.Map),
+		cfg:              cfg,
+		clientCfg:        new(sync.Map),
+		connectedClients: make(map[string]int64),
 	}
 
 	gs.loadConfig(*confFile)
