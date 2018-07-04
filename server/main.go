@@ -102,10 +102,12 @@ func getClientName(ctx context.Context) string {
 }
 
 func (s *gorramServer) Ping(ctx context.Context, msg *gorram.IsAlive) (*gorram.Config, error) {
-	// Variables to eventually change into config values, fetched from the client's configured interval
-	// deadClienttime is the time to wait between alerting after a client has been declared dead
-	var deadClienttime time.Duration
-	deadClienttime = 30 * time.Second
+	/*
+		// Variables to eventually change into config values, fetched from the client's configured interval
+		// deadClienttime is the time to wait between alerting after a client has been declared dead
+		var deadClienttime time.Duration
+		deadClienttime = 30 * time.Second
+	*/
 
 	client := getClientName(ctx)
 
@@ -152,7 +154,7 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.IsAlive) (*gorram.C
 			clientTicker.(*time.Ticker).Stop()
 		}
 		// create a ticker to store and reference
-		ticker := time.NewTicker(deadClienttime)
+		ticker := time.NewTicker(pingTime)
 		s.clientTimers.tickers.Store(client, ticker)
 		// Create a timer to store and reference
 		timer := time.NewTimer(pingTime)
