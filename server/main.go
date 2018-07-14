@@ -136,19 +136,12 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.PingMsg) (*gorram.P
 		//log.Println("[TIMER]", client, "creating new timer for", pingTime, "seconds")
 
 		// Check if the client was dead, and reset it's ticker
-		if clientTicker, ok := s.clientTimers.tickers.Load(client); ok {
+		s.reviveDeadClient(client)
 
-			//log.Println("[TIMER]", client, "is alive again. Stopping it's deadClientTicker.")
-			alert(*s.cfg, client, gorram.Issue{
-				Title:   "Dead Client Alive",
-				Message: fmt.Sprintf("%v is alive again!", client),
-			})
-
-			clientTicker.(*time.Ticker).Stop()
-		}
 		// create a ticker to store and reference
 		ticker := time.NewTicker(pingTime)
 		s.clientTimers.tickers.Store(client, ticker)
+
 		// Create a timer to store and reference
 		timer := time.NewTimer(pingTime)
 		s.clientTimers.timers.Store(client, timer)
@@ -160,6 +153,18 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.PingMsg) (*gorram.P
 	//log.Println("[TIMER] Number of goroutines:", runtime.NumGoroutine())
 
 	return &cfgOutOfDate, nil
+}
+
+// reviveDeadClient checks and resets the ticket a dead client sets off
+func (s *gorramServer) reviveDeadClient(clientName string) {
+	if clientTicker, ok := s.clientTimers.tickers.Load(clientName); ok {
+		//log.Println("[TIMER]", client, "is alive again. Stopping it's deadClientTicker.")
+		alert(*s.cfg, clientName, gorram.Issue{
+			Title:   "Dead Client Alive",
+			Message: fmt.Sprintf("%v is alive again!", clientName),
+		})
+		clientTicker.(*time.Ticker).Stop()
+	}
 }
 
 func deadClientTicker(clientName string, c *clientTimers, cfg serverConfig) {
@@ -243,6 +248,9 @@ func (s *gorramServer) ConfigSync(ctx context.Context, req *gorram.ConfigRequest
 	// Record time, as SendConfig is only called upon initial connection
 	s.connectedClients[clientName] = time.Now().Unix()
 	log.Println(clientName, "has connected.")
+
+	// Check if the client was dead, and reset it's ticker
+	s.reviveDeadClient(clientName)
 
 	// Load config
 	cfg := s.loadClientConfig(clientName)
