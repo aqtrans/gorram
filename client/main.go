@@ -119,6 +119,7 @@ func main() {
 	}
 	if err != nil {
 		log.Printf("Error connecting to server: %v", err)
+		return
 	}
 
 	defer conn.Close()
