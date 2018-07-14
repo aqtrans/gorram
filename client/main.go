@@ -100,8 +100,10 @@ func main() {
 	var conn *grpc.ClientConn
 	var err error
 	var creds credentials.TransportCredentials
+	dialCtx, dialCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer dialCancel()
 	if *insecure {
-		conn, err = grpc.Dial(*serverAddress, grpc.WithBlock(), grpc.WithInsecure(), grpc.WithPerRPCCredentials(&secret{
+		conn, err = grpc.DialContext(dialCtx, *serverAddress, grpc.WithBlock(), grpc.WithInsecure(), grpc.WithPerRPCCredentials(&secret{
 			Secret: *secretKey,
 			TLS:    false,
 		}))
@@ -110,7 +112,7 @@ func main() {
 		if err != nil {
 			log.Fatal("Error parsing TLS cert:", err)
 		}
-		conn, err = grpc.Dial(*serverAddress, grpc.WithBlock(), grpc.WithTransportCredentials(creds), grpc.WithPerRPCCredentials(&secret{
+		conn, err = grpc.DialContext(dialCtx, *serverAddress, grpc.WithBlock(), grpc.WithTransportCredentials(creds), grpc.WithPerRPCCredentials(&secret{
 			Secret: *secretKey,
 			TLS:    true,
 		}))
