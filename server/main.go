@@ -79,8 +79,8 @@ func (s *statHandler) HandleConn(ctx context.Context, connStats stats.ConnStats)
 
 type gorramServer struct {
 	clientTimers
-	clientCfg        *sync.Map
-	cfg              *serverConfig
+	clientCfg        sync.Map
+	cfg              serverConfig
 	connectedClients map[string]int64
 	/*
 		pingTimers    map[string]*time.Timer
@@ -121,7 +121,7 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.PingMsg) (*gorram.P
 
 	// pingTime is the time to wait before declaring a client dead
 	var pingTime time.Duration
-	pingTime = time.Duration(s.loadClientConfig(client).Interval+10) * time.Second
+	pingTime = time.Duration(s.loadClientConfig(client).Interval) * time.Second
 
 	// Setup a ping timer
 	clientTimer, ok := s.clientTimers.timers.Load(client)
@@ -147,7 +147,7 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.PingMsg) (*gorram.P
 		s.clientTimers.timers.Store(client, timer)
 
 		// Fire off a goroutine that expires in 60 seconds, then ticking every 30 seconds
-		go deadClientTicker(client, &s.clientTimers, *s.cfg)
+		go s.deadClientTicker(client)
 	}
 
 	//log.Println("[TIMER] Number of goroutines:", runtime.NumGoroutine())
@@ -159,7 +159,7 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.PingMsg) (*gorram.P
 func (s *gorramServer) reviveDeadClient(clientName string) {
 	if clientTicker, ok := s.clientTimers.tickers.Load(clientName); ok {
 		//log.Println("[TIMER]", client, "is alive again. Stopping it's deadClientTicker.")
-		alert(*s.cfg, clientName, gorram.Issue{
+		alert(s.cfg, clientName, gorram.Issue{
 			Title:   "Dead Client Alive",
 			Message: fmt.Sprintf("%v is alive again!", clientName),
 		})
@@ -167,31 +167,42 @@ func (s *gorramServer) reviveDeadClient(clientName string) {
 	}
 }
 
-func deadClientTicker(clientName string, c *clientTimers, cfg serverConfig) {
-	timer, ok := c.timers.Load(clientName)
-	if !ok {
-		log.Fatalln("[TIMER] Error: no timer for", clientName)
-	}
-	ticker, ok := c.tickers.Load(clientName)
-	if !ok {
-		log.Fatalln("[TIMER] Error: no ticker for", clientName)
-	}
+func (s *gorramServer) deadClientTicker(clientName string) {
+	timer := s.clientTimers.getTimer(clientName)
+	ticker := s.clientTimers.getTicker(clientName)
 
-	<-timer.(*time.Timer).C
+	// This should block until the given clients timer has not been reset, considering the client dead
+	<-timer.C
 
 	//log.Println("[TIMER]", clientName, "is dead. Deleting it's timer.")
 
-	c.timers.Delete(clientName)
+	s.clientTimers.timers.Delete(clientName)
 
-	for t := range ticker.(*time.Ticker).C {
+	for t := range ticker.C {
 		//log.Println("[TIMER]", t, clientName, "is dead")
 
-		alert(cfg, clientName, gorram.Issue{
+		alert(s.cfg, clientName, gorram.Issue{
 			Title:   "Dead Client",
 			Message: fmt.Sprintf("%v is dead, since %v", clientName, t),
 		})
 	}
 
+}
+
+func (c *clientTimers) getTimer(clientName string) *time.Timer {
+	timer, ok := c.timers.Load(clientName)
+	if !ok {
+		log.Fatalln("[TIMER] Error: no timer for", clientName)
+	}
+	return timer.(*time.Timer)
+}
+
+func (c *clientTimers) getTicker(clientName string) *time.Ticker {
+	ticker, ok := c.tickers.Load(clientName)
+	if !ok {
+		log.Fatalln("[TIMER] Error: no ticker for", clientName)
+	}
+	return ticker.(*time.Ticker)
 }
 
 func (s *gorramServer) RecordIssue(stream gorram.Reporter_RecordIssueServer) error {
@@ -212,7 +223,7 @@ func (s *gorramServer) RecordIssue(stream gorram.Reporter_RecordIssueServer) err
 			return err
 		}
 		// Record issue
-		alert(*s.cfg, getClientName(stream.Context()), *issue)
+		alert(s.cfg, getClientName(stream.Context()), *issue)
 
 		//log.Println("Time since issue was submitted:", time.Since(time.Unix(issue.TimeSubmitted, 0)).String())
 
@@ -371,7 +382,7 @@ func main() {
 	alertMethodF := flag.String("alert", "log", "Alert method to use. Right now, log. To come: pushover.")
 	flag.Parse()
 
-	cfg := &serverConfig{
+	cfg := serverConfig{
 		secretKey:   *secret,
 		alertMethod: *alertMethodF,
 		configFile:  *confFile,
@@ -419,7 +430,7 @@ func main() {
 
 	gs := gorramServer{
 		cfg:              cfg,
-		clientCfg:        new(sync.Map),
+		clientCfg:        *new(sync.Map),
 		connectedClients: make(map[string]int64),
 	}
 
