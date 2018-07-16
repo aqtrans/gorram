@@ -121,7 +121,7 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.PingMsg) (*gorram.P
 
 	// pingTime is the time to wait before declaring a client dead
 	var pingTime time.Duration
-	pingTime = time.Duration(s.loadClientConfig(client).Interval) * time.Second
+	pingTime = time.Duration(s.loadClientConfig(client).Interval+10) * time.Second
 
 	// Setup a ping timer
 	clientTimer, ok := s.clientTimers.timers.Load(client)
