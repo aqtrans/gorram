@@ -70,6 +70,7 @@ func (s *secret) RequireTransportSecurity() bool {
 func ping(ctx context.Context, clientName string, c gorram.ReporterClient, cfgChan chan gorram.Config) {
 	log.Println("ping")
 	cfg := <-cfgChan
+	log.Println("ping chan")
 	pingResp, err := c.Ping(ctx, &gorram.PingMsg{IsAlive: true, CfgLastUpdated: cfg.LastUpdated})
 	if err != nil {
 		log.Fatalln("Error with c.Ping:", err)
@@ -103,6 +104,8 @@ func check(ctx context.Context, c gorram.ReporterClient, cfgChan <-chan gorram.C
 	log.Println("check")
 
 	cfg := <-cfgChan
+	log.Println("check chan")
+
 	log.Println(cfg.LastUpdated)
 
 	// Do checks
@@ -209,13 +212,7 @@ func main() {
 	// Ping and collect issues every X seconds
 	ticker := time.NewTicker(time.Duration(cfg.Interval) * time.Second)
 	quit := make(chan struct{})
-	cfgChan := make(chan gorram.Config, 1)
-	select {
-	case cfgChan <- *cfg:
-		log.Println("config set")
-	default:
-		log.Println("no config set")
-	}
+	cfgChan := make(chan gorram.Config)
 
 	go func() {
 		for {
@@ -223,13 +220,25 @@ func main() {
 			case <-ticker.C:
 				go ping(ctx, *clientName, c, cfgChan)
 				go check(ctx, c, cfgChan)
-
+				select {
+				case cfgChan <- *cfg:
+					log.Println("config set")
+				default:
+					log.Println("no config set")
+				}
 			case <-quit:
 				ticker.Stop()
 				return
 			}
 		}
 	}()
+
+	select {
+	case cfgChan <- *cfg:
+		log.Println("config set")
+	default:
+		log.Println("no config set")
+	}
 
 	go func() {
 		sig := <-sigs
