@@ -158,9 +158,9 @@ func main() {
 		for {
 			select {
 			case <-ticker.C:
-				log.Println("Number of Goroutines:", runtime.NumGoroutine())
+				//log.Println("Number of Goroutines:", runtime.NumGoroutine())
 				go func() {
-					log.Println("ping")
+					//log.Println("ping")
 					pingResp, err := c.Ping(ctx, &gorram.PingMsg{IsAlive: true, CfgLastUpdated: cfg.LastUpdated})
 					if err != nil {
 						log.Fatalln("Error with c.Ping:", err)
@@ -185,7 +185,7 @@ func main() {
 					//close(cfgChan)
 				}()
 				go func() {
-					log.Println("checks")
+					//log.Println("checks")
 					cfg = <-cfgChan
 					// Do checks
 					i := doChecks(cfg)
