@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"runtime"
 	"syscall"
 	"time"
 
