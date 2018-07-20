@@ -121,7 +121,7 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.PingMsg) (*gorram.P
 
 	// pingTime is the time to wait before declaring a client dead
 	var pingTime time.Duration
-	pingTime = time.Duration(s.loadClientConfig(client).Interval+10) * time.Second
+	pingTime = time.Duration(s.loadClientConfig(client).Interval*2) * time.Second
 
 	// Setup a ping timer
 	clientTimer, ok := s.clientTimers.timers.Load(client)
@@ -258,10 +258,10 @@ func (s *gorramServer) ConfigSync(ctx context.Context, req *gorram.ConfigRequest
 
 	// Record time, as SendConfig is only called upon initial connection
 	s.connectedClients[clientName] = time.Now().Unix()
-	log.Println(clientName, "has connected.")
+	log.Println(clientName, "has synced config.")
 
 	// Check if the client was dead, and reset it's ticker
-	s.reviveDeadClient(clientName)
+	//s.reviveDeadClient(clientName)
 
 	// Load config
 	cfg := s.loadClientConfig(clientName)
