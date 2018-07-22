@@ -101,7 +101,7 @@ func (d DelugeCheck) doCheck() string {
 
 	cookieJar, err := cookiejar.New(nil)
 	if err != nil {
-		return fmt.Sprintf("Error creating cookiejar:", err)
+		return fmt.Sprintf("Error creating cookiejar: %v", err)
 	}
 
 	client := &http.Client{
