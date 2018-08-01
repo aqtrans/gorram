@@ -368,6 +368,18 @@ func (s *gorramServer) loadConfig(confFile string) {
 	}
 }
 
+func (s *gorramServer) List(ctx context.Context, qr *gorram.QueryRequest) (*gorram.ClientList, error) {
+	var cl *gorram.ClientList
+
+	for k := range s.connectedClients {
+		cl.Clients[k] = &gorram.Client{
+			Name:      k,
+			Connected: true,
+		}
+	}
+	return cl, nil
+}
+
 func main() {
 
 	// Set config via flags
@@ -437,6 +449,8 @@ func main() {
 	gs.loadConfig(*confFile)
 
 	gorram.RegisterReporterServer(server, &gs)
+
+	gorram.RegisterQuerierServer(server, &gs)
 
 	// Start listening, in a goroutine so SIGINTs can be caught below
 	go func() {
