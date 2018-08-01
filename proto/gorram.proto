@@ -73,3 +73,21 @@ message GetURL {
     string url = 1;
     string expected_body = 2;
 }
+
+service Querier {
+    rpc List(QueryRequest) returns (ClientList) {}
+}
+
+message QueryRequest {
+    // When query was sent
+    int64 time_submitted = 3;    
+}
+
+message ClientList {
+    map<string, Client> clients = 1;
+}
+
+message Client {
+    string name = 1;
+    bool connected = 2;
+}
