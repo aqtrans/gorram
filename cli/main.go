@@ -4,9 +4,6 @@ import (
 	"context"
 	"flag"
 	"log"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"google.golang.org/grpc"
@@ -39,11 +36,6 @@ func main() {
 	//interval := flag.Duration("interval", 60*time.Second, "Number of seconds to check for issues on.")
 
 	flag.Parse()
-
-	// Catch Ctrl+C, sigint
-	sigs := make(chan os.Signal, 1)
-	done := make(chan bool, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -84,8 +76,6 @@ func main() {
 		return
 	}
 
-	defer conn.Close()
-
 	c := gorram.NewQuerierClient(conn)
 
 	cl, err := c.List(ctx, &gorram.QueryRequest{
@@ -96,15 +86,6 @@ func main() {
 	}
 	log.Println(cl.Clients)
 
-	// End
-	go func() {
-		sig := <-sigs
-		log.Println(sig)
-		done <- true
-	}()
-
-	<-done
-	log.Println("Client exiting...")
 	cancel()
 	err = conn.Close()
 	if err != nil {
