@@ -1,2 +1,4 @@
 checks/vendor/*
 server/vendor/*
+*.pem
+*.key
