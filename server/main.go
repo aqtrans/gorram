@@ -81,7 +81,7 @@ type gorramServer struct {
 	clientTimers
 	clientCfg        sync.Map
 	cfg              serverConfig
-	connectedClients map[string]int64
+	connectedClients gorram.ClientList
 	/*
 		pingTimers    map[string]*time.Timer
 		clientList    map[string]chan bool
@@ -257,7 +257,10 @@ func (s *gorramServer) ConfigSync(ctx context.Context, req *gorram.ConfigRequest
 	clientName := getClientName(ctx)
 
 	// Record time, as SendConfig is only called upon initial connection
-	s.connectedClients[clientName] = time.Now().Unix()
+	s.connectedClients.Clients[clientName] = &gorram.Client{
+		Name:      clientName,
+		Connected: true,
+	}
 	log.Println(clientName, "has synced config.")
 
 	// Check if the client was dead, and reset it's ticker
@@ -369,15 +372,8 @@ func (s *gorramServer) loadConfig(confFile string) {
 }
 
 func (s *gorramServer) List(ctx context.Context, qr *gorram.QueryRequest) (*gorram.ClientList, error) {
-	var cl *gorram.ClientList
 
-	for k := range s.connectedClients {
-		cl.Clients[k] = &gorram.Client{
-			Name:      k,
-			Connected: true,
-		}
-	}
-	return cl, nil
+	return &s.connectedClients, nil
 }
 
 func main() {
@@ -443,8 +439,10 @@ func main() {
 	gs := gorramServer{
 		cfg:              cfg,
 		clientCfg:        *new(sync.Map),
-		connectedClients: make(map[string]int64),
+		connectedClients: *new(gorram.ClientList),
 	}
+
+	gs.connectedClients.Clients = make(map[string]*gorram.Client)
 
 	gs.loadConfig(*confFile)
 
