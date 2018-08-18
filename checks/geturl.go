@@ -6,7 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	pb "jba.io/go/gorram/proto"
+	pb "git.jba.io/go/gorram/proto"
 )
 
 type GetURL struct {

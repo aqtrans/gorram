@@ -16,7 +16,7 @@ import (
 	//"strings"
 
 	//"github.com/smallnest/goreq"
-	pb "jba.io/go/gorram/proto"
+	pb "git.jba.io/go/gorram/proto"
 )
 
 type DelugeCheck struct {

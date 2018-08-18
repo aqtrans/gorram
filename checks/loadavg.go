@@ -3,8 +3,8 @@ package checks
 import (
 	"fmt"
 
+	pb "git.jba.io/go/gorram/proto"
 	"github.com/shirou/gopsutil/load"
-	pb "jba.io/go/gorram/proto"
 )
 
 type LoadAvg struct {

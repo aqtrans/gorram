@@ -1,8 +1,9 @@
 package checks
 
 import (
-	gorram "jba.io/go/gorram/proto"
 	"time"
+
+	gorram "git.jba.io/go/gorram/proto"
 )
 
 type checkData struct {

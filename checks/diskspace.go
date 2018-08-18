@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"log"
 
+	pb "git.jba.io/go/gorram/proto"
 	"github.com/shirou/gopsutil/disk"
-	pb "jba.io/go/gorram/proto"
 )
 
 type DiskSpace struct {

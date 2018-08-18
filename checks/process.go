@@ -5,8 +5,8 @@ import (
 	"log"
 	"strings"
 
+	pb "git.jba.io/go/gorram/proto"
 	"github.com/shirou/gopsutil/process"
-	pb "jba.io/go/gorram/proto"
 )
 
 type ProcessExists struct {
