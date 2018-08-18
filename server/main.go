@@ -18,11 +18,12 @@ import (
 	"github.com/gregdel/pushover"
 	"github.com/pelletier/go-toml"
 
+	"git.jba.io/go/gorram/proto"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
-	"jba.io/go/gorram/proto"
 )
 
 type serverConfig struct {
@@ -35,6 +36,7 @@ type serverConfig struct {
 }
 
 type statHandler struct {
+	list sync.Map
 	// TagRPC can attach some information to the given context.
 	// The context used for the rest lifetime of the RPC will be derived from
 	// the returned context.
@@ -75,6 +77,7 @@ func (s *statHandler) HandleConn(ctx context.Context, connStats stats.ConnStats)
 	case *stats.ConnEnd:
 		log.Println("Connection has ended")
 	}
+
 }
 
 type gorramServer struct {
@@ -374,6 +377,17 @@ func (s *gorramServer) loadConfig(confFile string) {
 func (s *gorramServer) List(ctx context.Context, qr *gorram.QueryRequest) (*gorram.ClientList, error) {
 
 	return &s.connectedClients, nil
+}
+
+func (s *gorramServer) Hello(ctx context.Context, req *gorram.ConfigRequest) (*gorram.Config, error) {
+
+	clientName := getClientName(ctx)
+
+	// Reset and then delete the ticker for the client
+	s.reviveDeadClient(clientName)
+	s.clientTimers.tickers.Delete(clientName)
+
+	return s.ConfigSync(ctx, req)
 }
 
 func main() {

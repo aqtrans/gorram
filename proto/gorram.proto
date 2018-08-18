@@ -3,6 +3,8 @@ syntax = "proto3";
 package gorram;
 
 service Reporter {
+    // Hello should be called once upon initial connection. It syncs the config and stops any timers
+    rpc Hello(ConfigRequest) returns (Config) {}
     // Ping is a heartbeat check, ran every X seconds to ensure a client is still alive
     // The cfg_last_updated variable sent, and cfg_out_of_sync received also allow syncing the config
     rpc Ping(PingMsg) returns (PingResponse) {}

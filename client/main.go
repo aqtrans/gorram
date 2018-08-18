@@ -9,11 +9,11 @@ import (
 	"syscall"
 	"time"
 
+	"git.jba.io/go/gorram/checks"
+	gorram "git.jba.io/go/gorram/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
-	"jba.io/go/gorram/checks"
-	"jba.io/go/gorram/proto"
 )
 
 // This is where all the actual checks are done, and an array of "issues" is made
@@ -132,18 +132,12 @@ func main() {
 	// Add secret key metadata
 	//ctx = metadata.AppendToOutgoingContext(ctx, "secret", *secretKey)
 
-	// Get config from server
-	cfg, err := c.ConfigSync(ctx, &gorram.ConfigRequest{
+	// Hello: Get config from server, and ensure dead tickers are stopped
+	cfg, err := c.Hello(ctx, &gorram.ConfigRequest{
 		ClientName: *clientName,
 	})
 	if err != nil {
-		log.Fatalln("Error with c.ConfigSync:", err)
-	}
-
-	// Do initial ping, to ensure tickers are properly stopped
-	_, err = c.Ping(ctx, &gorram.PingMsg{IsAlive: true, CfgLastUpdated: cfg.LastUpdated})
-	if err != nil {
-		log.Fatalln("Error with c.Ping:", err)
+		log.Fatalln("Error with c.Hello:", err)
 	}
 
 	log.Println("Interval:", cfg.Interval)
