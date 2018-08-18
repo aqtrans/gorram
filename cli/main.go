@@ -6,9 +6,9 @@ import (
 	"log"
 	"time"
 
+	"git.jba.io/go/gorram/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"jba.io/go/gorram/proto"
 )
 
 type secret struct {
