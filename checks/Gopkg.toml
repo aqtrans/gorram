@@ -20,7 +20,7 @@
 #  name = "github.com/x/y"
 #  version = "2.4.0"
 
-ignored = ["git.jba.io/go/gorram/proto", "google.golang.org/grpc", "google.golang.org/grpc/credentials", "google.golang.org/grpc/metadata", "google.golang.org/grpc/stats"]
+ignored = ["git.jba.io/go/gorram/proto", "google.golang.org/grpc*"]
 
 [[constraint]]
   version = "2.18.03"
