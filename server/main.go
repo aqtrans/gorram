@@ -14,6 +14,8 @@ import (
 	"syscall"
 	"time"
 
+	"google.golang.org/grpc/peer"
+
 	"github.com/fsnotify/fsnotify"
 	"github.com/gregdel/pushover"
 	"github.com/pelletier/go-toml"
@@ -36,7 +38,7 @@ type serverConfig struct {
 }
 
 type statHandler struct {
-	list sync.Map
+	list gorram.ClientList
 	// TagRPC can attach some information to the given context.
 	// The context used for the rest lifetime of the RPC will be derived from
 	// the returned context.
@@ -259,11 +261,6 @@ func (s *gorramServer) ConfigSync(ctx context.Context, req *gorram.ConfigRequest
 
 	clientName := getClientName(ctx)
 
-	// Record time, as SendConfig is only called upon initial connection
-	s.connectedClients.Clients[clientName] = &gorram.Client{
-		Name:      clientName,
-		Connected: true,
-	}
 	log.Println(clientName, "has synced config.")
 
 	// Check if the client was dead, and reset it's ticker
@@ -382,6 +379,21 @@ func (s *gorramServer) List(ctx context.Context, qr *gorram.QueryRequest) (*gorr
 func (s *gorramServer) Hello(ctx context.Context, req *gorram.ConfigRequest) (*gorram.Config, error) {
 
 	clientName := getClientName(ctx)
+
+	var clientAddress string
+	p, ok := peer.FromContext(ctx)
+	if !ok {
+		log.Println("ERR: no peer info in context for", clientName)
+		clientAddress = "N/A"
+	} else {
+		clientAddress = p.Addr.String()
+	}
+
+	// As this should only be called on client connection, record the client name and address here
+	s.connectedClients.Clients[clientName] = &gorram.Client{
+		Name:    clientName,
+		Address: clientAddress,
+	}
 
 	// Reset and then delete the ticker for the client
 	s.reviveDeadClient(clientName)

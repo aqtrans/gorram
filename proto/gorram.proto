@@ -91,5 +91,5 @@ message ClientList {
 
 message Client {
     string name = 1;
-    bool connected = 2;
+    string address = 2;
 }
