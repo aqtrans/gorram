@@ -1,6 +1,9 @@
 image: golang:latest
 
-cache: {}
+cache:
+  key: "$CI_COMMIT_REF_NAME"
+  paths:
+    - vendor/
 
 before_script:
   - echo deb http://deb.debian.org/debian/ stretch main > /etc/apt/sources.list
