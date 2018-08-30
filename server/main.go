@@ -107,6 +107,10 @@ func getClientName(ctx context.Context) string {
 	return "no-client-name"
 }
 
+// Ping handles the dead-client detection functionality
+//   It works by spawning a Timer and Ticker for each client
+//   - The timer is reset on every successful ping
+//   - The ticker triggers the dead-client alerts, once the above timer has expired
 func (s *gorramServer) Ping(ctx context.Context, msg *gorram.PingMsg) (*gorram.PingResponse, error) {
 	/*
 		// Variables to eventually change into config values, fetched from the client's configured interval
@@ -133,9 +137,12 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.PingMsg) (*gorram.P
 
 	if ok {
 		//log.Println("[TIMER]", client, "timer found, resetting.")
-
+		ct := clientTimer.(*time.Timer)
 		// Reset the client's timer
-		clientTimer.(*time.Timer).Reset(pingTime)
+		if !ct.Stop() {
+			<-ct.C
+		}
+		ct.Reset(pingTime)
 
 	} else {
 		//log.Println("[TIMER]", client, "creating new timer for", pingTime, "seconds")
