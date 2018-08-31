@@ -178,6 +178,8 @@ func (s *gorramServer) reviveDeadClient(clientName string) {
 			Message: fmt.Sprintf("%v is alive again!", clientName),
 		})
 		clientTicker.(*time.Ticker).Stop()
+		s.clientTimers.tickers.Delete(clientName)
+		s.clientTimers.timers.Delete(clientName)
 	}
 }
 
@@ -408,8 +410,6 @@ func (s *gorramServer) Hello(ctx context.Context, req *gorram.ConfigRequest) (*g
 
 	// Reset and then delete the ticker for the client
 	s.reviveDeadClient(clientName)
-	s.clientTimers.tickers.Delete(clientName)
-	s.clientTimers.timers.Delete(clientName)
 
 	return s.ConfigSync(ctx, req)
 }
