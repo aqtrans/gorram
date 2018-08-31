@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"runtime"
 	"sync"
 	"syscall"
 	"time"
@@ -135,6 +136,9 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.PingMsg) (*gorram.P
 	// Setup a ping timer
 	clientTimer, ok := s.clientTimers.timers.Load(client)
 
+	// DEBUG:
+	log.Println("Num of goroutines:", runtime.NumGoroutine())
+
 	if ok {
 		//log.Println("[TIMER]", client, "timer found, resetting.")
 		ct := clientTimer.(*time.Timer)
@@ -185,6 +189,8 @@ func (s *gorramServer) deadClientTicker(clientName string) {
 
 	// This should block until the given clients timer has not been reset, considering the client dead
 	<-timer.C
+	log.Println(clientName, "timer has expired.")
+	timer.Stop()
 
 	//log.Println("[TIMER]", clientName, "is dead. Deleting it's timer.")
 
@@ -405,6 +411,7 @@ func (s *gorramServer) Hello(ctx context.Context, req *gorram.ConfigRequest) (*g
 	// Reset and then delete the ticker for the client
 	s.reviveDeadClient(clientName)
 	s.clientTimers.tickers.Delete(clientName)
+	s.clientTimers.timers.Delete(clientName)
 
 	return s.ConfigSync(ctx, req)
 }
