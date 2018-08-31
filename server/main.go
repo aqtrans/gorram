@@ -143,7 +143,10 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.PingMsg) (*gorram.P
 		//log.Println("[TIMER]", client, "timer found, resetting.")
 		ct := clientTimer.(*time.Timer)
 		// Reset the client's timer
-		ct.Stop()
+		if !ct.Stop() {
+			log.Println("ct.Stop() hit. Draining channel.")
+			<-ct.C
+		}
 		ct.Reset(pingTime)
 
 	} else {
@@ -179,7 +182,6 @@ func (s *gorramServer) reviveDeadClient(clientName string) {
 		})
 		clientTicker.(*time.Ticker).Stop()
 		s.clientTimers.tickers.Delete(clientName)
-		s.clientTimers.timers.Delete(clientName)
 	}
 }
 
