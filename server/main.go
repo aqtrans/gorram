@@ -143,9 +143,7 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.PingMsg) (*gorram.P
 		//log.Println("[TIMER]", client, "timer found, resetting.")
 		ct := clientTimer.(*time.Timer)
 		// Reset the client's timer
-		if !ct.Stop() {
-			<-ct.C
-		}
+		ct.Stop()
 		ct.Reset(pingTime)
 
 	} else {
