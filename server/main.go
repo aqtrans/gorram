@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	_ "expvar"
 	"flag"
 	"fmt"
 	"io"
@@ -16,17 +15,17 @@ import (
 	"syscall"
 	"time"
 
-	"google.golang.org/grpc/peer"
-
 	"github.com/fsnotify/fsnotify"
 	"github.com/gregdel/pushover"
 	"github.com/pelletier/go-toml"
+	_ "github.com/tevjef/go-runtime-metrics/expvar"
 
 	"git.jba.io/go/gorram/proto"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/stats"
 )
 
