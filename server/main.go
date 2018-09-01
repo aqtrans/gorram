@@ -3,14 +3,15 @@ package main
 import (
 	"context"
 	"errors"
+	_ "expvar"
 	"flag"
 	"fmt"
 	"io"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
-	"runtime"
 	"sync"
 	"syscall"
 	"time"
@@ -135,9 +136,6 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.PingMsg) (*gorram.P
 
 	// Setup a ping timer
 	clientTimer, ok := s.clientTimers.timers.Load(client)
-
-	// DEBUG:
-	log.Println("Num of goroutines:", runtime.NumGoroutine())
 
 	if ok {
 		//log.Println("[TIMER]", client, "timer found, resetting.")
@@ -429,6 +427,11 @@ func main() {
 	secret := flag.String("server-secret", "omg12345", "Secret key of the server.")
 	alertMethodF := flag.String("alert", "log", "Alert method to use. Right now, log. To come: pushover.")
 	flag.Parse()
+
+	go func() {
+		// Expose expvars
+		http.ListenAndServe("127.0.0.1:50001", nil)
+	}()
 
 	cfg := serverConfig{
 		secretKey:   *secret,
