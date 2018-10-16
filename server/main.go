@@ -402,6 +402,13 @@ func (s *gorramServer) Delete(ctx context.Context, cn *gorram.ClientName) (*gorr
 	return &s.connectedClients, nil
 }
 
+func (s *gorramServer) Debug(ctx context.Context, dr *gorram.DebugRequest) (*gorram.DebugResponse, error) {
+	aString := fmt.Sprintf("Connected clients: %s | Timers: %s | Tickers: %s", s.connectedClients.String(), s.clientTimers.timers, s.clientTimers.tickers)
+	return &gorram.DebugResponse{
+		Resp: aString,
+	}, nil
+}
+
 func (s *gorramServer) Hello(ctx context.Context, req *gorram.ConfigRequest) (*gorram.Config, error) {
 
 	clientName := getClientName(ctx)

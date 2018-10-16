@@ -79,6 +79,7 @@ message GetURL {
 service Querier {
     rpc List(QueryRequest) returns (ClientList) {}
     rpc Delete(ClientName) returns (ClientList) {}
+    rpc Debug(DebugRequest) returns (DebugResponse) {}
 }
 
 message QueryRequest {
@@ -97,4 +98,12 @@ message Client {
 
 message ClientName {
     string name = 1;
+}
+
+message DebugRequest {
+    bool debug = 1;
+}
+
+message DebugResponse {
+    string resp = 1;
 }

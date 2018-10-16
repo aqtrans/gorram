@@ -36,6 +36,7 @@ func main() {
 	//interval := flag.Duration("interval", 60*time.Second, "Number of seconds to check for issues on.")
 	list := flag.Bool("list", false, "List connected clients and exit.")
 	deleteClient := flag.String("delete", "", "Delete named client and stop it's ticker.")
+	debug := flag.Bool("debug", false, "List debugging info and exit.")
 
 	flag.Parse()
 
@@ -97,6 +98,15 @@ func main() {
 			log.Println(err)
 		}
 		log.Println(cl.Clients)
+	}
+	if *debug {
+		cl, err := c.Debug(ctx, &gorram.DebugRequest{
+			Debug: true,
+		})
+		if err != nil {
+			log.Println(err)
+		}
+		log.Println(cl.String())
 	}
 
 	cancel()
