@@ -34,6 +34,8 @@ func main() {
 	serverCert := flag.String("cert", "cert.pem", "Path to the certificate from the server.")
 	secretKey := flag.String("server-secret", "omg12345", "Secret key of the server.")
 	//interval := flag.Duration("interval", 60*time.Second, "Number of seconds to check for issues on.")
+	list := flag.Bool("list", false, "List connected clients and exit.")
+	deleteClient := flag.String("delete", "", "Delete named client and stop it's ticker.")
 
 	flag.Parse()
 
@@ -78,13 +80,24 @@ func main() {
 
 	c := gorram.NewQuerierClient(conn)
 
-	cl, err := c.List(ctx, &gorram.QueryRequest{
-		TimeSubmitted: time.Now().Unix(),
-	})
-	if err != nil {
-		log.Println(err)
+	if *list {
+		cl, err := c.List(ctx, &gorram.QueryRequest{
+			TimeSubmitted: time.Now().Unix(),
+		})
+		if err != nil {
+			log.Println(err)
+		}
+		log.Println(cl.Clients)
 	}
-	log.Println(cl.Clients)
+	if *deleteClient != "" {
+		cl, err := c.Delete(ctx, &gorram.ClientName{
+			Name: *deleteClient,
+		})
+		if err != nil {
+			log.Println(err)
+		}
+		log.Println(cl.Clients)
+	}
 
 	cancel()
 	err = conn.Close()
