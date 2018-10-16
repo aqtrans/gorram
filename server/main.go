@@ -388,6 +388,20 @@ func (s *gorramServer) List(ctx context.Context, qr *gorram.QueryRequest) (*gorr
 	return &s.connectedClients, nil
 }
 
+func (s *gorramServer) Delete(ctx context.Context, cn *gorram.ClientName) (*gorram.ClientList, error) {
+	clientName := cn.GetName()
+	// Stop and delete clientName's ticker, and delete it from the ClientList
+	// TODO: Delete timer too?
+	if clientTicker, ok := s.clientTimers.tickers.Load(clientName); ok {
+		clientTicker.(*time.Ticker).Stop()
+		s.clientTimers.tickers.Delete(clientName)
+		delete(s.connectedClients.Clients, clientName)
+		log.Println(clientName, "has been deleted from client list.")
+	}
+
+	return &s.connectedClients, nil
+}
+
 func (s *gorramServer) Hello(ctx context.Context, req *gorram.ConfigRequest) (*gorram.Config, error) {
 
 	clientName := getClientName(ctx)

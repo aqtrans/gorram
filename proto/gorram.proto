@@ -78,6 +78,7 @@ message GetURL {
 
 service Querier {
     rpc List(QueryRequest) returns (ClientList) {}
+    rpc Delete(ClientName) returns (ClientList) {}
 }
 
 message QueryRequest {
@@ -92,4 +93,8 @@ message ClientList {
 message Client {
     string name = 1;
     string address = 2;
+}
+
+message ClientName {
+    string name = 1;
 }
