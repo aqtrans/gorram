@@ -403,7 +403,18 @@ func (s *gorramServer) Delete(ctx context.Context, cn *gorram.ClientName) (*gorr
 }
 
 func (s *gorramServer) Debug(ctx context.Context, dr *gorram.DebugRequest) (*gorram.DebugResponse, error) {
-	aString := fmt.Sprintf("Connected clients: %s | Timers: %s | Tickers: %s", s.connectedClients.String(), s.clientTimers.timers, s.clientTimers.tickers)
+	timers := make(map[interface{}]interface{})
+	s.clientTimers.timers.Range(func(k, v interface{}) bool {
+		timers[k] = v
+		return true
+	})
+	tickers := make(map[interface{}]interface{})
+	s.clientTimers.tickers.Range(func(k, v interface{}) bool {
+		tickers[k] = v
+		return true
+	})
+
+	aString := fmt.Sprintf("Connected clients: %s | Timers: %s | Tickers: %s", s.connectedClients.String(), timers, tickers)
 	return &gorram.DebugResponse{
 		Resp: aString,
 	}, nil
