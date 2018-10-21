@@ -26,6 +26,9 @@ func (p DiskSpace) doCheck() string {
 	if usage.UsedPercent > p.Cfg.MaxUsage {
 		return fmt.Sprintf("Disk usage of %s is greater than %f, %f", p.Cfg.Partition, p.Cfg.MaxUsage, usage.UsedPercent)
 	}
+	if usage.UsedPercent == p.Cfg.MaxUsage {
+		return fmt.Sprintf("Disk usage of %s is at %f, %f", p.Cfg.Partition, p.Cfg.MaxUsage, usage.UsedPercent)
+	}
 
 	return ""
 
