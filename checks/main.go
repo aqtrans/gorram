@@ -28,11 +28,11 @@ type Config struct {
 // GetCheck is a function which all checks should run through
 // It should only be called in client.go by doCheck().
 // If the check() is not OK, it appends the issues and returns it.
-func GetCheck(issues []*gorram.Issue, c check) []*gorram.Issue {
+func GetCheck(issues []gorram.Issue, c check) []gorram.Issue {
 	//log.Println("Check:", c)
 	theCheck := c.doCheck()
 	if theCheck != "" {
-		issues = append(issues, &gorram.Issue{
+		issues = append(issues, gorram.Issue{
 			Title:         c.title(),
 			Message:       theCheck,
 			TimeSubmitted: time.Now().Unix(),

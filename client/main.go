@@ -17,8 +17,8 @@ import (
 )
 
 // This is where all the actual checks are done, and an array of "issues" is made
-func doChecks(cfg *gorram.Config) []*gorram.Issue {
-	var issues []*gorram.Issue
+func doChecks(cfg *gorram.Config) []gorram.Issue {
+	var issues []gorram.Issue
 
 	// Check loadavg
 	if cfg.Load != nil {
@@ -190,7 +190,7 @@ func main() {
 						}
 
 						for _, issue := range i {
-							if err := issueStream.Send(issue); err != nil {
+							if err := issueStream.Send(&issue); err != nil {
 								log.Fatalln("Error submitting issue:", err)
 							}
 						}
