@@ -152,57 +152,58 @@ func main() {
 		for {
 			select {
 			case <-ticker.C:
-				log.Println("Number of Goroutines:", runtime.NumGoroutine())
-
-				//log.Println("ping")
-				pingResp, err := c.Ping(ctx, &gorram.PingMsg{IsAlive: true, CfgLastUpdated: cfg.LastUpdated})
-				if err != nil {
-					log.Fatalln("Error with c.Ping:", err)
-				}
-				// This variable should be true if the config is out of sync
-				if pingResp.CfgOutOfSync {
-					// Fetch and set the new config
-					log.Println("Configuration out of sync. Fetching new config from server.")
-					var err error
-					newCfg, err := c.ConfigSync(ctx, &gorram.ConfigRequest{
-						ClientName: *clientName,
-					})
+				go func() {
+					//log.Println("ping")
+					pingResp, err := c.Ping(ctx, &gorram.PingMsg{IsAlive: true, CfgLastUpdated: cfg.LastUpdated})
 					if err != nil {
-						log.Fatalln("Error with c.ConfigSync:", err)
+						log.Fatalln("Error with c.Ping:", err)
 					}
-					// Set cfg to newCfg
-					cfg = newCfg
-					log.Println(cfg.LastUpdated, newCfg.LastUpdated)
-				}
-				// Send config, either the new or old, through the channel
-				cfgChan <- cfg
-				//close(cfgChan)
-
-				//log.Println("checks")
-				cfg = <-cfgChan
-				// Do checks
-				i := doChecks(cfg)
-				// If there are any checks, open a client-side stream and record them
-				if len(i) > 0 {
-					issueStream, err := c.RecordIssue(ctx)
-					if err != nil {
-						log.Fatalln("Error recording issue:", err)
+					// This variable should be true if the config is out of sync
+					if pingResp.CfgOutOfSync {
+						// Fetch and set the new config
+						log.Println("Configuration out of sync. Fetching new config from server.")
+						var err error
+						newCfg, err := c.ConfigSync(ctx, &gorram.ConfigRequest{
+							ClientName: *clientName,
+						})
+						if err != nil {
+							log.Fatalln("Error with c.ConfigSync:", err)
+						}
+						// Set cfg to newCfg
+						cfg = newCfg
+						log.Println(cfg.LastUpdated, newCfg.LastUpdated)
 					}
+					// Send config, either the new or old, through the channel
+					cfgChan <- cfg
+					//close(cfgChan)
+				}()
+				go func() {
+					//log.Println("checks")
+					cfg = <-cfgChan
+					// Do checks
+					i := doChecks(cfg)
+					// If there are any checks, open a client-side stream and record them
+					if len(i) > 0 {
+						issueStream, err := c.RecordIssue(ctx)
+						if err != nil {
+							log.Fatalln("Error recording issue:", err)
+						}
 
-					for _, issue := range i {
-						if err := issueStream.Send(&issue); err != nil {
-							log.Fatalln("Error submitting issue:", err)
+						for _, issue := range i {
+							if err := issueStream.Send(&issue); err != nil {
+								log.Fatalln("Error submitting issue:", err)
+							}
+						}
+						reply, err := issueStream.CloseAndRecv()
+						if err != nil {
+							log.Fatalln("Error closing issueStream:", err)
+						}
+						if !reply.SuccessfullySubmitted {
+							log.Fatalln("Error submitting issue; Check server logs.", reply.SuccessfullySubmitted)
 						}
 					}
-					reply, err := issueStream.CloseAndRecv()
-					if err != nil {
-						log.Fatalln("Error closing issueStream:", err)
-					}
-					if !reply.SuccessfullySubmitted {
-						log.Fatalln("Error submitting issue; Check server logs.", reply.SuccessfullySubmitted)
-					}
-				}
-
+				}()
+				log.Println("Number of Goroutines:", runtime.NumGoroutine())
 			case <-quit:
 				ticker.Stop()
 				return
