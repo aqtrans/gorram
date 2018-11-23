@@ -18,6 +18,8 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/gregdel/pushover"
 	"github.com/pelletier/go-toml"
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 	_ "github.com/tevjef/go-runtime-metrics/expvar"
 
 	"git.jba.io/go/gorram/proto"
@@ -459,8 +461,31 @@ func main() {
 	alertMethodF := flag.String("alert", "log", "Alert method to use. Right now, log. To come: pushover.")
 	flag.Parse()
 
+	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
+	pflag.Parse()
+	viper.BindPFlags(pflag.CommandLine)
+
+	// Viper config.
+	viper.SetDefault("ServerAddress", "127.0.0.1:5000")
+	viper.SetDefault("Insecure", false)
+	viper.SetDefault("Cert", "cert.pem")
+	viper.SetDefault("Key", "cert.key")
+	viper.SetDefault("GenerateCerts", false)
+	viper.SetDefault("TLSHost", "127.0.0.1")
+	viper.SetDefault("SharedSecret", "test")
+	viper.SetDefault("AlertMethod", "log")
+	viper.SetEnvPrefix("gorram")
+	viper.AutomaticEnv()
+
+	viper.SetConfigName("gorram")
+	viper.AddConfigPath("/etc/gorram/")
+	err := viper.ReadInConfig() // Find and read the config file
+	if err != nil {             // Handle errors reading the config file
+		//panic(fmt.Errorf("Fatal error config file: %s \n", err))
+		log.Println("No configuration file loaded - using defaults")
+	}
+
 	go func() {
-		// Expose expvars
 		http.ListenAndServe("127.0.0.1:50001", nil)
 	}()
 
