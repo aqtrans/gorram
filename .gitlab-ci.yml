@@ -24,7 +24,7 @@ stages:
   - install-environment
   - build
   - test  
-  - package
+#  - package
   - deploy  
 
 install-go:
@@ -61,14 +61,14 @@ build-my-project:
       - gorram-server
       - gorram-client
 
-build-package:
-  stage: package
-  script:
-    - apt update && apt install -y build-essential devscripts debhelper
-    - cp gorram-client debian/
-    - cp gorram-server debian/    
-    - cd debian/
-    - debuild -us -uc -b  
+#build-package:
+#  stage: package
+#  script:
+#    - apt update && apt install -y build-essential devscripts debhelper
+#    - cp gorram-client debian/
+#    - cp gorram-server debian/    
+#    - cd debian/
+#    - debuild -us -uc -b  
 
 test-server:
   stage: test
