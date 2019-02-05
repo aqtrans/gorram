@@ -23,7 +23,8 @@ before_script:
 stages:
   - install-environment
   - build
-  - test
+  - test  
+  - package
   - deploy  
 
 install-go:
