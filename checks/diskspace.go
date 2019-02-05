@@ -28,10 +28,10 @@ func (p DiskSpace) doCheck() string {
 
 	if p.Cfg.GetMaxUsage() != 0 {
 		if usage.UsedPercent > p.Cfg.MaxUsage {
-			return fmt.Sprintf("Disk usage of %s is greater than %f, %f", p.Cfg.Partition, p.Cfg.MaxUsage, usage.UsedPercent)
+			return fmt.Sprintf("Disk usage of %s is greater than %f; currently %f", p.Cfg.Partition, p.Cfg.MaxUsage, usage.UsedPercent)
 		}
 		if usage.UsedPercent == p.Cfg.MaxUsage {
-			return fmt.Sprintf("Disk usage of %s is at %f, %f", p.Cfg.Partition, p.Cfg.MaxUsage, usage.UsedPercent)
+			return fmt.Sprintf("Disk usage of %s is at %f; currently %f", p.Cfg.Partition, p.Cfg.MaxUsage, usage.UsedPercent)
 		}
 	}
 
@@ -40,11 +40,11 @@ func (p DiskSpace) doCheck() string {
 		minBytes := p.Cfg.MinFreeGb * 1000000000
 		if usage.Free < minBytes {
 			freeGB := usage.Free / 1000000000
-			return fmt.Sprintf("Free space of %s is less than %v, %v", p.Cfg.Partition, p.Cfg.MinFreeGb, freeGB)
+			return fmt.Sprintf("Free space of %s is less than %v GB; currently %v GB", p.Cfg.Partition, p.Cfg.MinFreeGb, freeGB)
 		}
 		if usage.Free == minBytes {
 			freeGB := usage.Free / 1000000000
-			return fmt.Sprintf("Disk usage of %s is at %v, %v", p.Cfg.Partition, p.Cfg.MinFreeGb, freeGB)
+			return fmt.Sprintf("Disk usage of %s is at %v GB; currently %v GB", p.Cfg.Partition, p.Cfg.MinFreeGb, freeGB)
 		}
 	}
 
