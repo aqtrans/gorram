@@ -23,6 +23,7 @@ func (p DiskSpace) doCheck() string {
 		log.Println("Error getting disk usage for "+p.Cfg.Partition+":", err)
 		return ""
 	}
+	log.Println("DEBUG DiskSpace: ", usage.UsedPercent, usage.String(), usage.Free)
 	if usage.UsedPercent > p.Cfg.MaxUsage {
 		return fmt.Sprintf("Disk usage of %s is greater than %f, %f", p.Cfg.Partition, p.Cfg.MaxUsage, usage.UsedPercent)
 	}
