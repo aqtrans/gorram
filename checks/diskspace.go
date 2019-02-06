@@ -28,10 +28,10 @@ func (p DiskSpace) doCheck() string {
 
 	if p.Cfg.GetMaxUsage() != 0 {
 		if usage.UsedPercent > p.Cfg.MaxUsage {
-			return fmt.Sprintf("Disk usage of %s is greater than %f; currently %f", p.Cfg.Partition, p.Cfg.MaxUsage, usage.UsedPercent)
+			return fmt.Sprintf("Disk usage of %s is greater than %s; currently %s", p.Cfg.Partition, fmt.Sprintf("%.1f", p.Cfg.MaxUsage), fmt.Sprintf("%.1f", usage.UsedPercent))
 		}
 		if usage.UsedPercent == p.Cfg.MaxUsage {
-			return fmt.Sprintf("Disk usage of %s is at %f; currently %f", p.Cfg.Partition, p.Cfg.MaxUsage, usage.UsedPercent)
+			return fmt.Sprintf("Disk usage of %s is at %s; currently %s", p.Cfg.Partition, fmt.Sprintf("%.1f", p.Cfg.MaxUsage), fmt.Sprintf("%.1f", usage.UsedPercent))
 		}
 	}
 
