@@ -18,6 +18,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/gregdel/pushover"
 	"github.com/pelletier/go-toml"
+
 	//"github.com/spf13/pflag"
 	//"github.com/spf13/viper"
 	_ "github.com/tevjef/go-runtime-metrics/expvar"
@@ -90,11 +91,17 @@ type gorramServer struct {
 	clientCfg        sync.Map
 	cfg              serverConfig
 	connectedClients gorram.ClientList
+	alertsMap        alerts
 	/*
 		pingTimers    map[string]*time.Timer
 		clientList    map[string]chan bool
 		clientTickers map[string]*time.Ticker
 	*/
+}
+
+type alerts struct {
+	sync.Mutex
+	m map[string][]gorram.Issue
 }
 
 type clientTimers struct {
@@ -175,7 +182,7 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.PingMsg) (*gorram.P
 func (s *gorramServer) reviveDeadClient(clientName string) {
 	if clientTicker, ok := s.clientTimers.tickers.Load(clientName); ok {
 		//log.Println("[TIMER]", client, "is alive again. Stopping it's deadClientTicker.")
-		alert(s.cfg, clientName, gorram.Issue{
+		s.alert(clientName, gorram.Issue{
 			Title:   "Dead Client Alive",
 			Message: fmt.Sprintf("%v is alive again!", clientName),
 		})
@@ -200,7 +207,7 @@ func (s *gorramServer) deadClientTicker(clientName string) {
 	for t := range ticker.C {
 		//log.Println("[TIMER]", t, clientName, "is dead")
 
-		alert(s.cfg, clientName, gorram.Issue{
+		s.alert(clientName, gorram.Issue{
 			Title:   "Dead Client",
 			Message: fmt.Sprintf("%v is dead, since %v", clientName, t),
 		})
@@ -242,7 +249,7 @@ func (s *gorramServer) RecordIssue(stream gorram.Reporter_RecordIssueServer) err
 			return err
 		}
 		// Record issue
-		alert(s.cfg, getClientName(stream.Context()), *issue)
+		s.alert(getClientName(stream.Context()), *issue)
 
 		//log.Println("Time since issue was submitted:", time.Since(time.Unix(issue.TimeSubmitted, 0)).String())
 
@@ -317,18 +324,27 @@ func (cfg serverConfig) streamInterceptor(srv interface{}, stream grpc.ServerStr
 	return handler(srv, stream)
 }
 
-func alert(cfg serverConfig, client string, issue gorram.Issue) {
-	switch cfg.alertMethod {
+func (s *gorramServer) alert(client string, issue gorram.Issue) {
+
+	if s.alertsMap.exists(client, issue, s.loadClientConfig(client).Interval) {
+		log.Println("Issue Exists! Skipping Alert.")
+		return
+	}
+
+	log.Println("Issue does not exist. Adding to map.")
+	s.alertsMap.add(client, issue)
+
+	switch s.cfg.alertMethod {
 	case "log":
 		log.Println("ALERT: ["+client+"]: "+issue.Title+":", issue.Message)
 	case "pushover":
 		log.Println("ALERT: ["+client+"]: "+issue.Title+":", issue.Message)
-		app := pushover.New(cfg.pushoverAppKey)
-		recipient := pushover.NewRecipient(cfg.pushoverUserKey)
+		app := pushover.New(s.cfg.pushoverAppKey)
+		recipient := pushover.NewRecipient(s.cfg.pushoverUserKey)
 		message := pushover.NewMessageWithTitle(issue.Message, "["+client+"]: "+issue.Title)
 		// Set an optional device name to send alerts to
-		if cfg.pushoverDevice != "" {
-			message.DeviceName = cfg.pushoverDevice
+		if s.cfg.pushoverDevice != "" {
+			message.DeviceName = s.cfg.pushoverDevice
 		}
 		response, err := app.SendMessage(message, recipient)
 		if err != nil {
@@ -447,6 +463,59 @@ func (s *gorramServer) Hello(ctx context.Context, req *gorram.ConfigRequest) (*g
 	return s.ConfigSync(ctx, req)
 }
 
+func (a *alerts) exists(client string, issue gorram.Issue, interval int64) bool {
+	a.Lock()
+	alertHash := issue.Title + issue.Message
+	clientAlerts := a.m[client]
+	for i, v := range clientAlerts {
+		if alertHash == v.Title+v.Message {
+			// Check if the alert is stale, and if so, delete that stale alert, then pretend it didn't exist so we get a new alert
+			// TODO: Make this stale time configurable; currently setting to 20 checks
+			staleTime := interval * 10
+			/* TODO: Figure out how to keep sending alerts for the first 5 checks, or something like that
+
+			if time.Since(time.Unix(v.TimeSubmitted, 0)).Seconds() < float64(interval*5) {
+				log.Println("Alert is not stale yet.", time.Since(time.Unix(v.TimeSubmitted, 0)).Seconds())
+
+				//log.Println(len(a.m[client]))
+				//a.m[client][i] = a.m[client][len(a.m[client])-1]
+				//a.m[client] = a.m[client][:len(a.m[client])-1]
+				//a.m[client] = append(a.m[client][:i], a.m[client][i+1:]...)
+				//log.Println(len(a.m[client]))
+				a.Unlock()
+				return false
+			}
+			*/
+			if time.Since(time.Unix(v.TimeSubmitted, 0)).Seconds() > float64(staleTime) {
+				log.Println("Alert is stale! Deleting alert from map...")
+				log.Println(len(a.m[client]))
+				a.m[client][i] = a.m[client][len(a.m[client])-1]
+				a.m[client] = a.m[client][:len(a.m[client])-1]
+				//a.m[client] = append(a.m[client][:i], a.m[client][i+1:]...)
+				log.Println(len(a.m[client]))
+				a.Unlock()
+				return false
+			}
+			a.Unlock()
+			return true
+		}
+	}
+	a.Unlock()
+	return false
+}
+
+func (a *alerts) add(client string, issue gorram.Issue) {
+	a.Lock()
+	clientIssues := a.m[client]
+	if len(clientIssues) > 20 {
+		log.Println(client, "issues map is greater than 20", len(clientIssues))
+		clientIssues = clientIssues[:20]
+		a.m[client] = clientIssues
+	}
+	a.m[client] = append(a.m[client], issue)
+	a.Unlock()
+}
+
 func main() {
 
 	// Set config via flags
@@ -542,6 +611,8 @@ func main() {
 		clientCfg:        *new(sync.Map),
 		connectedClients: *new(gorram.ClientList),
 	}
+
+	gs.alertsMap.m = make(map[string][]gorram.Issue)
 
 	gs.connectedClients.Clients = make(map[string]*gorram.Client)
 
