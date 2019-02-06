@@ -326,13 +326,21 @@ func (cfg serverConfig) streamInterceptor(srv interface{}, stream grpc.ServerStr
 
 func (s *gorramServer) alert(client string, issue gorram.Issue) {
 
-	if s.alertsMap.exists(client, issue, s.loadClientConfig(client).Interval) {
+	resendAlert, alertExists := s.alertsMap.exists(client, issue, s.loadClientConfig(client).Interval)
+
+	if !resendAlert && alertExists {
 		log.Println("Issue Exists! Skipping Alert.")
 		return
 	}
 
-	log.Println("Issue does not exist. Adding to map.")
-	s.alertsMap.add(client, issue)
+	if !resendAlert && !alertExists {
+		log.Println("Issue does not exist. Adding to map.")
+		s.alertsMap.add(client, issue)
+	}
+
+	if resendAlert && alertExists {
+		log.Println("Alert exists, but resending alert.")
+	}
 
 	switch s.cfg.alertMethod {
 	case "log":
@@ -463,7 +471,7 @@ func (s *gorramServer) Hello(ctx context.Context, req *gorram.ConfigRequest) (*g
 	return s.ConfigSync(ctx, req)
 }
 
-func (a *alerts) exists(client string, issue gorram.Issue, interval int64) bool {
+func (a *alerts) exists(client string, issue gorram.Issue, interval int64) (resend, exists bool) {
 	a.Lock()
 	alertHash := issue.Title + issue.Message
 	clientAlerts := a.m[client]
@@ -471,37 +479,32 @@ func (a *alerts) exists(client string, issue gorram.Issue, interval int64) bool 
 		if alertHash == v.Title+v.Message {
 			// Check if the alert is stale, and if so, delete that stale alert, then pretend it didn't exist so we get a new alert
 			// TODO: Make this stale time configurable; currently setting to 20 checks
-			staleTime := interval * 10
-			/* TODO: Figure out how to keep sending alerts for the first 5 checks, or something like that
+			staleTime := interval * 20
 
-			if time.Since(time.Unix(v.TimeSubmitted, 0)).Seconds() < float64(interval*5) {
+			// Send the first 2 alerts
+			if time.Since(time.Unix(v.TimeSubmitted, 0)).Seconds() < float64(interval*2) {
 				log.Println("Alert is not stale yet.", time.Since(time.Unix(v.TimeSubmitted, 0)).Seconds())
 
-				//log.Println(len(a.m[client]))
-				//a.m[client][i] = a.m[client][len(a.m[client])-1]
-				//a.m[client] = a.m[client][:len(a.m[client])-1]
-				//a.m[client] = append(a.m[client][:i], a.m[client][i+1:]...)
-				//log.Println(len(a.m[client]))
 				a.Unlock()
-				return false
+				return true, false
 			}
-			*/
+
 			if time.Since(time.Unix(v.TimeSubmitted, 0)).Seconds() > float64(staleTime) {
 				log.Println("Alert is stale! Deleting alert from map...")
-				log.Println(len(a.m[client]))
+				//log.Println(len(a.m[client]))
 				a.m[client][i] = a.m[client][len(a.m[client])-1]
 				a.m[client] = a.m[client][:len(a.m[client])-1]
 				//a.m[client] = append(a.m[client][:i], a.m[client][i+1:]...)
-				log.Println(len(a.m[client]))
+				//log.Println(len(a.m[client]))
 				a.Unlock()
-				return false
+				return false, false
 			}
 			a.Unlock()
-			return true
+			return false, true
 		}
 	}
 	a.Unlock()
-	return false
+	return false, false
 }
 
 func (a *alerts) add(client string, issue gorram.Issue) {
