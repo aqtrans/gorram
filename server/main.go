@@ -101,7 +101,7 @@ type gorramServer struct {
 
 type alerts struct {
 	sync.Mutex
-	m map[string][]gorram.Issue
+	m map[gorram.Issue]*gorram.Alert
 }
 
 type clientTimers struct {
@@ -265,16 +265,18 @@ func (s *gorramServer) loadClientConfig(client string) gorram.Config {
 
 	// Default config values:
 	return gorram.Config{
-		Interval: 60,
-		Load: &gorram.Load{
-			MaxLoad: 0.5,
-		},
-		Disk: []*gorram.DiskSpace{
-			&gorram.DiskSpace{
-				Partition: "/",
-				MaxUsage:  10.0,
+		/*
+			Interval: 60,
+			Load: &gorram.Load{
+				MaxLoad: 0.5,
 			},
-		},
+			Disk: []*gorram.DiskSpace{
+				&gorram.DiskSpace{
+					Partition: "/",
+					MaxUsage:  10.0,
+				},
+			},
+		*/
 	}
 }
 
@@ -326,21 +328,49 @@ func (cfg serverConfig) streamInterceptor(srv interface{}, stream grpc.ServerStr
 
 func (s *gorramServer) alert(client string, issue gorram.Issue) {
 
-	resendAlert, alertExists := s.alertsMap.exists(client, issue, s.loadClientConfig(client).Interval)
+	// Set the client name here
+	issue.Host = client
 
-	if !resendAlert && alertExists {
-		log.Println("Issue Exists! Skipping Alert.")
-		return
-	}
+	if _, alertExists := s.alertsMap.m[issue]; alertExists {
+		//log.Println(issue.String())
+		log.Println("Issue exists. Increasing occurrence count.")
+		occurrences := s.alertsMap.count(issue)
+		if occurrences < 5 {
+			log.Println("Less than 5 occurrences. Continuing alerts.")
+		} else if (occurrences % 10) == 0 {
+			log.Println("Sending alert", occurrences)
+		} else {
+			log.Println("Skipping alert...", occurrences)
+			return
+		}
 
-	if !resendAlert && !alertExists {
+	} else {
 		log.Println("Issue does not exist. Adding to map.")
-		s.alertsMap.add(client, issue)
+		a := gorram.Alert{
+			Issue:         &issue,
+			TimeSubmitted: time.Now().Unix(),
+			Occurrences:   1,
+		}
+		s.alertsMap.add(a)
 	}
 
-	if resendAlert && alertExists {
-		log.Println("Alert exists, but resending alert.")
-	}
+	/*
+		resendAlert, alertExists := s.alertsMap.exists(client, *a, s.loadClientConfig(client).Interval)
+
+		if !resendAlert && alertExists {
+			log.Println("Issue Exists! Skipping Alert.")
+			return
+		}
+
+		if !resendAlert && !alertExists {
+			log.Println("Issue does not exist. Adding to map.")
+			s.alertsMap.add(client, *a)
+		}
+
+		if resendAlert && alertExists {
+			log.Println("Alert exists, but resending alert.")
+		}
+	*/
 
 	switch s.cfg.alertMethod {
 	case "log":
@@ -471,25 +501,27 @@ func (s *gorramServer) Hello(ctx context.Context, req *gorram.ConfigRequest) (*g
 	return s.ConfigSync(ctx, req)
 }
 
-func (a *alerts) exists(client string, issue gorram.Issue, interval int64) (resend, exists bool) {
+/*
+func (a *alerts) exists(client string, alert gorram.Alert, interval int64) (resend, exists bool) {
 	a.Lock()
-	alertHash := issue.Title + issue.Message
+	alertHash := alert.Issue.Title + alert.Issue.Message
 	clientAlerts := a.m[client]
+	log.Println(len(clientAlerts))
 	for i, v := range clientAlerts {
-		if alertHash == v.Title+v.Message {
-			// Check if the alert is stale, and if so, delete that stale alert, then pretend it didn't exist so we get a new alert
-			// TODO: Make this stale time configurable; currently setting to 20 checks
-			staleTime := interval * 20
+		if alertHash == v.Issue.Title+v.Issue.Message {
+			// Increase Occurrences counter
+			v.Occurrences = v.Occurrences + 1
+
+			log.Println(v.String())
 
 			// Send the first 2 alerts
-			if time.Since(time.Unix(v.TimeSubmitted, 0)).Seconds() < float64(interval*2) {
-				log.Println("Alert is not stale yet.", time.Since(time.Unix(v.TimeSubmitted, 0)).Seconds())
-
+			if v.Occurrences < 5 {
+				log.Println("Alert is not stale yet.", v.Occurrences)
 				a.Unlock()
 				return true, false
 			}
 
-			if time.Since(time.Unix(v.TimeSubmitted, 0)).Seconds() > float64(staleTime) {
+			if v.Occurrences > 25 {
 				log.Println("Alert is stale! Deleting alert from map...")
 				//log.Println(len(a.m[client]))
 				a.m[client][i] = a.m[client][len(a.m[client])-1]
@@ -506,17 +538,24 @@ func (a *alerts) exists(client string, issue gorram.Issue, interval int64) (rese
 	a.Unlock()
 	return false, false
 }
+*/
 
-func (a *alerts) add(client string, issue gorram.Issue) {
+func (a *alerts) add(alert gorram.Alert) {
 	a.Lock()
-	clientIssues := a.m[client]
-	if len(clientIssues) > 20 {
-		log.Println(client, "issues map is greater than 20", len(clientIssues))
-		clientIssues = clientIssues[:20]
-		a.m[client] = clientIssues
+	if len(a.m) > 20 {
+		log.Println("issues map is greater than 20", len(a.m))
 	}
-	a.m[client] = append(a.m[client], issue)
+	a.m[*alert.Issue] = &alert
 	a.Unlock()
+}
+
+func (a *alerts) count(issue gorram.Issue) int64 {
+	a.Lock()
+	v := a.m[issue]
+	v.Occurrences = v.Occurrences + 1
+	log.Println(v.Occurrences)
+	a.Unlock()
+	return v.Occurrences
 }
 
 func main() {
@@ -615,7 +654,7 @@ func main() {
 		connectedClients: *new(gorram.ClientList),
 	}
 
-	gs.alertsMap.m = make(map[string][]gorram.Issue)
+	gs.alertsMap.m = make(map[gorram.Issue]*gorram.Alert)
 
 	gs.connectedClients.Clients = make(map[string]*gorram.Client)
 
