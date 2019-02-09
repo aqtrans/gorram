@@ -9,7 +9,7 @@ import (
 )
 
 type DiskSpace struct {
-	Cfg pb.DiskSpace
+	Cfg pb.Config_DiskSpace
 }
 
 func (p DiskSpace) title() string {

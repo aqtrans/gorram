@@ -38,43 +38,40 @@ message ConfigRequest {
 }
 
 message Config {
-    // Used internally to tell when 
+    // Used internally to tell when config was last updated
     int64 last_updated = 1;
     int64 interval = 2;
-    // Only allow one Deluge check per-host
+
+    message Deluge {
+        string url = 1;
+        string password = 2;
+        int64 max_torrents = 3;
+    }
     Deluge deluge = 3;
-    // Only one load check per-host
-    Load load = 4;
-    // Allow multiple instances of other checks
+
+    message LoadAvg {
+        double max_load = 1;
+    }
+    LoadAvg load = 4;
+
+    message DiskSpace {
+        string partition = 1;
+        double max_usage = 2;
+        uint64  min_free_gb = 3;
+    }
     repeated DiskSpace disk = 5;
+
+    message ProcessExists {
+        string path = 1;
+        string user = 2;
+    }    
     repeated ProcessExists ps = 6;
+
+    message GetURL {
+        string url = 1;
+        string expected_body = 2;
+    }    
     repeated GetURL get_url = 7;
-}
-
-message Deluge {
-    string url = 1;
-    string password = 2;
-    int64 max_torrents = 3;
-}
-
-message DiskSpace {
-    string partition = 1;
-    double max_usage = 2;
-    uint64  min_free_gb = 3;
-}
-
-message Load {
-    double max_load = 1;
-}
-
-message ProcessExists {
-    string path = 1;
-    string user = 2;
-}
-
-message GetURL {
-    string url = 1;
-    string expected_body = 2;
 }
 
 service Querier {

@@ -8,7 +8,7 @@ import (
 )
 
 type LoadAvg struct {
-	Cfg pb.Load
+	Cfg pb.Config_LoadAvg
 }
 
 func (l LoadAvg) title() string {

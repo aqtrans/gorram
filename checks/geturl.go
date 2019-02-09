@@ -10,7 +10,7 @@ import (
 )
 
 type GetURL struct {
-	Cfg pb.GetURL
+	Cfg pb.Config_GetURL
 }
 
 func (g GetURL) title() string {

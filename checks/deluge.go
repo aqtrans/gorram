@@ -13,6 +13,7 @@ import (
 	"net/http/cookiejar"
 	"strconv"
 	"time"
+
 	//"strings"
 
 	//"github.com/smallnest/goreq"
@@ -20,7 +21,7 @@ import (
 )
 
 type DelugeCheck struct {
-	Cfg pb.Deluge
+	Cfg pb.Config_Deluge
 }
 
 var (

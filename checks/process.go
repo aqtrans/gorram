@@ -10,10 +10,10 @@ import (
 )
 
 type ProcessExists struct {
-	Cfg pb.ProcessExists
+	Cfg pb.Config_ProcessExists
 }
 
-func checkForProc(c pb.ProcessExists) bool {
+func checkForProc(c pb.Config_ProcessExists) bool {
 	var procExists bool
 
 	procs, err := process.Processes()
