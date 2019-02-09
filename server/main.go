@@ -101,7 +101,7 @@ type gorramServer struct {
 
 type alerts struct {
 	sync.Mutex
-	m map[gorram.Issue]*gorram.Alert
+	m map[string]*gorram.Alert
 }
 
 type clientTimers struct {
@@ -331,7 +331,7 @@ func (s *gorramServer) alert(client string, issue gorram.Issue) {
 	// Tie the issue with the given client name here
 	issue.Host = client
 
-	if _, alertExists := s.alertsMap.m[issue]; alertExists {
+	if _, alertExists := s.alertsMap.m[issue.String()]; alertExists {
 		//log.Println(issue.String())
 		log.Println("Issue exists. Increasing occurrence count.")
 		occurrences := s.alertsMap.count(issue)
@@ -339,7 +339,7 @@ func (s *gorramServer) alert(client string, issue gorram.Issue) {
 			log.Println("Less than 5 occurrences. Continuing alerts.")
 		} else if (occurrences % 10) == 0 {
 			log.Println("Sending alert", occurrences)
-			issue.Message = issue.Message + " | First occurred:" + time.Unix(s.alertsMap.m[issue].TimeSubmitted, 0).String()
+			issue.Message = issue.Message + " | First occurred:" + time.Unix(s.alertsMap.m[issue.String()].TimeSubmitted, 0).String()
 		} else {
 			log.Println("Skipping alert...", occurrences)
 			return
@@ -546,13 +546,13 @@ func (a *alerts) add(alert gorram.Alert) {
 	if len(a.m) > 20 {
 		log.Println("issues map is greater than 20", len(a.m))
 	}
-	a.m[*alert.Issue] = &alert
+	a.m[alert.Issue.String()] = &alert
 	a.Unlock()
 }
 
 func (a *alerts) count(issue gorram.Issue) int64 {
 	a.Lock()
-	v := a.m[issue]
+	v := a.m[issue.String()]
 	v.Occurrences = v.Occurrences + 1
 	a.Unlock()
 	return v.Occurrences
@@ -654,7 +654,7 @@ func main() {
 		connectedClients: *new(gorram.ClientList),
 	}
 
-	gs.alertsMap.m = make(map[gorram.Issue]*gorram.Alert)
+	gs.alertsMap.m = make(map[string]*gorram.Alert)
 
 	gs.connectedClients.Clients = make(map[string]*gorram.Client)
 
