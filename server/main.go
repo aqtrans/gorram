@@ -328,7 +328,7 @@ func (cfg serverConfig) streamInterceptor(srv interface{}, stream grpc.ServerStr
 
 func (s *gorramServer) alert(client string, issue gorram.Issue) {
 
-	// Set the client name here
+	// Tie the issue with the given client name here
 	issue.Host = client
 
 	if _, alertExists := s.alertsMap.m[issue]; alertExists {
@@ -339,6 +339,7 @@ func (s *gorramServer) alert(client string, issue gorram.Issue) {
 			log.Println("Less than 5 occurrences. Continuing alerts.")
 		} else if (occurrences % 10) == 0 {
 			log.Println("Sending alert", occurrences)
+			issue.Message = issue.Message + " | First occurred:" + time.Unix(s.alertsMap.m[issue].TimeSubmitted, 0).String()
 		} else {
 			log.Println("Skipping alert...", occurrences)
 			return
@@ -553,7 +554,6 @@ func (a *alerts) count(issue gorram.Issue) int64 {
 	a.Lock()
 	v := a.m[issue]
 	v.Occurrences = v.Occurrences + 1
-	log.Println(v.Occurrences)
 	a.Unlock()
 	return v.Occurrences
 }
