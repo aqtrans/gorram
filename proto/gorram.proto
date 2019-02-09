@@ -26,11 +26,20 @@ message Submitted {
 }
 
 message Issue {
-    string title = 1;
-    // Message itself
-    string message = 2;
+    // Host that generated the issue
+    string host = 1;
+    // Title of the check that generated the issue
+    string title = 2;
+    // Message of the issue
+    string message = 3;
+}
+
+message Alert {
+    Issue issue = 1;
     // When issue was sent
     int64 time_submitted = 3;
+    // How many times this identical alert has been sent
+    int64 occurrences = 4;
 }
 
 message ConfigRequest {
