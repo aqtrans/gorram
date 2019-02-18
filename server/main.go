@@ -558,6 +558,23 @@ func (a *alerts) count(issue gorram.Issue) int64 {
 	return v.Occurrences
 }
 
+func (s *gorramServer) checkRequiredClients(k, v interface{}) bool {
+	if _, ok := s.connectedClients.Clients[k.(string)]; !ok {
+		clientCfg, isThere := s.clientCfg.Load(k.(string))
+		if isThere {
+			if clientCfg.(*gorram.Config).Required {
+				log.Println(k, "NOT CONNECTED! ALERT!")
+				s.alert(k.(string), gorram.Issue{
+					Title:   "Client Offline",
+					Message: k.(string) + " has not connected",
+				})
+			}
+		}
+
+	}
+	return true
+}
+
 func main() {
 
 	// Set config via flags
@@ -697,6 +714,23 @@ func main() {
 		log.Fatal(err)
 	}
 
+	// Now start checking if clients flagged as 'required' have connected:
+	// Currently checking every 5 minutes; May want to work this into a config variable
+	ticker := time.NewTicker(300 * time.Second)
+	quit := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				gs.clientCfg.Range(gs.checkRequiredClients)
+				//gs.isClientConnected
+			case <-quit:
+				ticker.Stop()
+				return
+			}
+		}
+	}()
+
 	// Listen for Ctrl+C
 	go func() {
 		sig := <-sigs
@@ -707,6 +741,7 @@ func main() {
 	// When Ctrl+C is caught, do this
 	<-done
 	log.Println("Server exiting...")
+	ticker.Stop()
 	watcher.Close()
 	server.GracefulStop()
 
