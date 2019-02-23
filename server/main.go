@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -88,7 +89,7 @@ func (s *statHandler) HandleConn(ctx context.Context, connStats stats.ConnStats)
 
 type gorramServer struct {
 	clientTimers
-	clientCfg        sync.Map
+	clientCfgs       sync.Map
 	cfg              serverConfig
 	connectedClients gorram.ClientList
 	alertsMap        alerts
@@ -218,7 +219,7 @@ func (s *gorramServer) deadClientTicker(clientName string) {
 func (c *clientTimers) getTimer(clientName string) *time.Timer {
 	timer, ok := c.timers.Load(clientName)
 	if !ok {
-		log.Fatalln("[TIMER] Error: no timer for", clientName)
+		log.Fatalln("getTimer Error: no timer for", clientName)
 	}
 	return timer.(*time.Timer)
 }
@@ -258,7 +259,7 @@ func (s *gorramServer) RecordIssue(stream gorram.Reporter_RecordIssueServer) err
 
 func (s *gorramServer) loadClientConfig(client string) gorram.Config {
 	// Attempt to read the config.toml, and then if it has [clientname] in it, unmarshal the config from there
-	clientCfg, isThere := s.clientCfg.Load(client)
+	clientCfg, isThere := s.clientCfgs.Load(client)
 	if isThere {
 		return *clientCfg.(*gorram.Config)
 	}
@@ -339,7 +340,7 @@ func (s *gorramServer) alert(client string, issue gorram.Issue) {
 			log.Println("Less than 5 occurrences. Continuing alerts.")
 		} else if (occurrences % 10) == 0 {
 			log.Println("Sending alert", occurrences)
-			issue.Message = issue.Message + " | First occurred:" + time.Unix(s.alertsMap.m[issue.String()].TimeSubmitted, 0).String()
+			issue.Message = issue.Message + " | Occurrences: " + strconv.FormatInt(occurrences, 10) + "| First occurred:" + time.Unix(s.alertsMap.m[issue.String()].TimeSubmitted, 0).String()
 		} else {
 			log.Println("Skipping alert...", occurrences)
 			return
@@ -355,32 +356,14 @@ func (s *gorramServer) alert(client string, issue gorram.Issue) {
 		s.alertsMap.add(a)
 	}
 
-	/*
-		resendAlert, alertExists := s.alertsMap.exists(client, *a, s.loadClientConfig(client).Interval)
-
-		if !resendAlert && alertExists {
-			log.Println("Issue Exists! Skipping Alert.")
-			return
-		}
-
-		if !resendAlert && !alertExists {
-			log.Println("Issue does not exist. Adding to map.")
-			s.alertsMap.add(client, *a)
-		}
-
-		if resendAlert && alertExists {
-			log.Println("Alert exists, but resending alert.")
-		}
-	*/
-
 	switch s.cfg.alertMethod {
 	case "log":
-		log.Println("ALERT: ["+client+"]: "+issue.Title+":", issue.Message)
+		log.Println("ALERT: "+client+" - "+issue.Title+":", issue.Message)
 	case "pushover":
-		log.Println("ALERT: ["+client+"]: "+issue.Title+":", issue.Message)
+		log.Println("ALERT: "+client+" - "+issue.Title+":", issue.Message)
 		app := pushover.New(s.cfg.pushoverAppKey)
 		recipient := pushover.NewRecipient(s.cfg.pushoverUserKey)
-		message := pushover.NewMessageWithTitle(issue.Message, "["+client+"]: "+issue.Title)
+		message := pushover.NewMessageWithTitle(issue.Message, client+" - "+issue.Title)
 		// Set an optional device name to send alerts to
 		if s.cfg.pushoverDevice != "" {
 			message.DeviceName = s.cfg.pushoverDevice
@@ -436,7 +419,7 @@ func (s *gorramServer) loadConfig(confFile string) {
 			clientCfg.Interval = 60
 		}
 		clientCfg.LastUpdated = time.Now().Unix()
-		s.clientCfg.Store(clientName, &clientCfg)
+		s.clientCfgs.Store(clientName, &clientCfg)
 	}
 }
 
@@ -560,7 +543,7 @@ func (a *alerts) count(issue gorram.Issue) int64 {
 
 func (s *gorramServer) checkRequiredClients(k, v interface{}) bool {
 	if _, ok := s.connectedClients.Clients[k.(string)]; !ok {
-		clientCfg, isThere := s.clientCfg.Load(k.(string))
+		clientCfg, isThere := s.clientCfgs.Load(k.(string))
 		if isThere {
 			if clientCfg.(*gorram.Config).Required {
 				log.Println(k, "NOT CONNECTED! ALERT!")
@@ -667,7 +650,7 @@ func main() {
 
 	gs := gorramServer{
 		cfg:              cfg,
-		clientCfg:        *new(sync.Map),
+		clientCfgs:       *new(sync.Map),
 		connectedClients: *new(gorram.ClientList),
 	}
 
@@ -703,7 +686,7 @@ func main() {
 				}
 			case err := <-watcher.Errors:
 				if err != nil {
-					log.Println("error:", err)
+					log.Println("Error watching config.toml:", err)
 				}
 			}
 		}
@@ -711,7 +694,7 @@ func main() {
 
 	err = watcher.Add(*confFile)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Error watching config.toml:", err)
 	}
 
 	// Now start checking if clients flagged as 'required' have connected:
@@ -722,7 +705,7 @@ func main() {
 		for {
 			select {
 			case <-ticker.C:
-				gs.clientCfg.Range(gs.checkRequiredClients)
+				gs.clientCfgs.Range(gs.checkRequiredClients)
 				//gs.isClientConnected
 			case <-quit:
 				ticker.Stop()
