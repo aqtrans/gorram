@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -293,6 +294,11 @@ func (s *gorramServer) ConfigSync(ctx context.Context, req *gorram.ConfigRequest
 	// Load config
 	cfg := s.loadClientConfig(clientName)
 
+	enabledChecks, ok := s.clientCfgs.Load(clientName + ".checks")
+	if ok {
+		cfg.EnabledChecks = enabledChecks.(string)
+	}
+
 	return &cfg, nil
 }
 
@@ -419,6 +425,23 @@ func (s *gorramServer) loadConfig(confFile string) {
 			clientCfg.Interval = 60
 		}
 		clientCfg.LastUpdated = time.Now().Unix()
+
+		checkKeys := clientCfgTree.Keys()
+		var enabledChecks []string
+		for _, v := range checkKeys {
+			log.Println(v)
+			if v == "Required" {
+
+			} else if v == "Interval" {
+
+			} else {
+				enabledChecks = append(enabledChecks, v)
+			}
+		}
+
+		// Store the enabled checks
+		s.clientCfgs.Store(clientName+".checks", strings.Join(enabledChecks, ","))
+
 		s.clientCfgs.Store(clientName, &clientCfg)
 	}
 }
@@ -542,18 +565,23 @@ func (a *alerts) count(issue gorram.Issue) int64 {
 }
 
 func (s *gorramServer) checkRequiredClients(k, v interface{}) bool {
-	if _, ok := s.connectedClients.Clients[k.(string)]; !ok {
-		clientCfg, isThere := s.clientCfgs.Load(k.(string))
-		if isThere {
-			if clientCfg.(*gorram.Config).Required {
-				log.Println(k, "NOT CONNECTED! ALERT!")
-				s.alert(k.(string), gorram.Issue{
-					Title:   "Client Offline",
-					Message: k.(string) + " has not connected",
-				})
-			}
-		}
+	if clientName, isString := k.(string); isString {
+		if _, ok := s.connectedClients.Clients[clientName]; !ok {
+			clientCfg, isThere := s.clientCfgs.Load(clientName)
+			if isThere {
+				if actualClientCfg, isCfg := clientCfg.(*gorram.Config); isCfg {
+					if actualClientCfg.Required {
+						log.Println(k, "NOT CONNECTED! ALERT!")
+						s.alert(clientName, gorram.Issue{
+							Title:   "Client Offline",
+							Message: clientName + " has not connected",
+						})
+					}
+				}
 
+			}
+
+		}
 	}
 	return true
 }

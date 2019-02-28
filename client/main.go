@@ -30,7 +30,6 @@ func doChecks(cfg *gorram.Config) []gorram.Issue {
 		for _, diskCheck := range cfg.Disk {
 			issues = checks.GetCheck(issues, checks.DiskSpace{Cfg: *diskCheck})
 		}
-
 	}
 	// Check Deluge
 	if cfg.Deluge != nil {
@@ -180,6 +179,9 @@ func main() {
 				go func() {
 					//log.Println("checks")
 					cfg = <-cfgChan
+
+					log.Println("Enabled checks:", cfg.EnabledChecks)
+
 					// Do checks
 					i := doChecks(cfg)
 					// If there are any checks, open a client-side stream and record them

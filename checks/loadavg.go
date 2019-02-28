@@ -39,3 +39,9 @@ func (l LoadAvg) doCheck() string {
 
 	return ""
 }
+
+func (l LoadAvg) configure(issues *[]pb.Issue, cfg *pb.Config) {
+	if cfg.Load != nil {
+		*issues = GetCheck(*issues, LoadAvg{Cfg: *cfg.Load})
+	}
+}

@@ -80,9 +80,11 @@ message Config {
     repeated DiskSpace disk = 5;
     repeated ProcessExists ps = 6;
     repeated GetURL get_url = 7;
+    // A string of enabled checks
+    string enabled_checks = 8;
     // Whether client is required to connect
     // Since the server is stateless, this ensures an offline client is detected when the server is restarted
-    bool required = 8;   
+    bool required = 9;
 }
 
 service Querier {

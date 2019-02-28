@@ -11,6 +11,7 @@ type checkData struct {
 type check interface {
 	doCheck() string
 	title() string
+	//configure(*[]gorram.Issue, *gorram.Config_Checks)
 }
 
 // GetCheck is a function which all checks should run through
