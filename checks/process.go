@@ -10,7 +10,15 @@ import (
 )
 
 type ProcessExists struct {
-	Cfg pb.Config_ProcessExists
+	Cfg []*pb.Config_ProcessExists
+}
+
+func init() {
+	TheChecks = append(TheChecks, &ProcessExists{})
+}
+
+func (p *ProcessExists) configure(cfg *pb.Config) {
+	p.Cfg = cfg.GetProcess()
 }
 
 func checkForProc(c pb.Config_ProcessExists) bool {
@@ -54,16 +62,17 @@ func checkForProc(c pb.Config_ProcessExists) bool {
 	return procExists
 }
 
-func (p ProcessExists) title() string {
+func (p ProcessExists) Title() string {
 	return "Process"
 }
 
-func (p ProcessExists) doCheck() string {
+func (p ProcessExists) doCheck(issues *[]pb.Issue) {
 	//procList := getProcList()
 
-	if !checkForProc(p.Cfg) {
-		return fmt.Sprintf("%v is not running. Check that the full path is specified.", p.Cfg.Path)
+	for _, psCheck := range p.Cfg {
+		log.Println(psCheck)
+		if !checkForProc(*psCheck) {
+			addIssue(issues, p.Title(), fmt.Sprintf("%v is not running. Check that the full path is specified.", psCheck.Path))
+		}
 	}
-
-	return ""
 }

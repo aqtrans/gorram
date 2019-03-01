@@ -17,40 +17,6 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-// This is where all the actual checks are done, and an array of "issues" is made
-func doChecks(cfg *gorram.Config) []gorram.Issue {
-	var issues []gorram.Issue
-
-	// Check loadavg
-	if cfg.Load != nil {
-		issues = checks.GetCheck(issues, checks.LoadAvg{Cfg: *cfg.Load})
-	}
-	// Check disk usage, looping through given list of disks
-	if cfg.Disk != nil {
-		for _, diskCheck := range cfg.Disk {
-			issues = checks.GetCheck(issues, checks.DiskSpace{Cfg: *diskCheck})
-		}
-	}
-	// Check Deluge
-	if cfg.Deluge != nil {
-		issues = checks.GetCheck(issues, checks.DelugeCheck{Cfg: *cfg.Deluge})
-	}
-	// Check ps faux, looping through given list of full process names
-	if cfg.Ps != nil {
-		for _, psCheck := range cfg.Ps {
-			issues = checks.GetCheck(issues, checks.ProcessExists{Cfg: *psCheck})
-		}
-	}
-	// Check GET URLs, looping throug list of given URLs
-	if cfg.GetUrl != nil {
-		for _, urlCheck := range cfg.GetUrl {
-			issues = checks.GetCheck(issues, checks.GetURL{Cfg: *urlCheck})
-		}
-	}
-
-	return issues
-}
-
 type secret struct {
 	Secret string
 	TLS    bool
@@ -180,10 +146,16 @@ func main() {
 					//log.Println("checks")
 					cfg = <-cfgChan
 
-					log.Println("Enabled checks:", cfg.EnabledChecks)
+					//log.Println("Enabled checks:", cfg.EnabledChecks)
+
+					/*
+						for _, v := range checks.TheChecks {
+							log.Println(v.Title())
+						}
+					*/
 
 					// Do checks
-					i := doChecks(cfg)
+					i := checks.DoChecks(cfg)
 					// If there are any checks, open a client-side stream and record them
 					if len(i) > 0 {
 						issueStream, err := c.RecordIssue(ctx)

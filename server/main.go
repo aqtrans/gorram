@@ -429,7 +429,7 @@ func (s *gorramServer) loadConfig(confFile string) {
 		checkKeys := clientCfgTree.Keys()
 		var enabledChecks []string
 		for _, v := range checkKeys {
-			log.Println(v)
+			//log.Println(v)
 			if v == "Required" {
 
 			} else if v == "Interval" {

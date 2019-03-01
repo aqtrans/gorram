@@ -8,40 +8,41 @@ import (
 )
 
 type LoadAvg struct {
-	Cfg pb.Config_LoadAvg
+	Cfg *pb.Config_LoadAvg
 }
 
-func (l LoadAvg) title() string {
-	return "Load Avg"
+func init() {
+	TheChecks = append(TheChecks, &LoadAvg{})
 }
 
-func (l LoadAvg) doCheck() string {
+func (l *LoadAvg) configure(cfg *pb.Config) {
+	l.Cfg = cfg.GetLoadavg()
+}
+
+func (l LoadAvg) Title() string {
+	return "Loadavg"
+}
+
+func (l LoadAvg) doCheck(issues *[]pb.Issue) {
 
 	loadAvgs, err := load.Avg()
 	if err != nil {
-		return fmt.Sprintf("Error fetching load average, %v", err)
+		addIssue(issues, l.Title(), fmt.Sprintf("Error fetching load average, %v", err))
+		return
 	}
 
 	if loadAvgs.Load15 >= l.Cfg.MaxLoad {
-
-		return fmt.Sprintf("Load average is greater than %f, %f", l.Cfg.MaxLoad, loadAvgs.Load1)
+		addIssue(issues, l.Title(), fmt.Sprintf("Load average is greater than %f, %f", l.Cfg.MaxLoad, loadAvgs.Load1))
+		return
 	}
 
 	if loadAvgs.Load5 >= l.Cfg.MaxLoad {
-
-		return fmt.Sprintf("Load average is greater than %f, %f", l.Cfg.MaxLoad, loadAvgs.Load5)
+		addIssue(issues, l.Title(), fmt.Sprintf("Load average is greater than %f, %f", l.Cfg.MaxLoad, loadAvgs.Load5))
+		return
 	}
 
 	if loadAvgs.Load1 >= l.Cfg.MaxLoad {
-
-		return fmt.Sprintf("Load average is greater than %f, %f", l.Cfg.MaxLoad, loadAvgs.Load1)
-	}
-
-	return ""
-}
-
-func (l LoadAvg) configure(issues *[]pb.Issue, cfg *pb.Config) {
-	if cfg.Load != nil {
-		*issues = GetCheck(*issues, LoadAvg{Cfg: *cfg.Load})
+		addIssue(issues, l.Title(), fmt.Sprintf("Load average is greater than %f, %f", l.Cfg.MaxLoad, loadAvgs.Load1))
+		return
 	}
 }

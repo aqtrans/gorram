@@ -10,33 +10,47 @@ import (
 )
 
 type GetURL struct {
-	Cfg pb.Config_GetURL
+	Cfg []*pb.Config_GetURL
 }
 
-func (g GetURL) title() string {
-	return "Get URL"
+func init() {
+	TheChecks = append(TheChecks, &GetURL{})
 }
 
-func (g GetURL) doCheck() string {
+func (g GetURL) Title() string {
+	return "GetUrl"
+}
 
-	resp, err := http.Get(g.Cfg.Url)
-	if err != nil {
-		return fmt.Sprintf("Error checking %v: %v.", g.Cfg.Url, err)
-	}
-	defer resp.Body.Close()
+func (g *GetURL) configure(cfg *pb.Config) {
+	g.Cfg = cfg.GetGetUrl()
+}
 
-	if resp.StatusCode == 200 && g.Cfg.ExpectedBody != "" {
-		body, err := ioutil.ReadAll(resp.Body)
+func (g GetURL) doCheck(issues *[]pb.Issue) {
+
+	for _, urlCheck := range g.Cfg {
+
+		resp, err := http.Get(urlCheck.Url)
 		if err != nil {
-			return fmt.Sprintf("%v error reading body: %v", g.Cfg.Url, err)
+			addIssue(issues, g.Title(), fmt.Sprintf("Error checking %v: %v.", urlCheck.Url, err))
+			continue
 		}
-		if !bytes.Equal(body, []byte(g.Cfg.ExpectedBody)) {
-			return fmt.Sprintf("%v body content is unexpected.", g.Cfg.Url)
-		}
-	}
+		defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
-		return fmt.Sprintf("%v did not respond with a 200: %v.", g.Cfg.Url, resp.StatusCode)
+		if resp.StatusCode == 200 && urlCheck.ExpectedBody != "" {
+			body, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				addIssue(issues, g.Title(), fmt.Sprintf("%v error reading body: %v", urlCheck.Url, err))
+				continue
+			}
+			if !bytes.Equal(body, []byte(urlCheck.ExpectedBody)) {
+				addIssue(issues, g.Title(), fmt.Sprintf("%v body content is unexpected.", urlCheck.Url))
+				continue
+			}
+		}
+
+		if resp.StatusCode != 200 {
+			addIssue(issues, g.Title(), fmt.Sprintf("%v did not respond with a 200: %v.", urlCheck.Url, resp.StatusCode))
+			continue
+		}
 	}
-	return ""
 }
