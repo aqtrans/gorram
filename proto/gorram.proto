@@ -76,9 +76,9 @@ message Config {
     int64 interval = 2;
     // Configurations for various checks
     Deluge deluge = 3;
-    LoadAvg load = 4;
-    repeated DiskSpace disk = 5;
-    repeated ProcessExists ps = 6;
+    LoadAvg loadavg = 4;
+    repeated DiskSpace diskspace = 5;
+    repeated ProcessExists process = 6;
     repeated GetURL get_url = 7;
     // A string of enabled checks
     string enabled_checks = 8;
