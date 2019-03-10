@@ -12,10 +12,17 @@ import (
 
 	"git.jba.io/go/gorram/checks"
 	gorram "git.jba.io/go/gorram/proto"
+	toml "github.com/pelletier/go-toml"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 )
+
+type clientConfig struct {
+	ClientName    string
+	ServerSecret  string
+	ServerAddress string
+}
 
 type secret struct {
 	Secret string
@@ -33,15 +40,27 @@ func (s *secret) RequireTransportSecurity() bool {
 	return s.TLS
 }
 
+func loadConfig(confFile string) clientConfig {
+	var cfg clientConfig
+	// Load config.toml here
+	cfgTree, err := toml.LoadFile(confFile)
+	if err != nil {
+		log.Fatalln("Error reading config.toml", err)
+	}
+	cfgTree.Unmarshal(&cfg)
+	log.Println(cfg)
+	return cfg
+}
+
 func main() {
 	// Set config via flags
-	clientName := flag.String("name", "unnamed", "Name of the client, as seen by the server. Should be unique.")
-	serverAddress := flag.String("server-address", "127.0.0.1:50000", "Address and port of the server.")
+	confFile := flag.String("conf", "config.toml", "Path to the TOML config file.")
+	//clientName := flag.String("name", "unnamed", "Name of the client, as seen by the server. Should be unique.")
+	//serverAddress := flag.String("server-address", "127.0.0.1:50000", "Address and port of the server.")
 	insecure := flag.Bool("insecure", false, "Connect to server without TLS.")
 	serverCert := flag.String("cert", "cert.pem", "Path to the certificate from the server.")
-	secretKey := flag.String("server-secret", "omg12345", "Secret key of the server.")
+	//secretKey := flag.String("server-secret", "omg12345", "Secret key of the server.")
 	//interval := flag.Duration("interval", 60*time.Second, "Number of seconds to check for issues on.")
-
 	flag.Parse()
 
 	// Catch Ctrl+C, sigint
@@ -51,6 +70,8 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	tomlCfg := loadConfig(*confFile)
 
 	/* Trying to send client-name as early as possible...
 		Doesn't seem to send on the Dial
@@ -69,8 +90,8 @@ func main() {
 	dialCtx, dialCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer dialCancel()
 	if *insecure {
-		conn, err = grpc.DialContext(dialCtx, *serverAddress, grpc.WithBlock(), grpc.WithInsecure(), grpc.WithPerRPCCredentials(&secret{
-			Secret: *secretKey,
+		conn, err = grpc.DialContext(dialCtx, tomlCfg.ServerAddress, grpc.WithBlock(), grpc.WithInsecure(), grpc.WithPerRPCCredentials(&secret{
+			Secret: tomlCfg.ServerSecret,
 			TLS:    false,
 		}))
 	} else {
@@ -78,8 +99,8 @@ func main() {
 		if err != nil {
 			log.Fatal("Error parsing TLS cert:", err)
 		}
-		conn, err = grpc.DialContext(dialCtx, *serverAddress, grpc.WithBlock(), grpc.WithTransportCredentials(creds), grpc.WithPerRPCCredentials(&secret{
-			Secret: *secretKey,
+		conn, err = grpc.DialContext(dialCtx, tomlCfg.ServerAddress, grpc.WithBlock(), grpc.WithTransportCredentials(creds), grpc.WithPerRPCCredentials(&secret{
+			Secret: tomlCfg.ServerSecret,
 			TLS:    true,
 		}))
 	}
@@ -93,14 +114,14 @@ func main() {
 	c := gorram.NewReporterClient(conn)
 
 	// Add client name metadata
-	ctx = metadata.AppendToOutgoingContext(ctx, "client", *clientName)
+	ctx = metadata.AppendToOutgoingContext(ctx, "client", tomlCfg.ClientName)
 
 	// Add secret key metadata
 	//ctx = metadata.AppendToOutgoingContext(ctx, "secret", *secretKey)
 
 	// Hello: Get config from server, and ensure dead tickers are stopped
 	cfg, err := c.Hello(ctx, &gorram.ConfigRequest{
-		ClientName: *clientName,
+		ClientName: tomlCfg.ClientName,
 	})
 	if err != nil {
 		log.Fatalln("Error with c.Hello:", err)
@@ -129,7 +150,7 @@ func main() {
 						log.Println("Configuration out of sync. Fetching new config from server.")
 						var err error
 						newCfg, err := c.ConfigSync(ctx, &gorram.ConfigRequest{
-							ClientName: *clientName,
+							ClientName: tomlCfg.ClientName,
 						})
 						if err != nil {
 							log.Fatalln("Error with c.ConfigSync:", err)

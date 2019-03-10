@@ -35,12 +35,12 @@ import (
 )
 
 type serverConfig struct {
-	secretKey       string
-	alertMethod     string
-	configFile      string
-	pushoverAppKey  string
-	pushoverUserKey string
-	pushoverDevice  string
+	SecretKey       string
+	AlertMethod     string
+	PushoverAppKey  string
+	PushoverUserKey string
+	PushoverDevice  string
+	ListenAddress   string
 }
 
 type statHandler struct {
@@ -305,7 +305,7 @@ func (s *gorramServer) ConfigSync(ctx context.Context, req *gorram.ConfigRequest
 func (cfg serverConfig) authorize(ctx context.Context) error {
 	var clientName string
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
-		if len(md["secret"]) > 0 && md["secret"][0] == cfg.secretKey {
+		if len(md["secret"]) > 0 && md["secret"][0] == cfg.SecretKey {
 			return nil
 		}
 		// Set client name if applicable
@@ -362,17 +362,17 @@ func (s *gorramServer) alert(client string, issue gorram.Issue) {
 		s.alertsMap.add(a)
 	}
 
-	switch s.cfg.alertMethod {
+	switch s.cfg.AlertMethod {
 	case "log":
 		log.Println("ALERT: "+client+" - "+issue.Title+":", issue.Message)
 	case "pushover":
 		log.Println("ALERT: "+client+" - "+issue.Title+":", issue.Message)
-		app := pushover.New(s.cfg.pushoverAppKey)
-		recipient := pushover.NewRecipient(s.cfg.pushoverUserKey)
+		app := pushover.New(s.cfg.PushoverAppKey)
+		recipient := pushover.NewRecipient(s.cfg.PushoverUserKey)
 		message := pushover.NewMessageWithTitle(issue.Message, client+" - "+issue.Title)
 		// Set an optional device name to send alerts to
-		if s.cfg.pushoverDevice != "" {
-			message.DeviceName = s.cfg.pushoverDevice
+		if s.cfg.PushoverDevice != "" {
+			message.DeviceName = s.cfg.PushoverDevice
 		}
 		response, err := app.SendMessage(message, recipient)
 		if err != nil {
@@ -396,21 +396,25 @@ func (s *gorramServer) loadConfig(confFile string) {
 		// Allow configuring server-specific variables inside a ServerConfig table
 		if clientName == "ServerConfig" {
 			serverCfgTree := cfgTree.Get(clientName).(*toml.Tree)
-			if serverCfgTree.Has("secretKey") {
-				s.cfg.secretKey = serverCfgTree.Get("secretKey").(string)
-			}
-			if serverCfgTree.Has("pushoverAppKey") {
-				s.cfg.pushoverAppKey = serverCfgTree.Get("pushoverAppKey").(string)
-			}
-			if serverCfgTree.Has("pushoverUserKey") {
-				s.cfg.pushoverUserKey = serverCfgTree.Get("pushoverUserKey").(string)
-			}
-			if serverCfgTree.Has("pushoverDevice") {
-				s.cfg.pushoverDevice = serverCfgTree.Get("pushoverDevice").(string)
-			}
-			if serverCfgTree.Has("alertMethod") {
-				s.cfg.alertMethod = serverCfgTree.Get("alertMethod").(string)
-			}
+			serverCfgTree.Unmarshal(&s.cfg)
+			//log.Println(s.cfg)
+			/*
+				if serverCfgTree.Has("secretKey") {
+					s.cfg.secretKey = serverCfgTree.Get("secretKey").(string)
+				}
+				if serverCfgTree.Has("pushoverAppKey") {
+					s.cfg.pushoverAppKey = serverCfgTree.Get("pushoverAppKey").(string)
+				}
+				if serverCfgTree.Has("pushoverUserKey") {
+					s.cfg.pushoverUserKey = serverCfgTree.Get("pushoverUserKey").(string)
+				}
+				if serverCfgTree.Has("pushoverDevice") {
+					s.cfg.pushoverDevice = serverCfgTree.Get("pushoverDevice").(string)
+				}
+				if serverCfgTree.Has("alertMethod") {
+					s.cfg.alertMethod = serverCfgTree.Get("alertMethod").(string)
+				}
+			*/
 			continue
 		}
 		log.Println("Loaded config for", clientName, "from config.toml...")
@@ -591,13 +595,13 @@ func main() {
 	// Set config via flags
 	confFile := flag.String("conf", "config.toml", "Path to the TOML config file.")
 	insecure := flag.Bool("insecure", false, "Disable TLS. Allow insecure client connections.")
-	serverAddress := flag.String("listen-address", "127.0.0.1:50000", "Address and port to listen on.")
+	//serverAddress := flag.String("listen-address", "127.0.0.1:50000", "Address and port to listen on.")
 	serverCert := flag.String("cert", "cert.pem", "Path to the server certificate.")
 	serverCertKey := flag.String("key", "cert.key", "Path to the server certificate key.")
 	generate := flag.Bool("generate-certs", false, "Generate certs if given.")
 	generateHost := flag.String("tls-host", "127.0.0.1", "If generate-certs is specified, override the host in the cert.")
-	secret := flag.String("server-secret", "omg12345", "Secret key of the server.")
-	alertMethodF := flag.String("alert", "log", "Alert method to use. Right now, log. To come: pushover.")
+	//secret := flag.String("server-secret", "omg12345", "Secret key of the server.")
+	//alertMethodF := flag.String("alert", "log", "Alert method to use. Right now, log. To come: pushover.")
 	flag.Parse()
 
 	/*
@@ -626,25 +630,28 @@ func main() {
 		}
 	*/
 
+	gs := gorramServer{
+		cfg:              serverConfig{},
+		clientCfgs:       *new(sync.Map),
+		connectedClients: *new(gorram.ClientList),
+	}
+
+	gs.loadConfig(*confFile)
+
+	// Expose expvars on port 50001
 	go func() {
 		http.ListenAndServe("127.0.0.1:50001", nil)
 	}()
-
-	cfg := serverConfig{
-		secretKey:   *secret,
-		alertMethod: *alertMethodF,
-		configFile:  *confFile,
-	}
 
 	// TLS stuff
 	var creds credentials.TransportCredentials
 	if *generate {
 		// Only generate cert.pem if it do not exist
-		if _, err := os.Stat("./cert.pem"); err == nil {
-			log.Fatalln("./cert.pem already exists. Not overwriting. Manually remove it and cert.key if you need to re-generate them.")
+		if _, err := os.Stat(*serverCert); err == nil {
+			log.Fatalln(*serverCert, "already exists. Not overwriting. Manually remove it and cert.key if you need to re-generate them.")
 		}
-		log.Println("Generating certs to ./cert.pem and ./cert.key")
-		generateCerts(*generateHost)
+		log.Println("Generating certs to", *serverCert, "and", *serverCertKey)
+		generateCerts(*generateHost, *serverCert, *serverCertKey)
 	}
 
 	if !*insecure {
@@ -661,32 +668,24 @@ func main() {
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
 	// Setup the TCP port to listen on
-	lis, err := net.Listen("tcp", *serverAddress)
+	lis, err := net.Listen("tcp", gs.cfg.ListenAddress)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
-	log.Println("Listening on", *serverAddress)
+	log.Println("Listening on", gs.cfg.ListenAddress)
 
 	sh := statHandler{}
 
 	var server *grpc.Server
 	if *insecure {
-		server = grpc.NewServer(grpc.StatsHandler(&sh), grpc.UnaryInterceptor(cfg.unaryInterceptor))
+		server = grpc.NewServer(grpc.StatsHandler(&sh), grpc.UnaryInterceptor(gs.cfg.unaryInterceptor))
 	} else {
-		server = grpc.NewServer(grpc.Creds(creds), grpc.StatsHandler(&sh), grpc.UnaryInterceptor(cfg.unaryInterceptor))
-	}
-
-	gs := gorramServer{
-		cfg:              cfg,
-		clientCfgs:       *new(sync.Map),
-		connectedClients: *new(gorram.ClientList),
+		server = grpc.NewServer(grpc.Creds(creds), grpc.StatsHandler(&sh), grpc.UnaryInterceptor(gs.cfg.unaryInterceptor))
 	}
 
 	gs.alertsMap.m = make(map[string]*gorram.Alert)
 
 	gs.connectedClients.Clients = make(map[string]*gorram.Client)
-
-	gs.loadConfig(*confFile)
 
 	gorram.RegisterReporterServer(server, &gs)
 

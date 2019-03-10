@@ -62,7 +62,7 @@ func pemBlockForKey(priv interface{}) *pem.Block {
 	}
 }
 
-func generateCerts(host string) {
+func generateCerts(host, certPath, certKeyPath string) {
 
 	if len(host) == 0 {
 		log.Fatalf("Missing required --host parameter")
@@ -109,20 +109,19 @@ func generateCerts(host string) {
 		log.Fatalf("Failed to create certificate: %s", err)
 	}
 
-	certOut, err := os.Create("cert.pem")
+	certOut, err := os.Create(certPath)
 	if err != nil {
-		log.Fatalf("failed to open cert.pem for writing: %s", err)
+		log.Fatalf("failed to open %s for writing: %s", certPath, err)
 	}
 	pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
 	certOut.Close()
-	log.Print("written cert.pem\n")
+	log.Println("written", certPath)
 
-	keyOut, err := os.OpenFile("cert.key", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	keyOut, err := os.OpenFile(certKeyPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
-		log.Print("failed to open cert.key for writing:", err)
-		return
+		log.Fatalf("failed to open %s for writing: %s", certKeyPath, err)
 	}
 	pem.Encode(keyOut, pemBlockForKey(priv))
 	keyOut.Close()
-	log.Print("written cert.key\n")
+	log.Println("written", certKeyPath)
 }
