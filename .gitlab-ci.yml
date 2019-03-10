@@ -24,8 +24,8 @@ stages:
   - install-environment
   - build
   - test  
-#  - package
-  - deploy  
+  - package
+#  - deploy  
 
 install-go:
   stage: install-environment
@@ -63,15 +63,6 @@ build-my-project:
       - gorram-server
       - gorram-client
 
-#build-package:
-#  stage: package
-#  script:
-#    - apt update && apt install -y build-essential devscripts debhelper
-#    - cp gorram-client debian/
-#    - cp gorram-server debian/    
-#    - cd debian/
-#    - debuild -us -uc -b  
-
 test-server:
   stage: test
   coverage: '/coverage: \d+\.\d+/'
@@ -87,24 +78,40 @@ test-server:
     - go test -race
     - go test -cover
 
-deploy_prod:
-  stage: deploy
+build-package:
+  stage: package
   script:
-    # Stop client and server on Frink
-    - ssh gorram@frink.jba.io sudo systemctl stop gorram-server gorram-client  
-    # scp client to /opt/gorram/gorram-client on Frink
-    - scp gorram-client gorram@frink.jba.io:/opt/gorram/gorram-client  
-    # scp server to /opt/gorram/gorram-server on Frink
-    - scp gorram-server gorram@frink.jba.io:/opt/gorram/gorram-server
-    # Restart client and server on Rick
-    - ssh gorram@frink.jba.io sudo systemctl start gorram-server gorram-client
-    # Stop client on Rick
-    - ssh gorram@rick.jba.io sudo systemctl stop gorram-client    
-    # scp client to /opt/gorram/gorram-client on Rick
-    - scp gorram-client gorram@rick.jba.io:/opt/gorram/gorram-client
-    # Restart client on Rick
-    - ssh gorram@rick.jba.io sudo systemctl start gorram-client
-  environment:
-    name: production
-  only:
-    - master
+    - apt update && apt install -y build-essential devscripts debhelper
+    - cp gorram-client client/deb/
+    - cp gorram-server server/deb/
+    - cd server/deb/
+    - debuild -us -uc -b
+    - cd ../../client/deb/
+    - debuild -us -uc -b
+  artifacts:
+    expire_in: 1 day
+    paths:
+      - client/gorram-client_0.1_amd64.deb
+      - server/gorram-server_0.1_amd64.deb
+
+#deploy_prod:
+#  stage: deploy
+#  script:
+#    # Stop client and server on Frink
+#    - ssh gorram@frink.jba.io sudo systemctl stop gorram-server gorram-client  
+#    # scp client to /opt/gorram/gorram-client on Frink
+#    - scp gorram-client gorram@frink.jba.io:/opt/gorram/gorram-client  
+#    # scp server to /opt/gorram/gorram-server on Frink
+#    - scp gorram-server gorram@frink.jba.io:/opt/gorram/gorram-server
+#    # Restart client and server on Rick
+#    - ssh gorram@frink.jba.io sudo systemctl start gorram-server gorram-client
+#    # Stop client on Rick
+#    - ssh gorram@rick.jba.io sudo systemctl stop gorram-client    
+#    # scp client to /opt/gorram/gorram-client on Rick
+#    - scp gorram-client gorram@rick.jba.io:/opt/gorram/gorram-client
+#    # Restart client on Rick
+#    - ssh gorram@rick.jba.io sudo systemctl start gorram-client
+#  environment:
+#    name: production
+#  only:
+#    - master
