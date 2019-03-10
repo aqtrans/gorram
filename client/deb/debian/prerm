@@ -1,0 +1,4 @@
+#!/bin/sh
+
+systemctl disable gorram-client.service >/dev/null
+systemctl stop gorram-client.service >/dev/null

@@ -1,0 +1,12 @@
+#!/bin/sh
+
+set -e
+
+USER=gorram
+
+if ! getent passwd "$USER" >/dev/null; then
+ adduser --quiet --home /etc/gorram --system "$USER"
+fi
+
+systemctl --system daemon-reload >/dev/null
+#systemctl start gowiki.service >/dev/null 

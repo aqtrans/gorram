@@ -1,0 +1,10 @@
+Source: gorram-client
+Section: unknown
+Priority: optional
+Maintainer: aqtrans <aqtrans@jba.io>
+Homepage: https://git.jba.io/go/gorram
+
+Package: gorram-client
+Architecture: amd64
+Depends: libc6, adduser
+Description: A simple single-process system monitoring solution. Written in Golang.
