@@ -85,14 +85,16 @@ build-package:
     - cp gorram-client client/deb/
     - cp gorram-server server/deb/
     - cd server/deb/
+    - dch -m -i "New version from Git" && dch -r -D stretch ""
     - debuild -us -uc -b
     - cd ../../client/deb/
+    - dch -m -i "New version from Git" && dch -r -D stretch ""
     - debuild -us -uc -b
   artifacts:
     expire_in: 1 day
     paths:
-      - client/gorram-client_0.1_amd64.deb
-      - server/gorram-server_0.1_amd64.deb
+      - client/*.deb
+      - server/*.deb
 
 #deploy_prod:
 #  stage: deploy
