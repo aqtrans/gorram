@@ -1,5 +1,5 @@
 Source: gorram-server
-Section: unknown
+Section: admin
 Priority: optional
 Maintainer: aqtrans <aqtrans@jba.io>
 Homepage: https://git.jba.io/go/gorram
@@ -7,4 +7,5 @@ Homepage: https://git.jba.io/go/gorram
 Package: gorram-server
 Architecture: amd64
 Depends: libc6, adduser
-Description: A simple single-process system monitoring solution. Written in Golang.
+Description: Server for gorram, the single-process system monitoring solution. 
+ A Nagios replacement inspired by Telegraf. Written in Golang.

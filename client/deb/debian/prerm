@@ -1,4 +1,6 @@
 #!/bin/sh
 
-systemctl disable gorram-client.service >/dev/null
-systemctl stop gorram-client.service >/dev/null
+set -e
+
+deb-systemd-helper disable gorram-client.service >/dev/null
+deb-systemd-helper stop gorram-client.service >/dev/null
