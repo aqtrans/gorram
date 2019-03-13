@@ -3,4 +3,4 @@
 set -e
 
 deb-systemd-helper disable gorram-server.service >/dev/null
-deb-systemd-helper stop gorram-server.service >/dev/null
+deb-systemd-invoke stop gorram-server.service >/dev/null

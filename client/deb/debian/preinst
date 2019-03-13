@@ -16,7 +16,7 @@ set -e
 
 case "$1" in
     upgrade)
-        deb-systemd-helper stop gorram-client
+        deb-systemd-invoke stop gorram-client
     ;;
 
     install|abort-upgrade)
