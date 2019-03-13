@@ -2,5 +2,15 @@
 
 set -e
 
-deb-systemd-helper disable gorram-client.service >/dev/null
-deb-systemd-invoke stop gorram-client.service >/dev/null
+case "$1" in 
+    upgrade)
+    ;;  
+    remove)
+        deb-systemd-helper disable gorram-client.service >/dev/null
+        deb-systemd-invoke stop gorram-client.service >/dev/null
+    ;;
+    *)
+    ;;
+esac
+
+exit 0
