@@ -82,15 +82,15 @@ build-package:
   stage: package
   script:
     - apt update && apt install -y build-essential devscripts debhelper
-    - cp gorram-client client/deb/
-    - cp gorram-server server/deb/
-    - cd server/deb/
+    - cp gorram-client client/
+    - cp gorram-server server/
+    - cd server/
     - dch -M -v 1.0-$CI_COMMIT_REF_NAME-$CI_JOB_ID "New version from Git" && dch -M -r -D stretch ""
     - debuild -us -uc -b
-    - cd ../../client/deb/
+    - cd ../client/
     - dch -M -v 1.0-$CI_COMMIT_REF_NAME-$CI_JOB_ID "New version from Git" && dch -M -r -D stretch ""
     - debuild -us -uc -b
-    - cd ../../ && mv client/gorram-client_*.deb client/gorram-client.deb && mv server/gorram-server_*.deb server/gorram-server.deb
+    - cd ../ && mv gorram-client_*.deb client/gorram-client.deb && mv gorram-server_*.deb server/gorram-server.deb
   artifacts:
     expire_in: 1 day
     paths:
@@ -105,13 +105,15 @@ build-package:
 #    - scp ./client/gorram-client.deb ./server/gorram-server.deb $DEPLOY_HOST:/home/repo/
 #    - ssh $DEPLOY_HOST reprepro -b www/debian/ includedeb stretch *.deb
 
-deploy_to_repo:
+deploy_to_prod:
   stage: deploy
   variables:
     DEPLOY_HOST: 'deploy@bob.jba.io'
   script:
     - scp ./client/gorram-client.deb ./server/gorram-server.deb $DEPLOY_HOST:/home/deploy/
     - ssh $DEPLOY_HOST sudo dpkg -i gorram-server.deb gorram-client.deb
+    - scp ./client/gorram-client.deb deploy@rick.jba.io:/home/deploy/
+    - ssh $DEPLOY_HOST sudo dpkg -i gorram-client.deb
 
 #deploy_prod:
 #  stage: deploy
