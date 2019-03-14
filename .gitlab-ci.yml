@@ -113,7 +113,7 @@ deploy_to_prod:
     - scp ./client/gorram-client.deb ./server/gorram-server.deb $DEPLOY_HOST:/home/deploy/
     - ssh $DEPLOY_HOST sudo dpkg -i gorram-server.deb gorram-client.deb
     - scp ./client/gorram-client.deb deploy@rick.jba.io:/home/deploy/
-    - ssh $DEPLOY_HOST sudo dpkg -i gorram-client.deb
+    - ssh deploy@rick.jba.io sudo dpkg -i gorram-client.deb
 
 #deploy_prod:
 #  stage: deploy
