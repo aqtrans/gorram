@@ -68,7 +68,10 @@ message Config {
     message GetURL {
         string url = 1;
         string expected_body = 2;
-    }    
+    }
+    message Memory {
+        double max_usage = 1;
+    }
     
     // Used internally to tell when config was last updated
     int64 last_updated = 1;
@@ -77,6 +80,7 @@ message Config {
     // Configurations for various checks
     Deluge deluge = 3;
     LoadAvg loadavg = 4;
+    Memory memory = 10;
     repeated DiskSpace diskspace = 5;
     repeated ProcessExists process = 6;
     repeated GetURL get_url = 7;
