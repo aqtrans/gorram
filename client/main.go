@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"sync"
 	"syscall"
 	"time"
 
@@ -120,17 +121,21 @@ func main() {
 	//ctx = metadata.AppendToOutgoingContext(ctx, "secret", *secretKey)
 
 	// Hello: Get config from server, and ensure dead tickers are stopped
-	cfg, err := c.Hello(ctx, &gorram.ConfigRequest{
+	origCfg, err := c.Hello(ctx, &gorram.ConfigRequest{
 		ClientName: tomlCfg.ClientName,
 	})
 	if err != nil {
 		log.Fatalln("Error with c.Hello:", err)
 	}
 
-	log.Println("Interval:", cfg.Interval)
+	//cfg := *origCfg
+
+	log.Println("Interval:", origCfg.Interval)
+
+	cfgMutex := &sync.Mutex{}
 
 	// Ping and collect issues every X seconds
-	ticker := time.NewTicker(time.Duration(cfg.Interval) * time.Second)
+	ticker := time.NewTicker(time.Duration(origCfg.Interval) * time.Second)
 	quit := make(chan struct{})
 	cfgChan := make(chan *gorram.Config)
 
@@ -139,8 +144,9 @@ func main() {
 			select {
 			case <-ticker.C:
 				go func() {
+					cfgMutex.Lock()
 					//log.Println("ping")
-					pingResp, err := c.Ping(ctx, &gorram.PingMsg{IsAlive: true, CfgLastUpdated: cfg.LastUpdated})
+					pingResp, err := c.Ping(ctx, &gorram.PingMsg{IsAlive: true, CfgLastUpdated: origCfg.LastUpdated})
 					if err != nil {
 						log.Fatalln("Error with c.Ping:", err)
 					}
@@ -156,16 +162,18 @@ func main() {
 							log.Fatalln("Error with c.ConfigSync:", err)
 						}
 						// Set cfg to newCfg
-						cfg = newCfg
-						log.Println(cfg.LastUpdated, newCfg.LastUpdated)
+						//cfg = *newCfg
+						origCfg = newCfg
+						log.Println(origCfg.LastUpdated, newCfg.LastUpdated)
 					}
 					// Send config, either the new or old, through the channel
-					cfgChan <- cfg
+					cfgChan <- origCfg
+					cfgMutex.Unlock()
 					//close(cfgChan)
 				}()
 				go func() {
 					//log.Println("checks")
-					cfg = <-cfgChan
+					cfg2 := <-cfgChan
 
 					//log.Println("Enabled checks:", cfg.EnabledChecks)
 
@@ -176,7 +184,7 @@ func main() {
 					*/
 
 					// Do checks
-					i := checks.DoChecks(cfg)
+					i := checks.DoChecks(cfg2)
 					// If there are any checks, open a client-side stream and record them
 					if len(i) > 0 {
 						issueStream, err := c.RecordIssue(ctx)
