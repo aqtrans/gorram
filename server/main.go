@@ -338,7 +338,7 @@ func (s *gorramServer) alert(client string, issue gorram.Issue) {
 	// Tie the issue with the given client name here
 	issue.Host = client
 
-	if _, alertExists := s.alertsMap.m[issue.String()]; alertExists {
+	if s.alertsMap.exists(issue) {
 		//log.Println(issue.String())
 		log.Println("Issue exists. Increasing occurrence count.")
 		occurrences := s.alertsMap.count(issue)
@@ -346,7 +346,9 @@ func (s *gorramServer) alert(client string, issue gorram.Issue) {
 			log.Println("Less than 5 occurrences. Continuing alerts.")
 		} else if (occurrences % 10) == 0 {
 			log.Println("Sending alert", occurrences)
+			s.alertsMap.Lock()
 			issue.Message = issue.Message + " | Occurrences: " + strconv.FormatInt(occurrences, 10) + "| First occurred:" + time.Unix(s.alertsMap.m[issue.String()].TimeSubmitted, 0).String()
+			s.alertsMap.Unlock()
 		} else {
 			log.Println("Skipping alert...", occurrences)
 			return
@@ -566,6 +568,13 @@ func (a *alerts) count(issue gorram.Issue) int64 {
 	v.Occurrences = v.Occurrences + 1
 	a.Unlock()
 	return v.Occurrences
+}
+
+func (a *alerts) exists(issue gorram.Issue) bool {
+	a.Lock()
+	_, alertExists := a.m[issue.String()]
+	a.Unlock()
+	return alertExists
 }
 
 func (s *gorramServer) checkRequiredClients(k, v interface{}) bool {
