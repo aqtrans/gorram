@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"google.golang.org/grpc/keepalive"
 	"io"
 	"log"
 	"net"
@@ -685,11 +686,21 @@ func main() {
 
 	sh := statHandler{}
 
+	kp := keepalive.ServerParameters{
+		MaxConnectionIdle: 5 * time.Minute,
+		Time:              15 * time.Minute,
+		Timeout:           20 * time.Second,
+	}
+	kpe := keepalive.EnforcementPolicy{
+		MinTime:             10 * time.Second,
+		PermitWithoutStream: true,
+	}
+
 	var server *grpc.Server
 	if *insecure {
-		server = grpc.NewServer(grpc.StatsHandler(&sh), grpc.UnaryInterceptor(gs.cfg.unaryInterceptor))
+		server = grpc.NewServer(grpc.StatsHandler(&sh), grpc.UnaryInterceptor(gs.cfg.unaryInterceptor), grpc.KeepaliveParams(kp), grpc.KeepaliveEnforcementPolicy(kpe))
 	} else {
-		server = grpc.NewServer(grpc.Creds(creds), grpc.StatsHandler(&sh), grpc.UnaryInterceptor(gs.cfg.unaryInterceptor))
+		server = grpc.NewServer(grpc.Creds(creds), grpc.StatsHandler(&sh), grpc.UnaryInterceptor(gs.cfg.unaryInterceptor), grpc.KeepaliveParams(kp), grpc.KeepaliveEnforcementPolicy(kpe))
 	}
 
 	gs.alertsMap.m = make(map[string]*gorram.Alert)

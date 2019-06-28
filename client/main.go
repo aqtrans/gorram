@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"google.golang.org/grpc/keepalive"
 	"log"
 	"os"
 	"os/signal"
@@ -69,7 +70,7 @@ func main() {
 	done := make(chan bool, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	tomlCfg := loadConfig(*confFile)
@@ -88,22 +89,41 @@ func main() {
 	var conn *grpc.ClientConn
 	var err error
 	var creds credentials.TransportCredentials
-	dialCtx, dialCancel := context.WithTimeout(context.Background(), 10*time.Second)
+
+	kp := keepalive.ClientParameters{
+		Time:                60 * time.Second,
+		Timeout:             30 * time.Second,
+		PermitWithoutStream: false,
+	}
+
+	dialCtx, dialCancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer dialCancel()
 	if *insecure {
-		conn, err = grpc.DialContext(dialCtx, tomlCfg.ServerAddress, grpc.WithBlock(), grpc.WithInsecure(), grpc.WithPerRPCCredentials(&secret{
-			Secret: tomlCfg.ServerSecret,
-			TLS:    false,
-		}))
+		conn, err = grpc.DialContext(
+			dialCtx,
+			tomlCfg.ServerAddress,
+			grpc.WithInsecure(),
+			grpc.WithPerRPCCredentials(&secret{
+				Secret: tomlCfg.ServerSecret,
+				TLS:    false,
+			}),
+			grpc.WithKeepaliveParams(kp),
+		)
 	} else {
 		creds, err = credentials.NewClientTLSFromFile(*serverCert, "")
 		if err != nil {
 			log.Fatal("Error parsing TLS cert:", err)
 		}
-		conn, err = grpc.DialContext(dialCtx, tomlCfg.ServerAddress, grpc.WithBlock(), grpc.WithTransportCredentials(creds), grpc.WithPerRPCCredentials(&secret{
-			Secret: tomlCfg.ServerSecret,
-			TLS:    true,
-		}))
+		conn, err = grpc.DialContext(
+			dialCtx,
+			tomlCfg.ServerAddress,
+			grpc.WithTransportCredentials(creds),
+			grpc.WithPerRPCCredentials(&secret{
+				Secret: tomlCfg.ServerSecret,
+				TLS:    true,
+			}),
+			grpc.WithKeepaliveParams(kp),
+		)
 	}
 	if err != nil {
 		log.Printf("Error connecting to server: %v", err)
