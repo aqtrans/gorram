@@ -9,9 +9,25 @@
 
 [[projects]]
   branch = "master"
+  name = "github.com/gregdel/pushover"
+  packages = ["."]
+  revision = "1e03358b8e7e921df70042289c6e9ae96f8d5484"
+
+[[projects]]
   name = "github.com/pelletier/go-toml"
   packages = ["."]
-  revision = "66540cf1fcd2c3aee6f6787dfa32a6ae9a870f12"
+  revision = "c01d1270ff3e442a8a57cddc1c92dc1138598194"
+  version = "v1.2.0"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/tevjef/go-runtime-metrics"
+  packages = [
+    "collector",
+    "expvar",
+    "influxdb"
+  ]
+  revision = "527a540293077c77cf70479bbf9f8efb9f818cb2"
 
 [[projects]]
   branch = "master"
@@ -22,6 +38,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "ab60d09ea9de8b23180cdd82f74314761d6506e7a0347e39a06854a906289063"
+  inputs-digest = "dcdddc6c91dae55f0dcd1e7d8262ce181d305cf81d1e6cb98806dcfeac098576"
   solver-name = "gps-cdcl"
   solver-version = 1
