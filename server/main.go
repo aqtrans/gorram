@@ -2,11 +2,14 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"flag"
 	"fmt"
 	"google.golang.org/grpc/keepalive"
 	"io"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -26,6 +29,7 @@ import (
 	//"github.com/spf13/viper"
 	_ "github.com/tevjef/go-runtime-metrics/expvar"
 
+	"git.jba.io/go/gorram/certs"
 	"git.jba.io/go/gorram/proto"
 
 	"google.golang.org/grpc"
@@ -113,6 +117,17 @@ type clientTimers struct {
 }
 
 func getClientName(ctx context.Context) string {
+	p, pok := peer.FromContext(ctx)
+	if pok {
+		tlsAuth, tok := p.AuthInfo.(credentials.TLSInfo)
+		if tok {
+			if len(tlsAuth.State.PeerCertificates) != 0 {
+				//log.Println("Client from cert:", tlsAuth.State.PeerCertificates[0].Subject.CommonName)
+				return tlsAuth.State.PeerCertificates[0].Subject.CommonName
+			}
+		}
+	}
+
 	md, ok := metadata.FromIncomingContext(ctx)
 	if ok {
 		return md["client"][0]
@@ -606,10 +621,8 @@ func main() {
 	confFile := flag.String("conf", "config.toml", "Path to the TOML config file.")
 	insecure := flag.Bool("insecure", false, "Disable TLS. Allow insecure client connections.")
 	//serverAddress := flag.String("listen-address", "127.0.0.1:50000", "Address and port to listen on.")
-	serverCert := flag.String("cert", "cert.pem", "Path to the server certificate.")
-	serverCertKey := flag.String("key", "cert.key", "Path to the server certificate key.")
-	generate := flag.Bool("generate-certs", false, "Generate certs if given.")
-	generateHost := flag.String("tls-host", "127.0.0.1", "If generate-certs is specified, override the host in the cert.")
+	//serverCert := flag.String("cert", "cert.pem", "Path to the server certificate.")
+	//serverCertKey := flag.String("key", "cert.key", "Path to the server certificate key.")
 	//secret := flag.String("server-secret", "omg12345", "Secret key of the server.")
 	//alertMethodF := flag.String("alert", "log", "Alert method to use. Right now, log. To come: pushover.")
 	flag.Parse()
@@ -655,21 +668,54 @@ func main() {
 
 	// TLS stuff
 	var creds credentials.TransportCredentials
-	if *generate {
-		// Only generate cert.pem if it do not exist
-		if _, err := os.Stat(*serverCert); err == nil {
-			log.Fatalln(*serverCert, "already exists. Not overwriting. Manually remove it and cert.key if you need to re-generate them.")
+	/*
+		if *generate {
+			// Only generate cert.pem if it do not exist
+			if _, err := os.Stat(*serverCert); err == nil {
+				log.Fatalln(*serverCert, "already exists. Not overwriting. Manually remove it and cert.key if you need to re-generate them.")
+			}
+			log.Println("Generating certs to", *serverCert, "and", *serverCertKey)
+			generateCerts(*generateHost, *serverCert, *serverCertKey)
 		}
-		log.Println("Generating certs to", *serverCert, "and", *serverCertKey)
-		generateCerts(*generateHost, *serverCert, *serverCertKey)
-	}
+	*/
 
 	if !*insecure {
-		var err error
-		creds, err = credentials.NewServerTLSFromFile(*serverCert, *serverCertKey)
+		// Generate certificates dynamically:
+		var tlsHost string
+		tlsHost, _, err := net.SplitHostPort(gs.cfg.ListenAddress)
 		if err != nil {
-			log.Fatal("Error with certs:", err)
+			log.Println("Error parsing ListenAddress from config; Watch out for TLS issues.", err)
+			tlsHost = gs.cfg.ListenAddress
 		}
+		tlsCert := certs.GenerateServerCert(tlsHost, "cacert.pem", "cacert.key")
+		/*
+			// Load static certs:
+				cert, err := tls.LoadX509KeyPair(*serverCert, *serverCertKey)
+				if err != nil {
+					log.Fatalln("Error loading keypair:", err)
+				}
+		*/
+		caCert, err := ioutil.ReadFile("cacert.pem")
+		if err != nil {
+			log.Fatalln("Error reading", "cacert.pem", err)
+		}
+		certPool := x509.NewCertPool()
+		if success := certPool.AppendCertsFromPEM(caCert); !success {
+			log.Fatalln("cannot append certs from PEM")
+		}
+
+		creds = credentials.NewTLS(&tls.Config{
+			ClientAuth:   tls.RequireAndVerifyClientCert,
+			Certificates: []tls.Certificate{tlsCert},
+			ClientCAs:    certPool,
+		})
+		/*
+			var err error
+			creds, err = credentials.NewServerTLSFromFile(*serverCert, *serverCertKey)
+			if err != nil {
+				log.Fatal("Error with certs:", err)
+			}
+		*/
 	}
 
 	// Catch Ctrl+C, sigint
