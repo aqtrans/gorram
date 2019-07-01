@@ -2,9 +2,13 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"flag"
 	"google.golang.org/grpc/keepalive"
+	"io/ioutil"
 	"log"
+	"net"
 	"os"
 	"os/signal"
 	"runtime"
@@ -12,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"git.jba.io/go/gorram/certs"
 	"git.jba.io/go/gorram/checks"
 	gorram "git.jba.io/go/gorram/proto"
 	toml "github.com/pelletier/go-toml"
@@ -60,7 +65,7 @@ func main() {
 	//clientName := flag.String("name", "unnamed", "Name of the client, as seen by the server. Should be unique.")
 	//serverAddress := flag.String("server-address", "127.0.0.1:50000", "Address and port of the server.")
 	insecure := flag.Bool("insecure", false, "Connect to server without TLS.")
-	serverCert := flag.String("cert", "cert.pem", "Path to the certificate from the server.")
+	//serverCert := flag.String("cert", "cert.pem", "Path to the certificate from the server.")
 	//secretKey := flag.String("server-secret", "omg12345", "Secret key of the server.")
 	//interval := flag.Duration("interval", 60*time.Second, "Number of seconds to check for issues on.")
 	flag.Parse()
@@ -110,10 +115,46 @@ func main() {
 			grpc.WithKeepaliveParams(kp),
 		)
 	} else {
-		creds, err = credentials.NewClientTLSFromFile(*serverCert, "")
+		// Generate certificates dynamically:
+		tlsCert := certs.GenerateClientCert(tomlCfg.ClientName, "cacert.pem", "cacert.key")
+
+		/*
+			// Load static certs:
+			certificate, err := tls.LoadX509KeyPair(tomlCfg.ClientName+".pem", tomlCfg.ClientName+".key")
+			if err != nil {
+				log.Fatalln("Error reading", tomlCfg.ClientName+".pem", err)
+			}
+		*/
+
+		var host string
+		host, _, err := net.SplitHostPort(tomlCfg.ServerAddress)
 		if err != nil {
-			log.Fatal("Error parsing TLS cert:", err)
+			log.Println("Error parsing ServerAddress from config; Watch out for TLS issues.", err)
+			host = tomlCfg.ServerAddress
 		}
+
+		caCertRaw, err := ioutil.ReadFile("cacert.pem")
+		if err != nil {
+			log.Fatalln("Error reading", "cacert.pem", err)
+		}
+		certPool := x509.NewCertPool()
+		if success := certPool.AppendCertsFromPEM(caCertRaw); !success {
+			log.Fatalln("cannot append certs from PEM")
+		}
+
+		creds = credentials.NewTLS(&tls.Config{
+			ServerName:         host, // NOTE: this is required!
+			Certificates:       []tls.Certificate{tlsCert},
+			RootCAs:            certPool,
+			InsecureSkipVerify: false,
+		})
+
+		/*
+			creds, err = credentials.NewClientTLSFromFile(tomlCfg.ClientName+".pem", "")
+			if err != nil {
+				log.Fatalln("Error parsing TLS cert:", err)
+			}
+		*/
 
 		conn, err = grpc.DialContext(
 			dialCtx,
