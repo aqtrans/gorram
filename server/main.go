@@ -620,6 +620,7 @@ func main() {
 	// Set config via flags
 	confFile := flag.String("conf", "config.toml", "Path to the TOML config file.")
 	insecure := flag.Bool("insecure", false, "Disable TLS. Allow insecure client connections.")
+	generateCAcert := flag.Bool("generate-ca", false, "Generate CA certificates, at cacert.pem and cacert.key.")
 	//serverAddress := flag.String("listen-address", "127.0.0.1:50000", "Address and port to listen on.")
 	//serverCert := flag.String("cert", "cert.pem", "Path to the server certificate.")
 	//serverCertKey := flag.String("key", "cert.key", "Path to the server certificate key.")
@@ -652,6 +653,11 @@ func main() {
 			log.Println("No configuration file loaded - using defaults")
 		}
 	*/
+
+	if *generateCAcert {
+		log.Println("Generating cacert.pem and cacert.key...")
+		certs.GenerateCACert()
+	}
 
 	gs := gorramServer{
 		cfg:              serverConfig{},
