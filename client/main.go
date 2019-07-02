@@ -115,21 +115,26 @@ func main() {
 			grpc.WithKeepaliveParams(kp),
 		)
 	} else {
-		// Generate certificates dynamically:
-		tlsCert := certs.GenerateClientCert(tomlCfg.ClientName, "cacert.pem", "cacert.key")
-
-		/*
+		// If a certificate at $ClientName.pem exists, load it, otherwise generate one dynamically
+		var tlsCert tls.Certificate
+		certPath := tomlCfg.ClientName + ".pem"
+		if _, err := os.Stat(certPath); err == nil {
+			log.Println(certPath, "exists. Loading cert.")
 			// Load static certs:
-			certificate, err := tls.LoadX509KeyPair(tomlCfg.ClientName+".pem", tomlCfg.ClientName+".key")
+			tlsCert, err = tls.LoadX509KeyPair(tomlCfg.ClientName+".pem", tomlCfg.ClientName+".key")
 			if err != nil {
 				log.Fatalln("Error reading", tomlCfg.ClientName+".pem", err)
 			}
-		*/
+		} else {
+			log.Println("Generating certificate dynamically...")
+			// Generate certificates dynamically:
+			tlsCert = certs.GenerateClientCert(tomlCfg.ClientName, "cacert.pem", "cacert.key")
+		}
 
 		var host string
 		host, _, err := net.SplitHostPort(tomlCfg.ServerAddress)
 		if err != nil {
-			log.Println("Error parsing ServerAddress from config; Watch out for TLS issues.", err)
+			log.Println("Error parsing ServerAddress from config; Watch out for TLS issues due to ServerName mismatch.", err)
 			host = tomlCfg.ServerAddress
 		}
 
@@ -143,18 +148,10 @@ func main() {
 		}
 
 		creds = credentials.NewTLS(&tls.Config{
-			ServerName:         host, // NOTE: this is required!
-			Certificates:       []tls.Certificate{tlsCert},
-			RootCAs:            certPool,
-			InsecureSkipVerify: false,
+			ServerName:   host, // NOTE: this is required!
+			Certificates: []tls.Certificate{tlsCert},
+			RootCAs:      certPool,
 		})
-
-		/*
-			creds, err = credentials.NewClientTLSFromFile(tomlCfg.ClientName+".pem", "")
-			if err != nil {
-				log.Fatalln("Error parsing TLS cert:", err)
-			}
-		*/
 
 		conn, err = grpc.DialContext(
 			dialCtx,

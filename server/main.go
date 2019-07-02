@@ -686,21 +686,28 @@ func main() {
 	*/
 
 	if !*insecure {
-		// Generate certificates dynamically:
-		var tlsHost string
-		tlsHost, _, err := net.SplitHostPort(gs.cfg.ListenAddress)
-		if err != nil {
-			log.Println("Error parsing ListenAddress from config; Watch out for TLS issues.", err)
-			tlsHost = gs.cfg.ListenAddress
-		}
-		tlsCert := certs.GenerateServerCert(tlsHost, "cacert.pem", "cacert.key")
-		/*
+
+		// If a certificate at server.pem exists, load it, otherwise generate one dynamically
+		var tlsCert tls.Certificate
+		if _, err := os.Stat("server.pem"); err == nil {
+			log.Println("server.pem exists. Loading cert.")
 			// Load static certs:
-				cert, err := tls.LoadX509KeyPair(*serverCert, *serverCertKey)
-				if err != nil {
-					log.Fatalln("Error loading keypair:", err)
-				}
-		*/
+			tlsCert, err = tls.LoadX509KeyPair("server.pem", "server.key")
+			if err != nil {
+				log.Fatalln("Error reading", "server.pem", err)
+			}
+		} else {
+			log.Println("Generating certificate dynamically...")
+			// Generate certificates dynamically:
+			var tlsHost string
+			tlsHost, _, err := net.SplitHostPort(gs.cfg.ListenAddress)
+			if err != nil {
+				log.Println("Error parsing ListenAddress from config; Watch out for TLS issues.", err)
+				tlsHost = gs.cfg.ListenAddress
+			}
+			tlsCert = certs.GenerateServerCert(tlsHost, "cacert.pem", "cacert.key")
+		}
+
 		caCert, err := ioutil.ReadFile("cacert.pem")
 		if err != nil {
 			log.Fatalln("Error reading", "cacert.pem", err)
