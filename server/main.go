@@ -690,15 +690,22 @@ func main() {
 		// If a certificate at server.pem exists, load it, otherwise generate one dynamically
 		var tlsCert tls.Certificate
 		if _, err := os.Stat("server.pem"); err == nil {
+
+			// Load static cert at server.pem:
 			log.Println("server.pem exists. Loading cert.")
-			// Load static certs:
 			tlsCert, err = tls.LoadX509KeyPair("server.pem", "server.key")
 			if err != nil {
 				log.Fatalln("Error reading", "server.pem", err)
 			}
 		} else {
-			log.Println("Generating certificate dynamically...")
+			// Check that CA cert required to sign/generate server and client exists, generating if needed:
+			if _, err := os.Stat("cacert.pem"); err != nil {
+				log.Println("CA certificate at cacert.pem does not exist, generating it...")
+				certs.GenerateCACert()
+			}
+
 			// Generate certificates dynamically:
+			log.Println("Generating certificate dynamically...")
 			var tlsHost string
 			tlsHost, _, err := net.SplitHostPort(gs.cfg.ListenAddress)
 			if err != nil {

@@ -119,15 +119,20 @@ func main() {
 		var tlsCert tls.Certificate
 		certPath := tomlCfg.ClientName + ".pem"
 		if _, err := os.Stat(certPath); err == nil {
+			// Load static cert from $ClientName.pem:
 			log.Println(certPath, "exists. Loading cert.")
-			// Load static certs:
 			tlsCert, err = tls.LoadX509KeyPair(tomlCfg.ClientName+".pem", tomlCfg.ClientName+".key")
 			if err != nil {
 				log.Fatalln("Error reading", tomlCfg.ClientName+".pem", err)
 			}
 		} else {
-			log.Println("Generating certificate dynamically...")
+			// Check that CA cert required to dynamically generate client exists:
+			if _, err := os.Stat("cacert.pem"); err != nil {
+				log.Fatalln("Error: CA certificate at cacert.pem does not exist. Copy cacert.pem and cacert.key from the server in order to dynamically generate a client certificate.")
+			}
+
 			// Generate certificates dynamically:
+			log.Println("Generating certificate dynamically...")
 			tlsCert = certs.GenerateClientCert(tomlCfg.ClientName, "cacert.pem", "cacert.key")
 		}
 
@@ -144,7 +149,7 @@ func main() {
 		}
 		certPool := x509.NewCertPool()
 		if success := certPool.AppendCertsFromPEM(caCertRaw); !success {
-			log.Fatalln("cannot append certs from PEM")
+			log.Fatalln("Error appending CA cert to certPool")
 		}
 
 		creds = credentials.NewTLS(&tls.Config{
@@ -232,7 +237,7 @@ func main() {
 						// Set cfg to newCfg
 						//cfg = *newCfg
 						origCfg = newCfg
-						log.Println(origCfg.LastUpdated, newCfg.LastUpdated)
+						//log.Println(origCfg.LastUpdated, newCfg.LastUpdated)
 					}
 					// Send config, either the new or old, through the channel
 					cfgChan <- origCfg
