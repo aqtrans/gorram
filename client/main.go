@@ -55,7 +55,6 @@ func loadConfig(confFile string) clientConfig {
 		log.Fatalln("Error reading config.toml", err)
 	}
 	cfgTree.Unmarshal(&cfg)
-	log.Println(cfg)
 	return cfg
 }
 
