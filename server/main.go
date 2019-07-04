@@ -721,9 +721,9 @@ func main() {
 			tlsCert = certs.GenerateServerCert(tlsHost, *sslPath)
 		}
 
-		caCert, err := ioutil.ReadFile("cacert.pem")
+		caCert, err := ioutil.ReadFile(caCertPath)
 		if err != nil {
-			log.Fatalln("Error reading", "cacert.pem", err)
+			log.Fatalln("Error reading", caCertPath, err)
 		}
 		certPool := x509.NewCertPool()
 		if success := certPool.AppendCertsFromPEM(caCert); !success {
