@@ -20,6 +20,7 @@ import (
 	"math/big"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -52,9 +53,9 @@ func pemBlockForKey(priv interface{}) *pem.Block {
 }
 
 // GenerateCACert generates and saves a CA cert to cacert.pem and cacert.key
-func GenerateCACert() {
-	certPath := "cacert.pem"
-	certKeyPath := "cacert.key"
+func GenerateCACert(sslPath string) {
+	certPath := filepath.Join(sslPath, "cacert.pem")
+	certKeyPath := filepath.Join(sslPath, "cacert.key")
 
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -105,7 +106,10 @@ func GenerateCACert() {
 }
 
 // GenerateServerCert generates a server certificate against a given CA cert
-func GenerateServerCert(host, caCertPath, caCertKeyPath string) tls.Certificate {
+func GenerateServerCert(host, sslPath string) tls.Certificate {
+	caCertPath := filepath.Join(sslPath, "cacert.pem")
+	caCertKeyPath := filepath.Join(sslPath, "cacert.key")
+
 	ca, err := tls.LoadX509KeyPair(caCertPath, caCertKeyPath)
 	if err != nil {
 		log.Fatalln("Error parsing cacert.pem/key", err)
@@ -162,11 +166,14 @@ func GenerateServerCert(host, caCertPath, caCertKeyPath string) tls.Certificate 
 }
 
 // SaveServerCert generates and saves a server cert
-func SaveServerCert(host, caCertPath, caCertKeyPath string) {
-	certPath := "server.pem"
-	certKeyPath := "server.key"
+func SaveServerCert(host, sslPath string) {
+	//caCertPath := filepath.Join(sslPath, "cacert.pem")
+	//caCertKeyPath := filepath.Join(sslPath, "cacert.key")
 
-	cert := GenerateServerCert(host, caCertPath, caCertKeyPath)
+	certPath := filepath.Join(sslPath, "server.pem")
+	certKeyPath := filepath.Join(sslPath, "server.key")
+
+	cert := GenerateServerCert(host, sslPath)
 
 	certOut, err := os.Create(certPath)
 	if err != nil {
@@ -186,11 +193,11 @@ func SaveServerCert(host, caCertPath, caCertKeyPath string) {
 }
 
 // SaveClientCert generates and saves a client cert to disk
-func SaveClientCert(hostname, caCertPath, caCertKeyPath string) {
-	certPath := hostname + ".pem"
-	certKeyPath := hostname + ".key"
+func SaveClientCert(hostname, sslPath string) {
+	certPath := filepath.Join(sslPath, hostname+".pem")
+	certKeyPath := filepath.Join(sslPath, hostname+".key")
 
-	cert := GenerateClientCert(hostname, caCertPath, caCertKeyPath)
+	cert := GenerateClientCert(hostname, sslPath)
 
 	certOut, err := os.Create(certPath)
 	if err != nil {
@@ -210,7 +217,10 @@ func SaveClientCert(hostname, caCertPath, caCertKeyPath string) {
 }
 
 // GenerateClientCert generates a client cert against a given CA
-func GenerateClientCert(clientName, caCertPath, caCertKeyPath string) tls.Certificate {
+func GenerateClientCert(clientName, sslPath string) tls.Certificate {
+	caCertPath := filepath.Join(sslPath, "cacert.pem")
+	caCertKeyPath := filepath.Join(sslPath, "cacert.key")
+
 	ca, err := tls.LoadX509KeyPair(caCertPath, caCertKeyPath)
 	if err != nil {
 		log.Fatalln("Error loading cacert.pem/key", err)

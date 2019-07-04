@@ -5,16 +5,18 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"flag"
-	"google.golang.org/grpc/keepalive"
 	"io/ioutil"
 	"log"
 	"net"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"sync"
 	"syscall"
 	"time"
+
+	"google.golang.org/grpc/keepalive"
 
 	"git.jba.io/go/gorram/certs"
 	"git.jba.io/go/gorram/checks"
@@ -61,6 +63,7 @@ func loadConfig(confFile string) clientConfig {
 func main() {
 	// Set config via flags
 	confFile := flag.String("conf", "config.toml", "Path to the TOML config file.")
+	sslPath := flag.String("ssl-path", "/etc/gorram/", "Path to read/write SSL certs from.")
 	//clientName := flag.String("name", "unnamed", "Name of the client, as seen by the server. Should be unique.")
 	//serverAddress := flag.String("server-address", "127.0.0.1:50000", "Address and port of the server.")
 	insecure := flag.Bool("insecure", false, "Connect to server without TLS.")
@@ -116,23 +119,25 @@ func main() {
 	} else {
 		// If a certificate at $ClientName.pem exists, load it, otherwise generate one dynamically
 		var tlsCert tls.Certificate
-		certPath := tomlCfg.ClientName + ".pem"
+		caCertPath := filepath.Join(*sslPath, "cacert.pem")
+		certPath := filepath.Join(*sslPath, tomlCfg.ClientName+".pem")
+		certKeyPath := filepath.Join(*sslPath, tomlCfg.ClientName+".key")
 		if _, err := os.Stat(certPath); err == nil {
 			// Load static cert from $ClientName.pem:
 			log.Println(certPath, "exists. Loading cert.")
-			tlsCert, err = tls.LoadX509KeyPair(tomlCfg.ClientName+".pem", tomlCfg.ClientName+".key")
+			tlsCert, err = tls.LoadX509KeyPair(certPath, certKeyPath)
 			if err != nil {
-				log.Fatalln("Error reading", tomlCfg.ClientName+".pem", err)
+				log.Fatalln("Error reading", certPath, err)
 			}
 		} else {
 			// Check that CA cert required to dynamically generate client exists:
-			if _, err := os.Stat("cacert.pem"); err != nil {
+			if _, err := os.Stat(caCertPath); err != nil {
 				log.Fatalln("Error: CA certificate at cacert.pem does not exist. Copy cacert.pem and cacert.key from the server in order to dynamically generate a client certificate.")
 			}
 
 			// Generate certificates dynamically:
 			log.Println("Generating certificate dynamically...")
-			tlsCert = certs.GenerateClientCert(tomlCfg.ClientName, "cacert.pem", "cacert.key")
+			tlsCert = certs.GenerateClientCert(tomlCfg.ClientName, *sslPath)
 		}
 
 		var host string
@@ -142,9 +147,9 @@ func main() {
 			host = tomlCfg.ServerAddress
 		}
 
-		caCertRaw, err := ioutil.ReadFile("cacert.pem")
+		caCertRaw, err := ioutil.ReadFile(caCertPath)
 		if err != nil {
-			log.Fatalln("Error reading", "cacert.pem", err)
+			log.Fatalln("Error reading", caCertPath, err)
 		}
 		certPool := x509.NewCertPool()
 		if success := certPool.AppendCertsFromPEM(caCertRaw); !success {

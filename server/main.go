@@ -7,7 +7,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"google.golang.org/grpc/keepalive"
 	"io"
 	"io/ioutil"
 	"log"
@@ -15,11 +14,14 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
+
+	"google.golang.org/grpc/keepalive"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/gregdel/pushover"
@@ -30,7 +32,7 @@ import (
 	_ "github.com/tevjef/go-runtime-metrics/expvar"
 
 	"git.jba.io/go/gorram/certs"
-	"git.jba.io/go/gorram/proto"
+	gorram "git.jba.io/go/gorram/proto"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -621,6 +623,7 @@ func main() {
 	confFile := flag.String("conf", "config.toml", "Path to the TOML config file.")
 	insecure := flag.Bool("insecure", false, "Disable TLS. Allow insecure client connections.")
 	generateCAcert := flag.Bool("generate-ca", false, "Generate CA certificates, at cacert.pem and cacert.key.")
+	sslPath := flag.String("ssl-path", "/etc/gorram/", "Path to read/write SSL certs from.")
 	//serverAddress := flag.String("listen-address", "127.0.0.1:50000", "Address and port to listen on.")
 	//serverCert := flag.String("cert", "cert.pem", "Path to the server certificate.")
 	//serverCertKey := flag.String("key", "cert.key", "Path to the server certificate key.")
@@ -656,7 +659,7 @@ func main() {
 
 	if *generateCAcert {
 		log.Println("Generating cacert.pem and cacert.key...")
-		certs.GenerateCACert()
+		certs.GenerateCACert(*sslPath)
 	}
 
 	gs := gorramServer{
@@ -689,19 +692,22 @@ func main() {
 
 		// If a certificate at server.pem exists, load it, otherwise generate one dynamically
 		var tlsCert tls.Certificate
-		if _, err := os.Stat("server.pem"); err == nil {
+		caCertPath := filepath.Join(*sslPath, "cacert.pem")
+		serverCertPath := filepath.Join(*sslPath, "server.pem")
+		serverKeyPath := filepath.Join(*sslPath, "server.key")
+		if _, err := os.Stat(serverCertPath); err == nil {
 
 			// Load static cert at server.pem:
 			log.Println("server.pem exists. Loading cert.")
-			tlsCert, err = tls.LoadX509KeyPair("server.pem", "server.key")
+			tlsCert, err = tls.LoadX509KeyPair(serverCertPath, serverKeyPath)
 			if err != nil {
-				log.Fatalln("Error reading", "server.pem", err)
+				log.Fatalln("Error reading", serverCertPath, err)
 			}
 		} else {
 			// Check that CA cert required to sign/generate server and client exists, generating if needed:
-			if _, err := os.Stat("cacert.pem"); err != nil {
+			if _, err := os.Stat(caCertPath); err != nil {
 				log.Println("CA certificate at cacert.pem does not exist, generating it...")
-				certs.GenerateCACert()
+				certs.GenerateCACert(*sslPath)
 			}
 
 			// Generate certificates dynamically:
@@ -712,7 +718,7 @@ func main() {
 				log.Println("Error parsing ListenAddress from config; Watch out for TLS issues.", err)
 				tlsHost = gs.cfg.ListenAddress
 			}
-			tlsCert = certs.GenerateServerCert(tlsHost, "cacert.pem", "cacert.key")
+			tlsCert = certs.GenerateServerCert(tlsHost, *sslPath)
 		}
 
 		caCert, err := ioutil.ReadFile("cacert.pem")
