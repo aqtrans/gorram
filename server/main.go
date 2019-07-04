@@ -48,6 +48,7 @@ type serverConfig struct {
 	PushoverUserKey string
 	PushoverDevice  string
 	ListenAddress   string
+	TLSHostname     string
 }
 
 type statHandler struct {
@@ -711,14 +712,16 @@ func main() {
 			}
 
 			// Generate certificates dynamically:
-			log.Println("Generating certificate dynamically...")
-			var tlsHost string
-			tlsHost, _, err := net.SplitHostPort(gs.cfg.ListenAddress)
-			if err != nil {
-				log.Println("Error parsing ListenAddress from config; Watch out for TLS issues.", err)
-				tlsHost = gs.cfg.ListenAddress
-			}
-			tlsCert = certs.GenerateServerCert(tlsHost, *sslPath)
+			log.Println("Generating certificate dynamically for", gs.cfg.TLSHostname)
+			/*
+				var tlsHost string
+				tlsHost, _, err := net.SplitHostPort(gs.cfg.ListenAddress)
+				if err != nil {
+					log.Println("Error parsing ListenAddress from config; Watch out for TLS issues.", err)
+					tlsHost = gs.cfg.ListenAddress
+				}
+			*/
+			tlsCert = certs.GenerateServerCert(gs.cfg.TLSHostname, *sslPath)
 		}
 
 		caCert, err := ioutil.ReadFile(caCertPath)
