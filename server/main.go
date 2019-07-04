@@ -7,6 +7,8 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/hashicorp/hcl"
+	"github.com/hashicorp/hcl/hcl/ast"
 	"google.golang.org/grpc/keepalive"
 	"io"
 	"io/ioutil"
@@ -16,14 +18,12 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/gregdel/pushover"
-	"github.com/pelletier/go-toml"
 
 	//"github.com/spf13/pflag"
 	//"github.com/spf13/viper"
@@ -46,6 +46,7 @@ type serverConfig struct {
 	PushoverUserKey string
 	PushoverDevice  string
 	ListenAddress   string
+	//Clients         []gorram.Config
 }
 
 type statHandler struct {
@@ -405,67 +406,73 @@ func (s *gorramServer) alert(client string, issue gorram.Issue) {
 }
 
 func (s *gorramServer) loadConfig(confFile string) {
-	// Load config.toml here
-	cfgTree, err := toml.LoadFile(confFile)
+	cfgBytes, err := ioutil.ReadFile(confFile)
 	if err != nil {
-		log.Fatalln("Error reading config.toml", err)
+		log.Fatalln("Error reading", confFile, err)
 	}
-	for _, clientName := range cfgTree.Keys() {
-		// Allow configuring server-specific variables inside a ServerConfig table
-		if clientName == "ServerConfig" {
-			serverCfgTree := cfgTree.Get(clientName).(*toml.Tree)
-			serverCfgTree.Unmarshal(&s.cfg)
-			//log.Println(s.cfg)
-			/*
-				if serverCfgTree.Has("secretKey") {
-					s.cfg.secretKey = serverCfgTree.Get("secretKey").(string)
-				}
-				if serverCfgTree.Has("pushoverAppKey") {
-					s.cfg.pushoverAppKey = serverCfgTree.Get("pushoverAppKey").(string)
-				}
-				if serverCfgTree.Has("pushoverUserKey") {
-					s.cfg.pushoverUserKey = serverCfgTree.Get("pushoverUserKey").(string)
-				}
-				if serverCfgTree.Has("pushoverDevice") {
-					s.cfg.pushoverDevice = serverCfgTree.Get("pushoverDevice").(string)
-				}
-				if serverCfgTree.Has("alertMethod") {
-					s.cfg.alertMethod = serverCfgTree.Get("alertMethod").(string)
-				}
-			*/
-			continue
-		}
-		log.Println("Loaded config for", clientName, "from config.toml...")
-		clientCfgTree := cfgTree.Get(clientName).(*toml.Tree)
-		clientCfg := gorram.Config{}
-		err := clientCfgTree.Unmarshal(&clientCfg)
-		if err != nil {
-			log.Fatalln("Error unmarshaling config.toml for client "+clientName+":", err)
-		}
-		if clientCfg.Interval == 0 {
-			log.Println(clientName, "has no interval configured. Setting to 60 seconds.")
-			clientCfg.Interval = 60
-		}
-		clientCfg.LastUpdated = time.Now().Unix()
-
-		checkKeys := clientCfgTree.Keys()
-		var enabledChecks []string
-		for _, v := range checkKeys {
-			//log.Println(v)
-			if v == "Required" {
-
-			} else if v == "Interval" {
-
-			} else {
-				enabledChecks = append(enabledChecks, v)
-			}
-		}
-
-		// Store the enabled checks
-		s.clientCfgs.Store(clientName+".checks", strings.Join(enabledChecks, ","))
-
+	cfgAst, err := hcl.ParseBytes(cfgBytes)
+	if err != nil {
+		log.Fatalln("Error parsing", confFile, err)
+	}
+	list, ok := cfgAst.Node.(*ast.ObjectList)
+	if !ok {
+		log.Fatalln("CfgAst Node is not an ObjectList")
+	}
+	clients := list.Filter("Clients")
+	for _, v := range clients.Items {
+		clientName := v.Keys[0].Token.Value().(string)
+		log.Println("Client:", clientName)
+		var clientCfg gorram.Config
+		hcl.DecodeObject(&clientCfg, v.Val)
 		s.clientCfgs.Store(clientName, &clientCfg)
 	}
+	os.Exit(0)
+	/*
+		// Load config.toml here
+		cfgTree, err := toml.LoadFile(confFile)
+		if err != nil {
+			log.Fatalln("Error reading config.toml", err)
+		}
+		for _, clientName := range cfgTree.Keys() {
+			// Allow configuring server-specific variables inside a ServerConfig table
+			if clientName == "ServerConfig" {
+				serverCfgTree := cfgTree.Get(clientName).(*toml.Tree)
+				serverCfgTree.Unmarshal(&s.cfg)
+				//log.Println(s.cfg)
+				continue
+			}
+			log.Println("Loaded config for", clientName, "from config.toml...")
+			clientCfgTree := cfgTree.Get(clientName).(*toml.Tree)
+			clientCfg := gorram.Config{}
+			err := clientCfgTree.Unmarshal(&clientCfg)
+			if err != nil {
+				log.Fatalln("Error unmarshaling config.toml for client "+clientName+":", err)
+			}
+			if clientCfg.Interval == 0 {
+				log.Println(clientName, "has no interval configured. Setting to 60 seconds.")
+				clientCfg.Interval = 60
+			}
+			clientCfg.LastUpdated = time.Now().Unix()
+
+			checkKeys := clientCfgTree.Keys()
+			var enabledChecks []string
+			for _, v := range checkKeys {
+				//log.Println(v)
+				if v == "Required" {
+
+				} else if v == "Interval" {
+
+				} else {
+					enabledChecks = append(enabledChecks, v)
+				}
+			}
+
+			// Store the enabled checks
+			s.clientCfgs.Store(clientName+".checks", strings.Join(enabledChecks, ","))
+
+			s.clientCfgs.Store(clientName, &clientCfg)
+		}
+	*/
 }
 
 func (s *gorramServer) List(ctx context.Context, qr *gorram.QueryRequest) (*gorram.ClientList, error) {
@@ -618,7 +625,7 @@ func (s *gorramServer) checkRequiredClients(k, v interface{}) bool {
 func main() {
 
 	// Set config via flags
-	confFile := flag.String("conf", "config.toml", "Path to the TOML config file.")
+	confFile := flag.String("conf", "config.hcl", "Path to the TOML config file.")
 	insecure := flag.Bool("insecure", false, "Disable TLS. Allow insecure client connections.")
 	generateCAcert := flag.Bool("generate-ca", false, "Generate CA certificates, at cacert.pem and cacert.key.")
 	//serverAddress := flag.String("listen-address", "127.0.0.1:50000", "Address and port to listen on.")
