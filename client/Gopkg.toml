@@ -24,15 +24,15 @@
 #   go-tests = true
 #   unused-packages = true
 
-ignored = ["git.jba.io/go/gorram"]
+ignored = ["git.jba.io/go/gorram/proto", "git.jba.io/go/gorram/certs", "git.jba.io/go/gorram/checks", "google.golang.org/grpc*"]
 
 [[constraint]]
   name = "github.com/pelletier/go-toml"
   version = "1.2.0"
 
-[[constraint]]
-  name = "google.golang.org/grpc"
-  version = "1.19.1"
+#[[constraint]]
+#  name = "google.golang.org/grpc"
+#  version = "1.19.1"
 
 [prune]
   go-tests = true
