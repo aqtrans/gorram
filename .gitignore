@@ -1,4 +1,5 @@
 checks/vendor/*
 server/vendor/*
+client/vendor/*
 *.pem
 *.key
