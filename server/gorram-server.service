@@ -6,7 +6,7 @@ Requires=network-online.target
 [Service]
 ProtectSystem=strict
 ReadWritePaths=/etc/gorram
-ExecStart=/usr/bin/gorram-server -cert "/etc/gorram/cert.pem" -key "/etc/gorram/cert.key" -conf "/etc/gorram/config.toml"
+ExecStart=/usr/bin/gorram-server -conf "/etc/gorram/config.toml"
 Restart=on-failure
 User=gorram
 

@@ -4,7 +4,7 @@ Description=Gorram client daemon
 [Service]
 ProtectSystem=strict
 ReadWritePaths=/etc/gorram
-ExecStart=/usr/bin/gorram-client -cert "/etc/gorram/cert.pem" -conf "/etc/gorram/client.toml"
+ExecStart=/usr/bin/gorram-client -conf "/etc/gorram/client.toml"
 Restart=on-failure
 User=gorram
 
