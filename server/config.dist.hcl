@@ -2,7 +2,7 @@ SecretKey = "aSharedSecret"
 AlertMethod = "log"
 ListenAddress = "127.0.0.1:50000"
     
-Clients "client1" {
+Client "client1" {
     Required = true
     Interval = 5
 
@@ -57,7 +57,7 @@ Clients "client1" {
 }
 
 
-#Clients "client2" {
+#Client "client2" {
 #    Interval = 15
 #    DiskSpace = [
 #        {

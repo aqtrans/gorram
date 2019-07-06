@@ -427,7 +427,7 @@ func (s *gorramServer) loadConfig(confFile string) {
 		if !ok {
 			log.Fatalln("CfgAst Node is not an ObjectList")
 		}
-		clients := list.Filter("Clients")
+		clients := list.Filter("Client")
 		for _, v := range clients.Items {
 			clientName := v.Keys[0].Token.Value().(string)
 
