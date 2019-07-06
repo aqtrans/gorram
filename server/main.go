@@ -7,9 +7,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/hashicorp/hcl"
-	"github.com/hashicorp/hcl/hcl/ast"
-	"google.golang.org/grpc/keepalive"
 	"io"
 	"io/ioutil"
 	"log"
@@ -17,13 +14,18 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/gregdel/pushover"
+	"github.com/hashicorp/hcl"
+	"github.com/hashicorp/hcl/hcl/ast"
+	"github.com/pelletier/go-toml"
 
 	//"github.com/spf13/pflag"
 	//"github.com/spf13/viper"
@@ -34,6 +36,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/stats"
@@ -406,32 +409,65 @@ func (s *gorramServer) alert(client string, issue gorram.Issue) {
 }
 
 func (s *gorramServer) loadConfig(confFile string) {
-	cfgBytes, err := ioutil.ReadFile(confFile)
-	if err != nil {
-		log.Fatalln("Error reading", confFile, err)
-	}
-	cfgAst, err := hcl.ParseBytes(cfgBytes)
-	if err != nil {
-		log.Fatalln("Error parsing", confFile, err)
-	}
-	list, ok := cfgAst.Node.(*ast.ObjectList)
-	if !ok {
-		log.Fatalln("CfgAst Node is not an ObjectList")
-	}
-	clients := list.Filter("Clients")
-	for _, v := range clients.Items {
-		clientName := v.Keys[0].Token.Value().(string)
-		log.Println("Client:", clientName)
-		var clientCfg gorram.Config
-		hcl.DecodeObject(&clientCfg, v.Val)
-		s.clientCfgs.Store(clientName, &clientCfg)
-	}
-	os.Exit(0)
-	/*
-		// Load config.toml here
+	ext := filepath.Ext(confFile)
+	switch ext {
+	case ".hcl":
+		cfgBytes, err := ioutil.ReadFile(confFile)
+		if err != nil {
+			log.Fatalln("Error reading", confFile, err)
+		}
+		cfgAst, err := hcl.ParseBytes(cfgBytes)
+		if err != nil {
+			log.Fatalln("Error parsing", confFile, err)
+		}
+		// Decode server-level config
+		hcl.DecodeObject(&s.cfg, cfgAst.Node)
+
+		list, ok := cfgAst.Node.(*ast.ObjectList)
+		if !ok {
+			log.Fatalln("CfgAst Node is not an ObjectList")
+		}
+		clients := list.Filter("Clients")
+		for _, v := range clients.Items {
+			clientName := v.Keys[0].Token.Value().(string)
+
+			log.Println("Loaded config for", clientName, "from", confFile)
+
+			// Decode each client-level config
+			var clientCfg gorram.Config
+			hcl.DecodeObject(&clientCfg, v.Val)
+
+			clientCfgList, aok := v.Val.(*ast.ObjectType)
+			if !aok {
+				log.Fatalln("Error: clientCfgList is not an ObjectType.")
+			}
+			var enabledChecks []string
+			for _, vv := range clientCfgList.List.Items {
+				key := vv.Keys[0].Token.Value().(string)
+				if key == "Required" {
+
+				} else if key == "Interval" {
+
+				} else {
+					enabledChecks = append(enabledChecks, key)
+				}
+			}
+
+			if clientCfg.Interval == 0 {
+				log.Println(clientName, "has no interval configured. Setting to 60 seconds.")
+				clientCfg.Interval = 60
+			}
+			clientCfg.LastUpdated = time.Now().Unix()
+
+			// Store the enabled checks
+			s.clientCfgs.Store(clientName+".checks", strings.Join(enabledChecks, ","))
+			s.clientCfgs.Store(clientName, &clientCfg)
+		}
+	case ".toml":
+		// Load TOML here
 		cfgTree, err := toml.LoadFile(confFile)
 		if err != nil {
-			log.Fatalln("Error reading config.toml", err)
+			log.Fatalln("Error reading", confFile, err)
 		}
 		for _, clientName := range cfgTree.Keys() {
 			// Allow configuring server-specific variables inside a ServerConfig table
@@ -441,18 +477,13 @@ func (s *gorramServer) loadConfig(confFile string) {
 				//log.Println(s.cfg)
 				continue
 			}
-			log.Println("Loaded config for", clientName, "from config.toml...")
+			log.Println("Loaded config for", clientName, "from", confFile)
 			clientCfgTree := cfgTree.Get(clientName).(*toml.Tree)
 			clientCfg := gorram.Config{}
 			err := clientCfgTree.Unmarshal(&clientCfg)
 			if err != nil {
-				log.Fatalln("Error unmarshaling config.toml for client "+clientName+":", err)
+				log.Fatalln("Error unmarshaling "+confFile+" for client "+clientName+":", err)
 			}
-			if clientCfg.Interval == 0 {
-				log.Println(clientName, "has no interval configured. Setting to 60 seconds.")
-				clientCfg.Interval = 60
-			}
-			clientCfg.LastUpdated = time.Now().Unix()
 
 			checkKeys := clientCfgTree.Keys()
 			var enabledChecks []string
@@ -467,12 +498,19 @@ func (s *gorramServer) loadConfig(confFile string) {
 				}
 			}
 
+			if clientCfg.Interval == 0 {
+				log.Println(clientName, "has no interval configured. Setting to 60 seconds.")
+				clientCfg.Interval = 60
+			}
+			clientCfg.LastUpdated = time.Now().Unix()
+
 			// Store the enabled checks
 			s.clientCfgs.Store(clientName+".checks", strings.Join(enabledChecks, ","))
-
 			s.clientCfgs.Store(clientName, &clientCfg)
 		}
-	*/
+	default:
+		log.Fatalln("Only able to load TOML and HCL files currently. Unable to load", confFile)
+	}
 }
 
 func (s *gorramServer) List(ctx context.Context, qr *gorram.QueryRequest) (*gorram.ClientList, error) {
