@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
+	//"log"
 	"net"
 	"net/http"
 	"os"
@@ -26,9 +26,8 @@ import (
 	"github.com/hashicorp/hcl"
 	"github.com/hashicorp/hcl/hcl/ast"
 	"github.com/pelletier/go-toml"
+	log "github.com/sirupsen/logrus"
 
-	//"github.com/spf13/pflag"
-	//"github.com/spf13/viper"
 	_ "github.com/tevjef/go-runtime-metrics/expvar"
 
 	"git.jba.io/go/gorram/certs"
@@ -83,16 +82,16 @@ func (s *statHandler) HandleRPC(ctx context.Context, rpcStats stats.RPCStats) {
 }
 
 func (s *statHandler) TagConn(ctx context.Context, tagInfo *stats.ConnTagInfo) context.Context {
-	log.Println("Inbound connection from", tagInfo.RemoteAddr)
+	log.Infoln("Inbound connection from", tagInfo.RemoteAddr)
 	return ctx
 }
 
 func (s *statHandler) HandleConn(ctx context.Context, connStats stats.ConnStats) {
 	switch connStats.(type) {
 	case *stats.ConnBegin:
-		log.Println("Connection has begun")
+		log.Infoln("Connection has begun")
 	case *stats.ConnEnd:
-		log.Println("Connection has ended")
+		log.Infoln("Connection has ended")
 	}
 
 }
@@ -126,7 +125,6 @@ func getClientName(ctx context.Context) string {
 		tlsAuth, tok := p.AuthInfo.(credentials.TLSInfo)
 		if tok {
 			if len(tlsAuth.State.PeerCertificates) != 0 {
-				//log.Println("Client from cert:", tlsAuth.State.PeerCertificates[0].Subject.CommonName)
 				return tlsAuth.State.PeerCertificates[0].Subject.CommonName
 			}
 		}
@@ -156,7 +154,9 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.PingMsg) (*gorram.P
 	// Compare the config last updated time and the last updated received in the ping message
 	var cfgOutOfDate gorram.PingResponse
 	if msg.CfgLastUpdated != s.loadClientConfig(client).LastUpdated {
-		log.Println("Config mismatch. Setting cfgOutOfDate to true.")
+		log.WithFields(log.Fields{
+			"client": client,
+		}).Infoln("Client config mismatch. Setting cfgOutOfDate to true.")
 		cfgOutOfDate.CfgOutOfSync = true
 	}
 
@@ -168,18 +168,17 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.PingMsg) (*gorram.P
 	clientTimer, ok := s.clientTimers.timers.Load(client)
 
 	if ok {
-		//log.Println("[TIMER]", client, "timer found, resetting.")
 		ct := clientTimer.(*time.Timer)
 		// Reset the client's timer
 		if !ct.Stop() {
-			log.Println("ct.Stop() hit. Draining channel.")
+			log.WithFields(log.Fields{
+				"client": client,
+			}).Debugln("ct.Stop() hit. Draining channel.")
 			<-ct.C
 		}
 		ct.Reset(pingTime)
 
 	} else {
-		//log.Println("[TIMER]", client, "creating new timer for", pingTime, "seconds")
-
 		// Check if the client was dead, and reset it's ticker
 		s.reviveDeadClient(client)
 
@@ -195,17 +194,14 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.PingMsg) (*gorram.P
 		go s.deadClientTicker(client)
 	}
 
-	//log.Println("[TIMER] Number of goroutines:", runtime.NumGoroutine())
-
 	return &cfgOutOfDate, nil
 }
 
 // reviveDeadClient checks and resets the ticket a dead client sets off
 func (s *gorramServer) reviveDeadClient(clientName string) {
 	if clientTicker, ok := s.clientTimers.tickers.Load(clientName); ok {
-		//log.Println("[TIMER]", client, "is alive again. Stopping it's deadClientTicker.")
 		s.alert(clientName, gorram.Issue{
-			Title:   "Dead Client Alive",
+			Title:   "Client Revived",
 			Message: fmt.Sprintf("%v is alive again!", clientName),
 		})
 		clientTicker.(*time.Ticker).Stop()
@@ -219,16 +215,14 @@ func (s *gorramServer) deadClientTicker(clientName string) {
 
 	// This should block until the given clients timer has not been reset, considering the client dead
 	<-timer.C
-	log.Println(clientName, "timer has expired.")
+	log.WithFields(log.Fields{
+		"client": clientName,
+	}).Debugln("timer has expired.")
 	timer.Stop()
-
-	//log.Println("[TIMER]", clientName, "is dead. Deleting it's timer.")
 
 	s.clientTimers.timers.Delete(clientName)
 
 	for t := range ticker.C {
-		//log.Println("[TIMER]", t, clientName, "is dead")
-
 		s.alert(clientName, gorram.Issue{
 			Title:   "Dead Client",
 			Message: fmt.Sprintf("%v is dead, since %v", clientName, t),
@@ -240,7 +234,7 @@ func (s *gorramServer) deadClientTicker(clientName string) {
 func (c *clientTimers) getTimer(clientName string) *time.Timer {
 	timer, ok := c.timers.Load(clientName)
 	if !ok {
-		log.Fatalln("getTimer Error: no timer for", clientName)
+		log.Fatalln("[TIMER] getTimer Error: no timer for", clientName)
 	}
 	return timer.(*time.Timer)
 }
@@ -248,20 +242,16 @@ func (c *clientTimers) getTimer(clientName string) *time.Timer {
 func (c *clientTimers) getTicker(clientName string) *time.Ticker {
 	ticker, ok := c.tickers.Load(clientName)
 	if !ok {
-		log.Fatalln("[TIMER] Error: no ticker for", clientName)
+		log.Fatalln("[TIMER] getTimer Error: no ticker for", clientName)
 	}
 	return ticker.(*time.Ticker)
 }
 
 func (s *gorramServer) RecordIssue(stream gorram.Reporter_RecordIssueServer) error {
 
-	//startTime := time.Now()
-
 	for {
 		issue, err := stream.Recv()
 		if err == io.EOF {
-
-			//log.Println("Time since issues started being submitted:", time.Since(startTime).String())
 
 			return stream.SendAndClose(&gorram.Submitted{
 				SuccessfullySubmitted: true,
@@ -272,8 +262,6 @@ func (s *gorramServer) RecordIssue(stream gorram.Reporter_RecordIssueServer) err
 		}
 		// Record issue
 		s.alert(getClientName(stream.Context()), *issue)
-
-		//log.Println("Time since issue was submitted:", time.Since(time.Unix(issue.TimeSubmitted, 0)).String())
 
 	}
 }
@@ -306,7 +294,9 @@ func (s *gorramServer) ConfigSync(ctx context.Context, req *gorram.ConfigRequest
 
 	clientName := getClientName(ctx)
 
-	log.Println(clientName, "has synced config.")
+	log.WithFields(log.Fields{
+		"client": clientName,
+	}).Debugln("Client has synced config.")
 
 	// Check if the client was dead, and reset it's ticker
 	//s.reviveDeadClient(clientName)
@@ -324,6 +314,7 @@ func (s *gorramServer) ConfigSync(ctx context.Context, req *gorram.ConfigRequest
 
 func (cfg serverConfig) authorize(ctx context.Context) error {
 	var clientName string
+	var givenSecret string
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
 		if len(md["secret"]) > 0 && md["secret"][0] == cfg.SecretKey {
 			return nil
@@ -332,9 +323,15 @@ func (cfg serverConfig) authorize(ctx context.Context) error {
 		if len(md["client"]) > 0 {
 			clientName = md["client"][0]
 		}
+		if len(md["secret"]) > 0 {
+			givenSecret = md["secret"][0]
+		}
 	}
 	err := errors.New("Access Denied")
-	log.Println(err, "To Client: "+clientName)
+	log.WithFields(log.Fields{
+		"client": clientName,
+		"secret": givenSecret,
+	}).Infoln("Access denied due to invalid secret.")
 	return err
 }
 
@@ -359,23 +356,44 @@ func (s *gorramServer) alert(client string, issue gorram.Issue) {
 	issue.Host = client
 
 	if s.alertsMap.exists(issue) {
-		//log.Println(issue.String())
-		log.Println("Issue exists. Increasing occurrence count.")
 		occurrences := s.alertsMap.count(issue)
+
+		log.WithFields(log.Fields{
+			"client":      client,
+			"issue":       issue.String(),
+			"occurrences": occurrences,
+		}).Debugln("Issue exists. Increasing occurrence count.")
+
 		if occurrences < 5 {
-			log.Println("Less than 5 occurrences. Continuing alerts.")
+			log.WithFields(log.Fields{
+				"client":      client,
+				"issue":       issue.String(),
+				"occurrences": occurrences,
+			}).Debugln("Less than 5 occurrences. Continuing alerts.")
 		} else if (occurrences % 10) == 0 {
-			log.Println("Sending alert", occurrences)
+			log.WithFields(log.Fields{
+				"client":      client,
+				"issue":       issue.String(),
+				"occurrences": occurrences,
+			}).Debugln("Sending alert as it meets occurrences count.")
 			s.alertsMap.Lock()
 			issue.Message = issue.Message + " | Occurrences: " + strconv.FormatInt(occurrences, 10) + "| First occurred:" + time.Unix(s.alertsMap.m[issue.String()].TimeSubmitted, 0).String()
 			s.alertsMap.Unlock()
 		} else {
-			log.Println("Skipping alert...", occurrences)
+			log.WithFields(log.Fields{
+				"client":      client,
+				"issue":       issue.String(),
+				"occurrences": occurrences,
+			}).Debugln("Skipping alert...")
 			return
 		}
 
 	} else {
-		log.Println("Issue does not exist. Adding to map.")
+		log.WithFields(log.Fields{
+			"client": client,
+			"issue":  issue.String(),
+		}).Debugln("Issue does not exist. Adding to map.")
+
 		a := gorram.Alert{
 			Issue:         &issue,
 			TimeSubmitted: time.Now().Unix(),
@@ -386,9 +404,16 @@ func (s *gorramServer) alert(client string, issue gorram.Issue) {
 
 	switch s.cfg.AlertMethod {
 	case "log":
-		log.Println("ALERT: "+client+" - "+issue.Title+":", issue.Message)
+		log.WithFields(log.Fields{
+			"client": client,
+			"issue":  issue.String(),
+		}).Warnln("[ALERT] "+client+" - "+issue.Title+":", issue.Message)
 	case "pushover":
-		log.Println("ALERT: "+client+" - "+issue.Title+":", issue.Message)
+		log.WithFields(log.Fields{
+			"client": client,
+			"issue":  issue.String(),
+		}).Debugln("[ALERT] "+client+" - "+issue.Title+":", issue.Message)
+
 		app := pushover.New(s.cfg.PushoverAppKey)
 		recipient := pushover.NewRecipient(s.cfg.PushoverUserKey)
 		message := pushover.NewMessageWithTitle(issue.Message, client+" - "+issue.Title)
@@ -398,11 +423,11 @@ func (s *gorramServer) alert(client string, issue gorram.Issue) {
 		}
 		response, err := app.SendMessage(message, recipient)
 		if err != nil {
-			log.Println("error sending alert to pushover:", err)
+			log.Errorln("Error sending alert to pushover:", err)
 			return
 		}
 		if response.Errors != nil {
-			log.Println("Pushover returned error(s):", response.Errors.Error())
+			log.Errorln("Pushover returned error(s):", response.Errors.Error())
 			return
 		}
 	}
@@ -431,7 +456,10 @@ func (s *gorramServer) loadConfig(confFile string) {
 		for _, v := range clients.Items {
 			clientName := v.Keys[0].Token.Value().(string)
 
-			log.Println("Loaded config for", clientName, "from", confFile)
+			log.WithFields(log.Fields{
+				"client": clientName,
+				"config": confFile,
+			}).Debugln("Loaded config for", clientName, "from", confFile)
 
 			// Decode each client-level config
 			var clientCfg gorram.Config
@@ -454,7 +482,10 @@ func (s *gorramServer) loadConfig(confFile string) {
 			}
 
 			if clientCfg.Interval == 0 {
-				log.Println(clientName, "has no interval configured. Setting to 60 seconds.")
+				log.WithFields(log.Fields{
+					"client": clientName,
+					"config": confFile,
+				}).Debugln("No interval configured. Setting to 60 seconds.")
 				clientCfg.Interval = 60
 			}
 			clientCfg.LastUpdated = time.Now().Unix()
@@ -474,10 +505,14 @@ func (s *gorramServer) loadConfig(confFile string) {
 			if clientName == "ServerConfig" {
 				serverCfgTree := cfgTree.Get(clientName).(*toml.Tree)
 				serverCfgTree.Unmarshal(&s.cfg)
-				//log.Println(s.cfg)
 				continue
 			}
-			log.Println("Loaded config for", clientName, "from", confFile)
+
+			log.WithFields(log.Fields{
+				"client": clientName,
+				"config": confFile,
+			}).Debugln("Loaded config for", clientName, "from", confFile)
+
 			clientCfgTree := cfgTree.Get(clientName).(*toml.Tree)
 			clientCfg := gorram.Config{}
 			err := clientCfgTree.Unmarshal(&clientCfg)
@@ -488,7 +523,6 @@ func (s *gorramServer) loadConfig(confFile string) {
 			checkKeys := clientCfgTree.Keys()
 			var enabledChecks []string
 			for _, v := range checkKeys {
-				//log.Println(v)
 				if v == "Required" {
 
 				} else if v == "Interval" {
@@ -499,7 +533,10 @@ func (s *gorramServer) loadConfig(confFile string) {
 			}
 
 			if clientCfg.Interval == 0 {
-				log.Println(clientName, "has no interval configured. Setting to 60 seconds.")
+				log.WithFields(log.Fields{
+					"client": clientName,
+					"config": confFile,
+				}).Debugln("No interval configured. Setting to 60 seconds.")
 				clientCfg.Interval = 60
 			}
 			clientCfg.LastUpdated = time.Now().Unix()
@@ -526,7 +563,9 @@ func (s *gorramServer) Delete(ctx context.Context, cn *gorram.ClientName) (*gorr
 		clientTicker.(*time.Ticker).Stop()
 		s.clientTimers.tickers.Delete(clientName)
 		delete(s.connectedClients.Clients, clientName)
-		log.Println(clientName, "has been deleted from client list.")
+		log.WithFields(log.Fields{
+			"client": clientName,
+		}).Infoln("Deleted from client list.")
 	}
 
 	return &s.connectedClients, nil
@@ -557,7 +596,9 @@ func (s *gorramServer) Hello(ctx context.Context, req *gorram.ConfigRequest) (*g
 	var clientAddress string
 	p, ok := peer.FromContext(ctx)
 	if !ok {
-		log.Println("ERR: no peer info in context for", clientName)
+		log.WithFields(log.Fields{
+			"client": clientName,
+		}).Debugln("ERR: no peer info in context")
 		clientAddress = "N/A"
 	} else {
 		clientAddress = p.Addr.String()
@@ -617,7 +658,11 @@ func (a *alerts) exists(client string, alert gorram.Alert, interval int64) (rese
 func (a *alerts) add(alert gorram.Alert) {
 	a.Lock()
 	if len(a.m) > 20 {
-		log.Println("issues map is greater than 20", len(a.m))
+		log.WithFields(log.Fields{
+			"client":      alert.Issue.Host,
+			"alert":       alert.String(),
+			"occurrences": alert.Occurrences,
+		}).Debugln("issues map is greater than 20", len(a.m))
 	}
 	a.m[alert.Issue.String()] = &alert
 	a.Unlock()
@@ -638,6 +683,18 @@ func (a *alerts) exists(issue gorram.Issue) bool {
 	return alertExists
 }
 
+func (a *alerts) get(issue gorram.Issue) *gorram.Alert {
+	a.Lock()
+	theAlert, alertExists := a.m[issue.String()]
+	if alertExists {
+		a.Unlock()
+		return theAlert
+	} else {
+		a.Unlock()
+		return nil
+	}
+}
+
 func (s *gorramServer) checkRequiredClients(k, v interface{}) bool {
 	if clientName, isString := k.(string); isString {
 		if _, ok := s.connectedClients.Clients[clientName]; !ok {
@@ -645,7 +702,6 @@ func (s *gorramServer) checkRequiredClients(k, v interface{}) bool {
 			if isThere {
 				if actualClientCfg, isCfg := clientCfg.(*gorram.Config); isCfg {
 					if actualClientCfg.Required {
-						log.Println(k, "NOT CONNECTED! ALERT!")
 						s.alert(clientName, gorram.Issue{
 							Title:   "Client Offline",
 							Message: clientName + " has not connected",
@@ -674,34 +730,8 @@ func main() {
 	//alertMethodF := flag.String("alert", "log", "Alert method to use. Right now, log. To come: pushover.")
 	flag.Parse()
 
-	/*
-		pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
-		pflag.Parse()
-		viper.BindPFlags(pflag.CommandLine)
-
-		// Viper config.
-		viper.SetDefault("ServerAddress", "127.0.0.1:5000")
-		viper.SetDefault("Insecure", false)
-		viper.SetDefault("Cert", "cert.pem")
-		viper.SetDefault("Key", "cert.key")
-		viper.SetDefault("GenerateCerts", false)
-		viper.SetDefault("TLSHost", "127.0.0.1")
-		viper.SetDefault("SharedSecret", "test")
-		viper.SetDefault("AlertMethod", "log")
-		viper.SetEnvPrefix("gorram")
-		viper.AutomaticEnv()
-
-		viper.SetConfigName("gorram")
-		viper.AddConfigPath("/etc/gorram/")
-		err := viper.ReadInConfig() // Find and read the config file
-		if err != nil {             // Handle errors reading the config file
-			//panic(fmt.Errorf("Fatal error config file: %s \n", err))
-			log.Println("No configuration file loaded - using defaults")
-		}
-	*/
-
 	if *generateCAcert {
-		log.Println("Generating cacert.pem and cacert.key...")
+		log.Infoln("Generating cacert.pem and cacert.key...")
 		certs.GenerateCACert(*sslPath)
 	}
 
@@ -720,28 +750,16 @@ func main() {
 
 	// TLS stuff
 	var creds credentials.TransportCredentials
-	/*
-		if *generate {
-			// Only generate cert.pem if it do not exist
-			if _, err := os.Stat(*serverCert); err == nil {
-				log.Fatalln(*serverCert, "already exists. Not overwriting. Manually remove it and cert.key if you need to re-generate them.")
-			}
-			log.Println("Generating certs to", *serverCert, "and", *serverCertKey)
-			generateCerts(*generateHost, *serverCert, *serverCertKey)
-		}
-	*/
 
 	if !*insecure {
-
 		// If a certificate at server.pem exists, load it, otherwise generate one dynamically
 		var tlsCert tls.Certificate
 		caCertPath := filepath.Join(*sslPath, "cacert.pem")
 		serverCertPath := filepath.Join(*sslPath, "server.pem")
 		serverKeyPath := filepath.Join(*sslPath, "server.key")
 		if _, err := os.Stat(serverCertPath); err == nil {
-
 			// Load static cert at server.pem:
-			log.Println("server.pem exists. Loading cert.")
+			log.Debugln("server.pem exists. Loading cert.")
 			tlsCert, err = tls.LoadX509KeyPair(serverCertPath, serverKeyPath)
 			if err != nil {
 				log.Fatalln("Error reading", serverCertPath, err)
@@ -749,20 +767,11 @@ func main() {
 		} else {
 			// Check that CA cert required to sign/generate server and client exists, generating if needed:
 			if _, err := os.Stat(caCertPath); err != nil {
-				log.Println("CA certificate at cacert.pem does not exist, generating it...")
+				log.Debugln("CA certificate at cacert.pem does not exist, generating it...")
 				certs.GenerateCACert(*sslPath)
 			}
-
 			// Generate certificates dynamically:
-			log.Println("Generating certificate dynamically for", gs.cfg.TLSHostname)
-			/*
-				var tlsHost string
-				tlsHost, _, err := net.SplitHostPort(gs.cfg.ListenAddress)
-				if err != nil {
-					log.Println("Error parsing ListenAddress from config; Watch out for TLS issues.", err)
-					tlsHost = gs.cfg.ListenAddress
-				}
-			*/
+			log.Debugln("Generating certificate dynamically for", gs.cfg.TLSHostname)
 			tlsCert = certs.GenerateServerCert(gs.cfg.TLSHostname, *sslPath)
 		}
 
@@ -772,7 +781,7 @@ func main() {
 		}
 		certPool := x509.NewCertPool()
 		if success := certPool.AppendCertsFromPEM(caCert); !success {
-			log.Fatalln("cannot append certs from PEM")
+			log.Fatalln("Cannot append certs from PEM to certpool.")
 		}
 
 		creds = credentials.NewTLS(&tls.Config{
@@ -780,13 +789,7 @@ func main() {
 			Certificates: []tls.Certificate{tlsCert},
 			ClientCAs:    certPool,
 		})
-		/*
-			var err error
-			creds, err = credentials.NewServerTLSFromFile(*serverCert, *serverCertKey)
-			if err != nil {
-				log.Fatal("Error with certs:", err)
-			}
-		*/
+
 	}
 
 	// Catch Ctrl+C, sigint
@@ -797,9 +800,10 @@ func main() {
 	// Setup the TCP port to listen on
 	lis, err := net.Listen("tcp", gs.cfg.ListenAddress)
 	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+		log.Fatalf("Failed to serve: %v", err)
 	}
-	log.Println("Listening on", gs.cfg.ListenAddress)
+
+	log.Infoln("Listening on", gs.cfg.ListenAddress)
 
 	sh := statHandler{}
 
@@ -831,14 +835,14 @@ func main() {
 	// Start listening, in a goroutine so SIGINTs can be caught below
 	go func() {
 		if err := server.Serve(lis); err != nil {
-			log.Fatalf("failed to serve: %v", err)
+			log.Fatalf("Failed to serve: %v", err)
 		}
 	}()
 
 	// Watch for config.toml changes
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalln("Error watching config file for changes:", err)
 	}
 
 	go func() {
@@ -850,7 +854,7 @@ func main() {
 				}
 			case err := <-watcher.Errors:
 				if err != nil {
-					log.Println("Error watching config.toml:", err)
+					log.Errorln("Error watching config.toml:", err)
 				}
 			}
 		}
@@ -858,7 +862,7 @@ func main() {
 
 	err = watcher.Add(*confFile)
 	if err != nil {
-		log.Fatal("Error watching config.toml:", err)
+		log.Fatalln("Error watching config.toml:", err)
 	}
 
 	// Now start checking if clients flagged as 'required' have connected:
@@ -881,13 +885,13 @@ func main() {
 	// Listen for Ctrl+C
 	go func() {
 		sig := <-sigs
-		log.Println(sig)
+		log.Debugln(sig, "signal caught")
 		done <- true
 	}()
 
 	// When Ctrl+C is caught, do this
 	<-done
-	log.Println("Server exiting...")
+	log.Infoln("Server exiting...")
 	ticker.Stop()
 	watcher.Close()
 	server.GracefulStop()
