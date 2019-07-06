@@ -21,10 +21,10 @@ import (
 	"syscall"
 	"time"
 
-	"google.golang.org/grpc/keepalive"
-
 	"github.com/fsnotify/fsnotify"
 	"github.com/gregdel/pushover"
+	"github.com/hashicorp/hcl"
+	"github.com/hashicorp/hcl/hcl/ast"
 	"github.com/pelletier/go-toml"
 
 	//"github.com/spf13/pflag"
@@ -36,6 +36,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/stats"
@@ -408,66 +409,107 @@ func (s *gorramServer) alert(client string, issue gorram.Issue) {
 }
 
 func (s *gorramServer) loadConfig(confFile string) {
-	// Load config.toml here
-	cfgTree, err := toml.LoadFile(confFile)
-	if err != nil {
-		log.Fatalln("Error reading config.toml", err)
-	}
-	for _, clientName := range cfgTree.Keys() {
-		// Allow configuring server-specific variables inside a ServerConfig table
-		if clientName == "ServerConfig" {
-			serverCfgTree := cfgTree.Get(clientName).(*toml.Tree)
-			serverCfgTree.Unmarshal(&s.cfg)
-			//log.Println(s.cfg)
-			/*
-				if serverCfgTree.Has("secretKey") {
-					s.cfg.secretKey = serverCfgTree.Get("secretKey").(string)
-				}
-				if serverCfgTree.Has("pushoverAppKey") {
-					s.cfg.pushoverAppKey = serverCfgTree.Get("pushoverAppKey").(string)
-				}
-				if serverCfgTree.Has("pushoverUserKey") {
-					s.cfg.pushoverUserKey = serverCfgTree.Get("pushoverUserKey").(string)
-				}
-				if serverCfgTree.Has("pushoverDevice") {
-					s.cfg.pushoverDevice = serverCfgTree.Get("pushoverDevice").(string)
-				}
-				if serverCfgTree.Has("alertMethod") {
-					s.cfg.alertMethod = serverCfgTree.Get("alertMethod").(string)
-				}
-			*/
-			continue
-		}
-		log.Println("Loaded config for", clientName, "from config.toml...")
-		clientCfgTree := cfgTree.Get(clientName).(*toml.Tree)
-		clientCfg := gorram.Config{}
-		err := clientCfgTree.Unmarshal(&clientCfg)
+	ext := filepath.Ext(confFile)
+	switch ext {
+	case ".hcl":
+		cfgBytes, err := ioutil.ReadFile(confFile)
 		if err != nil {
-			log.Fatalln("Error unmarshaling config.toml for client "+clientName+":", err)
+			log.Fatalln("Error reading", confFile, err)
 		}
-		if clientCfg.Interval == 0 {
-			log.Println(clientName, "has no interval configured. Setting to 60 seconds.")
-			clientCfg.Interval = 60
+		cfgAst, err := hcl.ParseBytes(cfgBytes)
+		if err != nil {
+			log.Fatalln("Error parsing", confFile, err)
 		}
-		clientCfg.LastUpdated = time.Now().Unix()
+		// Decode server-level config
+		hcl.DecodeObject(&s.cfg, cfgAst.Node)
 
-		checkKeys := clientCfgTree.Keys()
-		var enabledChecks []string
-		for _, v := range checkKeys {
-			//log.Println(v)
-			if v == "Required" {
+		list, ok := cfgAst.Node.(*ast.ObjectList)
+		if !ok {
+			log.Fatalln("CfgAst Node is not an ObjectList")
+		}
+		clients := list.Filter("Client")
+		for _, v := range clients.Items {
+			clientName := v.Keys[0].Token.Value().(string)
 
-			} else if v == "Interval" {
+			log.Println("Loaded config for", clientName, "from", confFile)
 
-			} else {
-				enabledChecks = append(enabledChecks, v)
+			// Decode each client-level config
+			var clientCfg gorram.Config
+			hcl.DecodeObject(&clientCfg, v.Val)
+
+			clientCfgList, aok := v.Val.(*ast.ObjectType)
+			if !aok {
+				log.Fatalln("Error: clientCfgList is not an ObjectType.")
 			}
+			var enabledChecks []string
+			for _, vv := range clientCfgList.List.Items {
+				key := vv.Keys[0].Token.Value().(string)
+				if key == "Required" {
+
+				} else if key == "Interval" {
+
+				} else {
+					enabledChecks = append(enabledChecks, key)
+				}
+			}
+
+			if clientCfg.Interval == 0 {
+				log.Println(clientName, "has no interval configured. Setting to 60 seconds.")
+				clientCfg.Interval = 60
+			}
+			clientCfg.LastUpdated = time.Now().Unix()
+
+			// Store the enabled checks
+			s.clientCfgs.Store(clientName+".checks", strings.Join(enabledChecks, ","))
+			s.clientCfgs.Store(clientName, &clientCfg)
 		}
+	case ".toml":
+		// Load TOML here
+		cfgTree, err := toml.LoadFile(confFile)
+		if err != nil {
+			log.Fatalln("Error reading", confFile, err)
+		}
+		for _, clientName := range cfgTree.Keys() {
+			// Allow configuring server-specific variables inside a ServerConfig table
+			if clientName == "ServerConfig" {
+				serverCfgTree := cfgTree.Get(clientName).(*toml.Tree)
+				serverCfgTree.Unmarshal(&s.cfg)
+				//log.Println(s.cfg)
+				continue
+			}
+			log.Println("Loaded config for", clientName, "from", confFile)
+			clientCfgTree := cfgTree.Get(clientName).(*toml.Tree)
+			clientCfg := gorram.Config{}
+			err := clientCfgTree.Unmarshal(&clientCfg)
+			if err != nil {
+				log.Fatalln("Error unmarshaling "+confFile+" for client "+clientName+":", err)
+			}
 
-		// Store the enabled checks
-		s.clientCfgs.Store(clientName+".checks", strings.Join(enabledChecks, ","))
+			checkKeys := clientCfgTree.Keys()
+			var enabledChecks []string
+			for _, v := range checkKeys {
+				//log.Println(v)
+				if v == "Required" {
 
-		s.clientCfgs.Store(clientName, &clientCfg)
+				} else if v == "Interval" {
+
+				} else {
+					enabledChecks = append(enabledChecks, v)
+				}
+			}
+
+			if clientCfg.Interval == 0 {
+				log.Println(clientName, "has no interval configured. Setting to 60 seconds.")
+				clientCfg.Interval = 60
+			}
+			clientCfg.LastUpdated = time.Now().Unix()
+
+			// Store the enabled checks
+			s.clientCfgs.Store(clientName+".checks", strings.Join(enabledChecks, ","))
+			s.clientCfgs.Store(clientName, &clientCfg)
+		}
+	default:
+		log.Fatalln("Only able to load TOML and HCL files currently. Unable to load", confFile)
 	}
 }
 
@@ -621,7 +663,7 @@ func (s *gorramServer) checkRequiredClients(k, v interface{}) bool {
 func main() {
 
 	// Set config via flags
-	confFile := flag.String("conf", "config.toml", "Path to the TOML config file.")
+	confFile := flag.String("conf", "config.hcl", "Path to the TOML config file.")
 	insecure := flag.Bool("insecure", false, "Disable TLS. Allow insecure client connections.")
 	generateCAcert := flag.Bool("generate-ca", false, "Generate CA certificates, at cacert.pem and cacert.key.")
 	sslPath := flag.String("ssl-path", "/etc/gorram/", "Path to read/write SSL certs from.")

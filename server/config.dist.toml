@@ -3,49 +3,49 @@
     AlertMethod = "log"
     ListenAddress = "127.0.0.1:50000"
     
-#[client1]
-    #Required = true
-    #Interval = 5
+[client1]
+    Required = true
+    Interval = 5
 
-    #[client1.Deluge]
-    #URL = "http://127.0.0.1:8112/json"
-    #Password = "omg"
-    #MaxTorrents = 5
+    [client1.Deluge]
+    URL = "http://127.0.0.1:8112/json"
+    Password = "omg"
+    MaxTorrents = 5
 
-    #[[client1.Diskspace]]
-    #Partition = "/"
-    #MaxUsage = 90.0
+    # Note double brackets on Diskspace, GetUrl, and Process checks
+    [[client1.Diskspace]]
+    Partition = "/"
+    MaxUsage = 90.0
 
-    #[[client1.Diskspace]]
-    #Partition = "/media/storage"
-    #MaxUsage = 100.0
+    [[client1.Diskspace]]
+    Partition = "/media/storage"
+    MaxUsage = 100.0
 
+    # Comments are allowed
     #[client1.Loadavg]
     #MaxLoad = 1.05
 
-    #[[client1.GetUrl]]
-    #Url = "http://google.com"
+    [[client1.GetUrl]]
+    Url = "http://google.com"
 
-    #[[client1.GetUrl]]
-    #Url = "https://some-url.com/health"
-    #ExpectedBody = "{\"alive\": true}"
+    [[client1.GetUrl]]
+    Url = "https://some-url.com/health"
+    ExpectedBody = "{\"alive\": true}"
 
-    #[[client1.Process]]
-    #Path = "/a/process/with/specific/user"
-    #User = "aqtrans"
+    [[client1.Process]]
+    Path = "/a/process/with/specific/user"
+    User = "aqtrans"
 
-    #[[client1.Process]]
-    #Path = "aProcess"
+    [[client1.Process]]
+    Path = "aProcess"
 
-    #[client1.Memory]
-    #MaxUsage = 10.0
+    [client1.Memory]
+    MaxUsage = 10.0
 
 #[client2]
     #Interval = 15
-
     #[[client2.DiskSpace]]
     #Partition = "/"
     #MaxUsage = 100.0
-
     #[client2.LoadAvg]
     #MaxLoad = 5.50
