@@ -33,3 +33,7 @@ ignored = ["git.jba.io/go/gorram/proto", "google.golang.org/grpc*"]
 #[[constraint]]
 #  name = "google.golang.org/grpc"
 #  version = "1.19.1"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/hashicorp/hcl"
