@@ -6,7 +6,6 @@ import (
 	"crypto/x509"
 	"flag"
 	"io/ioutil"
-	"log"
 	"net"
 	"os"
 	"os/signal"
@@ -21,6 +20,7 @@ import (
 	"git.jba.io/go/gorram/certs"
 	"git.jba.io/go/gorram/checks"
 	gorram "git.jba.io/go/gorram/proto"
+	log "github.com/Sirupsen/logrus"
 	toml "github.com/pelletier/go-toml"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -39,7 +39,6 @@ type secret struct {
 }
 
 func (s *secret) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
-	//log.Println(uri, ctx)
 	return map[string]string{
 		"secret": s.Secret,
 	}, nil
@@ -61,6 +60,7 @@ func loadConfig(confFile string) clientConfig {
 }
 
 func main() {
+
 	// Set config via flags
 	confFile := flag.String("conf", "config.toml", "Path to the TOML config file.")
 	sslPath := flag.String("ssl-path", "/etc/gorram/", "Path to read/write SSL certs from.")
@@ -70,7 +70,12 @@ func main() {
 	//serverCert := flag.String("cert", "cert.pem", "Path to the certificate from the server.")
 	//secretKey := flag.String("server-secret", "omg12345", "Secret key of the server.")
 	//interval := flag.Duration("interval", 60*time.Second, "Number of seconds to check for issues on.")
+	debug := flag.Bool("debug", false, "Toggle debug logging.")
 	flag.Parse()
+
+	if *debug {
+		log.SetLevel(log.DebugLevel)
+	}
 
 	// Set a global RPC timeout, to be used in context.WithTimeout()'s alongside each RPC call
 	rpcTimeout := 10 * time.Second
@@ -124,7 +129,7 @@ func main() {
 		certKeyPath := filepath.Join(*sslPath, tomlCfg.ClientName+".key")
 		if _, err := os.Stat(certPath); err == nil {
 			// Load static cert from $ClientName.pem:
-			log.Println(certPath, "exists. Loading cert.")
+			log.Debugln(certPath, "exists. Loading cert.")
 			tlsCert, err = tls.LoadX509KeyPair(certPath, certKeyPath)
 			if err != nil {
 				log.Fatalln("Error reading", certPath, err)
@@ -136,14 +141,14 @@ func main() {
 			}
 
 			// Generate certificates dynamically:
-			log.Println("Generating certificate dynamically...")
+			log.Debugln("Generating certificate dynamically...")
 			tlsCert = certs.GenerateClientCert(tomlCfg.ClientName, *sslPath)
 		}
 
 		var host string
 		host, _, err := net.SplitHostPort(tomlCfg.ServerAddress)
 		if err != nil {
-			log.Println("Error parsing ServerAddress from config; Watch out for TLS issues due to ServerName mismatch.", err)
+			log.Warnln("Error parsing ServerAddress from config; Watch out for TLS issues due to ServerName mismatch.", err)
 			host = tomlCfg.ServerAddress
 		}
 
@@ -195,9 +200,7 @@ func main() {
 	}
 	rpcCancel()
 
-	//cfg := *origCfg
-
-	log.Println("Interval:", origCfg.Interval)
+	log.Println("Client successfully connected to server.")
 
 	cfgMutex := &sync.Mutex{}
 
@@ -217,7 +220,6 @@ func main() {
 					defer rpcCancel()
 
 					cfgMutex.Lock()
-					//log.Println("ping")
 					pingResp, err := c.Ping(rpcCtx, &gorram.PingMsg{IsAlive: true, CfgLastUpdated: origCfg.LastUpdated})
 					if err != nil {
 						log.Fatalln("Error with c.Ping:", err)
@@ -225,7 +227,7 @@ func main() {
 					// This variable should be true if the config is out of sync
 					if pingResp.CfgOutOfSync {
 						// Fetch and set the new config
-						log.Println("Configuration out of sync. Fetching new config from server.")
+						log.Debugln("Configuration out of sync. Fetching new config from server.")
 						var err error
 						// Create RPC context, add client name metadata
 						rpcCtx, rpcCancel := context.WithTimeout(context.Background(), rpcTimeout)
@@ -239,9 +241,7 @@ func main() {
 							log.Fatalln("Error with c.ConfigSync:", err)
 						}
 						// Set cfg to newCfg
-						//cfg = *newCfg
 						origCfg = newCfg
-						//log.Println(origCfg.LastUpdated, newCfg.LastUpdated)
 					}
 					// Send config, either the new or old, through the channel
 					cfgChan <- origCfg
@@ -254,16 +254,7 @@ func main() {
 					rpcCtx = metadata.AppendToOutgoingContext(rpcCtx, "client", tomlCfg.ClientName)
 					defer rpcCancel()
 
-					//log.Println("checks")
 					cfg2 := <-cfgChan
-
-					//log.Println("Enabled checks:", cfg.EnabledChecks)
-
-					/*
-						for _, v := range checks.TheChecks {
-							log.Println(v.Title())
-						}
-					*/
 
 					// Do checks
 					i := checks.DoChecks(cfg2)
@@ -288,7 +279,7 @@ func main() {
 						}
 					}
 				}()
-				log.Println("Number of Goroutines:", runtime.NumGoroutine())
+				log.Debugln("Number of Goroutines:", runtime.NumGoroutine())
 			case <-quit:
 				ticker.Stop()
 				return
@@ -298,7 +289,7 @@ func main() {
 
 	go func() {
 		sig := <-sigs
-		log.Println(sig)
+		log.Warnln("Signal caught", sig)
 		done <- true
 	}()
 
@@ -307,7 +298,7 @@ func main() {
 	ticker.Stop()
 	err = conn.Close()
 	if err != nil {
-		log.Println("Error closing connection:", err)
+		log.Errorln("Error closing connection:", err)
 	}
 
 }
