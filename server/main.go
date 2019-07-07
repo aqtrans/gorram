@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+
 	//"log"
 	"net"
 	"net/http"
@@ -723,12 +724,17 @@ func main() {
 	insecure := flag.Bool("insecure", false, "Disable TLS. Allow insecure client connections.")
 	generateCAcert := flag.Bool("generate-ca", false, "Generate CA certificates, at cacert.pem and cacert.key.")
 	sslPath := flag.String("ssl-path", "/etc/gorram/", "Path to read/write SSL certs from.")
+	debug := flag.Bool("debug", false, "Toggle debug logging.")
 	//serverAddress := flag.String("listen-address", "127.0.0.1:50000", "Address and port to listen on.")
 	//serverCert := flag.String("cert", "cert.pem", "Path to the server certificate.")
 	//serverCertKey := flag.String("key", "cert.key", "Path to the server certificate key.")
 	//secret := flag.String("server-secret", "omg12345", "Secret key of the server.")
 	//alertMethodF := flag.String("alert", "log", "Alert method to use. Right now, log. To come: pushover.")
 	flag.Parse()
+
+	if *debug {
+		log.SetLevel(log.DebugLevel)
+	}
 
 	if *generateCAcert {
 		log.Infoln("Generating cacert.pem and cacert.key...")
