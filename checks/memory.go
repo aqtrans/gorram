@@ -12,7 +12,7 @@ type Memory struct {
 }
 
 func init() {
-	TheChecks = append(TheChecks, &Memory{})
+	theChecks = append(theChecks, &Memory{})
 }
 
 func (m *Memory) configure(cfg *pb.Config) {

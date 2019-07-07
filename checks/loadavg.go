@@ -12,7 +12,7 @@ type LoadAvg struct {
 }
 
 func init() {
-	TheChecks = append(TheChecks, &LoadAvg{})
+	theChecks = append(theChecks, &LoadAvg{})
 }
 
 func (l *LoadAvg) configure(cfg *pb.Config) {

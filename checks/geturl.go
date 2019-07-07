@@ -14,7 +14,7 @@ type GetURL struct {
 }
 
 func init() {
-	TheChecks = append(TheChecks, &GetURL{})
+	theChecks = append(theChecks, &GetURL{})
 }
 
 func (g GetURL) Title() string {

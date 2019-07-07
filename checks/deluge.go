@@ -25,7 +25,7 @@ type DelugeCheck struct {
 }
 
 func init() {
-	TheChecks = append(TheChecks, &DelugeCheck{})
+	theChecks = append(theChecks, &DelugeCheck{})
 }
 
 func (d *DelugeCheck) configure(cfg *pb.Config) {

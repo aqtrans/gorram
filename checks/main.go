@@ -1,17 +1,17 @@
 package checks
 
 import (
-	"log"
 	"strings"
 
 	gorram "git.jba.io/go/gorram/proto"
+	log "github.com/Sirupsen/logrus"
 )
 
 type checkData struct {
 	issue *gorram.Issue
 }
 
-var TheChecks []check
+var theChecks []check
 
 type check interface {
 	doCheck(*[]gorram.Issue)
@@ -54,9 +54,9 @@ func DoChecks(cfg *gorram.Config) []gorram.Issue {
 	// Loop over the available checks and the client's enabled checks
 	// If the client has an available check enabled, run it
 	for _, ec := range enabledChecks {
-		for _, c := range TheChecks {
+		for _, c := range theChecks {
 			if ec == c.Title() {
-				log.Println(ec, "is enabled! Running check...")
+				log.Debugln(ec, "is enabled! Running check...")
 				c.configure(cfg)
 				issues = getCheck(issues, c)
 			}

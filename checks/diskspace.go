@@ -12,7 +12,7 @@ type DiskSpace struct {
 }
 
 func init() {
-	TheChecks = append(TheChecks, &DiskSpace{})
+	theChecks = append(theChecks, &DiskSpace{})
 }
 
 func (d DiskSpace) Title() string {
