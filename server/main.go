@@ -24,8 +24,6 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/gregdel/pushover"
-	"github.com/hashicorp/hcl"
-	"github.com/hashicorp/hcl/hcl/ast"
 	"github.com/pelletier/go-toml"
 	log "github.com/sirupsen/logrus"
 
@@ -437,64 +435,6 @@ func (s *gorramServer) alert(client string, issue gorram.Issue) {
 func (s *gorramServer) loadConfig(confFile string) {
 	ext := filepath.Ext(confFile)
 	switch ext {
-	case ".hcl":
-		cfgBytes, err := ioutil.ReadFile(confFile)
-		if err != nil {
-			log.Fatalln("Error reading", confFile, err)
-		}
-		cfgAst, err := hcl.ParseBytes(cfgBytes)
-		if err != nil {
-			log.Fatalln("Error parsing", confFile, err)
-		}
-		// Decode server-level config
-		hcl.DecodeObject(&s.cfg, cfgAst.Node)
-
-		list, ok := cfgAst.Node.(*ast.ObjectList)
-		if !ok {
-			log.Fatalln("CfgAst Node is not an ObjectList")
-		}
-		clients := list.Filter("Client")
-		for _, v := range clients.Items {
-			clientName := v.Keys[0].Token.Value().(string)
-
-			log.WithFields(log.Fields{
-				"client": clientName,
-				"config": confFile,
-			}).Debugln("Loaded config for", clientName, "from", confFile)
-
-			// Decode each client-level config
-			var clientCfg gorram.Config
-			hcl.DecodeObject(&clientCfg, v.Val)
-
-			clientCfgList, aok := v.Val.(*ast.ObjectType)
-			if !aok {
-				log.Fatalln("Error: clientCfgList is not an ObjectType.")
-			}
-			var enabledChecks []string
-			for _, vv := range clientCfgList.List.Items {
-				key := vv.Keys[0].Token.Value().(string)
-				if key == "Required" {
-
-				} else if key == "Interval" {
-
-				} else {
-					enabledChecks = append(enabledChecks, key)
-				}
-			}
-
-			if clientCfg.Interval == 0 {
-				log.WithFields(log.Fields{
-					"client": clientName,
-					"config": confFile,
-				}).Debugln("No interval configured. Setting to 60 seconds.")
-				clientCfg.Interval = 60
-			}
-			clientCfg.LastUpdated = time.Now().Unix()
-
-			// Store the enabled checks
-			s.clientCfgs.Store(clientName+".checks", strings.Join(enabledChecks, ","))
-			s.clientCfgs.Store(clientName, &clientCfg)
-		}
 	case ".toml":
 		// Load TOML here
 		cfgTree, err := toml.LoadFile(confFile)
@@ -547,7 +487,7 @@ func (s *gorramServer) loadConfig(confFile string) {
 			s.clientCfgs.Store(clientName, &clientCfg)
 		}
 	default:
-		log.Fatalln("Only able to load TOML and HCL files currently. Unable to load", confFile)
+		log.Fatalln("Only able to load TOML files currently. Unable to load", confFile)
 	}
 }
 
@@ -720,7 +660,7 @@ func (s *gorramServer) checkRequiredClients(k, v interface{}) bool {
 func main() {
 
 	// Set config via flags
-	confFile := flag.String("conf", "config.hcl", "Path to the TOML config file.")
+	confFile := flag.String("conf", "config.toml", "Path to the TOML config file.")
 	insecure := flag.Bool("insecure", false, "Disable TLS. Allow insecure client connections.")
 	generateCAcert := flag.Bool("generate-ca", false, "Generate CA certificates, at cacert.pem and cacert.key.")
 	sslPath := flag.String("ssl-path", "/etc/gorram/", "Path to read/write SSL certs from.")
