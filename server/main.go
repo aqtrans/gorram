@@ -17,7 +17,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -26,6 +25,7 @@ import (
 	"github.com/gregdel/pushover"
 	"github.com/pelletier/go-toml"
 	log "github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v2"
 
 	_ "github.com/tevjef/go-runtime-metrics/expvar"
 
@@ -41,13 +41,13 @@ import (
 )
 
 type serverConfig struct {
-	SecretKey       string
-	AlertMethod     string
-	PushoverAppKey  string
-	PushoverUserKey string
-	PushoverDevice  string
-	ListenAddress   string
-	TLSHostname     string
+	SecretKey       string `yaml:"secret_key,omitempty"`
+	AlertMethod     string `yaml:"alert_method,omitempty"`
+	PushoverAppKey  string `yaml:"pushover_app_key,omitempty"`
+	PushoverUserKey string `yaml:"pushover_user_key,omitempty"`
+	PushoverDevice  string `yaml:"pushover_device,omitempty"`
+	ListenAddress   string `yaml:"listen_address,omitempty"`
+	TLSHostname     string `yaml:"tls_host,omitempty"`
 }
 
 type statHandler struct {
@@ -449,11 +449,6 @@ func (s *gorramServer) loadConfig(confFile string) {
 				continue
 			}
 
-			log.WithFields(log.Fields{
-				"client": clientName,
-				"config": confFile,
-			}).Debugln("Loaded config for", clientName, "from", confFile)
-
 			clientCfgTree := cfgTree.Get(clientName).(*toml.Tree)
 			clientCfg := gorram.Config{}
 			err := clientCfgTree.Unmarshal(&clientCfg)
@@ -461,17 +456,24 @@ func (s *gorramServer) loadConfig(confFile string) {
 				log.Fatalln("Error unmarshaling "+confFile+" for client "+clientName+":", err)
 			}
 
-			checkKeys := clientCfgTree.Keys()
-			var enabledChecks []string
-			for _, v := range checkKeys {
-				if v == "Required" {
+			log.WithFields(log.Fields{
+				"client": clientName,
+				"config": confFile,
+			}).Debugln("Loaded config for", clientName, "from", confFile, clientCfg)
 
-				} else if v == "Interval" {
+			/*
+				checkKeys := clientCfgTree.Keys()
+				var enabledChecks []string
+				for _, v := range checkKeys {
+					if v == "Required" {
 
-				} else {
-					enabledChecks = append(enabledChecks, v)
+					} else if v == "Interval" {
+
+					} else {
+						enabledChecks = append(enabledChecks, v)
+					}
 				}
-			}
+			*/
 
 			if clientCfg.Interval == 0 {
 				log.WithFields(log.Fields{
@@ -483,11 +485,137 @@ func (s *gorramServer) loadConfig(confFile string) {
 			clientCfg.LastUpdated = time.Now().Unix()
 
 			// Store the enabled checks
-			s.clientCfgs.Store(clientName+".checks", strings.Join(enabledChecks, ","))
+			//s.clientCfgs.Store(clientName+".checks", strings.Join(enabledChecks, ","))
 			s.clientCfgs.Store(clientName, &clientCfg)
+			//getEnabledChecks(clientCfg)
 		}
+	case ".yaml":
+		// TODO: get EnabledChecks building working
+
+		type yamlCfg struct {
+			Server  serverConfig              `yaml:"server,inline"`
+			Clients map[string]*gorram.Config `yaml:",inline"`
+		}
+
+		cfgBytes, err := ioutil.ReadFile(confFile)
+		if err != nil {
+			log.Fatalln("Error reading", confFile, err)
+		}
+		var m yamlCfg
+		err = yaml.Unmarshal(cfgBytes, &m)
+		if err != nil {
+			log.Fatalf("cannot unmarshal data: %v", err)
+		}
+
+		log.WithFields(log.Fields{
+			"config": confFile,
+		}).Debugln("Loaded config from", confFile, &m)
+
+		s.cfg = m.Server
+
+		for clientName, clientConfig := range m.Clients {
+			log.WithFields(log.Fields{
+				"client": clientName,
+				"config": confFile,
+			}).Debugln("Loaded config for", clientName, "from", confFile, clientConfig)
+
+			if clientConfig.Interval == 0 {
+				log.WithFields(log.Fields{
+					"client": clientName,
+					"config": confFile,
+				}).Debugln("No interval configured. Setting to 60 seconds.")
+				clientConfig.Interval = 60
+			}
+			clientConfig.LastUpdated = time.Now().Unix()
+
+			// Store the enabled checks
+			//s.clientCfgs.Store(clientName+".checks", strings.Join(enabledChecks, ","))
+			s.clientCfgs.Store(clientName, clientConfig)
+			//getEnabledChecks(*clientConfig)
+		}
+
+		/*
+			var newCfg Config
+			newCfg.Clients = make(map[string]*gorram.Config)
+			newCfg.Clients["omg"] = &gorram.Config{
+				Memory: &gorram.Config_Memory{
+					MaxUsage: 5.0,
+				},
+				Deluge: &gorram.Config_Deluge{
+					MaxTorrents: 5,
+				},
+			}
+			log.Println(newCfg.Clients["omg"])
+			yb, err := yaml.Marshal(&newCfg)
+			if err != nil {
+				log.Fatalln("Error marshaling YAML:", err)
+			}
+			log.Println("Generated YAML:", string(yb))
+		*/
+	/*
+		case ".hcl":
+			log.Warnln("WARNING: HCL currently has parsing issues. Proceed at your own caution.")
+
+			cfgBytes, err := ioutil.ReadFile(confFile)
+			if err != nil {
+				log.Fatalln("Error reading", confFile, err)
+			}
+			cfgAst, err := hcl.ParseBytes(cfgBytes)
+			if err != nil {
+				log.Fatalln("Error parsing", confFile, err)
+			}
+			// Decode server-level config
+			hcl.DecodeObject(&s.cfg, cfgAst.Node)
+
+			list, ok := cfgAst.Node.(*ast.ObjectList)
+			if !ok {
+				log.Fatalln("CfgAst Node is not an ObjectList")
+			}
+			clients := list.Filter("Client")
+			for _, v := range clients.Items {
+				clientName := v.Keys[0].Token.Value().(string)
+
+				log.WithFields(log.Fields{
+					"client": clientName,
+					"config": confFile,
+				}).Debugln("Loaded config for", clientName, "from", confFile)
+
+				// Decode each client-level config
+				var clientCfg gorram.Config
+				hcl.DecodeObject(&clientCfg, v.Val)
+
+				clientCfgList, aok := v.Val.(*ast.ObjectType)
+				if !aok {
+					log.Fatalln("Error: clientCfgList is not an ObjectType.")
+				}
+				var enabledChecks []string
+				for _, vv := range clientCfgList.List.Items {
+					key := vv.Keys[0].Token.Value().(string)
+					if key == "Required" {
+
+					} else if key == "Interval" {
+
+					} else {
+						enabledChecks = append(enabledChecks, key)
+					}
+				}
+
+				if clientCfg.Interval == 0 {
+					log.WithFields(log.Fields{
+						"client": clientName,
+						"config": confFile,
+					}).Debugln("No interval configured. Setting to 60 seconds.")
+					clientCfg.Interval = 60
+				}
+				clientCfg.LastUpdated = time.Now().Unix()
+
+				// Store the enabled checks
+				s.clientCfgs.Store(clientName+".checks", strings.Join(enabledChecks, ","))
+				s.clientCfgs.Store(clientName, &clientCfg)
+			}
+	*/
 	default:
-		log.Fatalln("Only able to load TOML files currently. Unable to load", confFile)
+		log.Fatalln("Only able to load TOML and YAML files currently. Unable to load", confFile)
 	}
 }
 
