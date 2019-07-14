@@ -7,45 +7,52 @@ import (
 	log "github.com/Sirupsen/logrus"
 )
 
-type checkData struct {
-	issue *gorram.Issue
-}
-
 var theChecks []check
 
 var errEmptyConfig = errors.New("Config is empty")
 
+// Each check should implement the following interface
 type check interface {
-	doCheck(*[]gorram.Issue)
+	/*
+		doCheck() is where the actual 'check' should be done, and return an array of checkIssues, either nil or not.
+		Note it is an array, so one check instance may return multiple errors.
+		This is useful in disk space and process checks, where multiple disks or processes can produce errors
+	*/
+	doCheck() []gorram.Issue
+	// Title spits out the Title of the given check, mainly for purposes of alerting.
 	Title() string
-	//Do([]gorram.Issue) []gorram.Issue
+	/*
+		configure() takes in the full server config and configures an instance of the check.
+		If the server config doesn't have an instance of the check config, it returns errEmptyConfig.
+		This is done so that DoChecks has some mechanism of knowing which checks to do.
+	*/
 	configure(cfg *gorram.Config) error
-	//configure(*[]gorram.Issue, *gorram.Config_Checks)
 }
 
-// GetCheck is a function which all checks should run through
-// It should only be called in client.go by doCheck().
-// If the check() is not OK, it appends the issues and returns it.
+// getCheck is a function which all checks should run through.
+// It should only be called via DoChecks().
+/*
 func getCheck(issues []gorram.Issue, c check) []gorram.Issue {
-	//log.Println("Check:", c)
-	c.doCheck(&issues)
-	/*
-		if theCheck != "" {
-			issues = append(issues, gorram.Issue{
-				Title:   c.Title(),
-				Message: theCheck,
-			})
-		}
-	*/
+	c.doCheck()
 	return issues
 }
+*/
 
+func newIssue(title, msg string) gorram.Issue {
+	return gorram.Issue{
+		Title:   title,
+		Message: msg,
+	}
+}
+
+/*
 func addIssue(issues *[]gorram.Issue, title, msg string) {
 	*issues = append(*issues, gorram.Issue{
 		Title:   title,
 		Message: msg,
 	})
 }
+*/
 
 // DoChecks is where all the actual checks are done, and an array of "issues" is made
 func DoChecks(cfg *gorram.Config) []gorram.Issue {
@@ -70,7 +77,10 @@ func DoChecks(cfg *gorram.Config) []gorram.Issue {
 		err := c.configure(cfg)
 		if err == nil {
 			log.Debugln("Config not empty. Running check", c.Title())
-			issues = getCheck(issues, c)
+			checkIssues := c.doCheck()
+			if checkIssues != nil {
+				issues = append(issues, checkIssues...)
+			}
 		}
 	}
 	/*

@@ -27,26 +27,26 @@ func (l loadAvg) Title() string {
 	return "Loadavg"
 }
 
-func (l loadAvg) doCheck(issues *[]pb.Issue) {
+func (l loadAvg) doCheck() []pb.Issue {
+	var issues []pb.Issue
 
 	loadAvgs, err := load.Avg()
 	if err != nil {
-		addIssue(issues, l.Title(), fmt.Sprintf("Error fetching load average, %v", err))
-		return
+		issues = append(issues, newIssue(l.Title(), fmt.Sprintf("Error fetching load average, %v", err)))
+		return issues
 	}
 
 	if loadAvgs.Load15 >= l.Cfg.MaxLoad {
-		addIssue(issues, l.Title(), fmt.Sprintf("Load average is greater than %f, %f", l.Cfg.MaxLoad, loadAvgs.Load1))
-		return
+		issues = append(issues, newIssue(l.Title(), fmt.Sprintf("Load average is greater than %f, %f", l.Cfg.MaxLoad, loadAvgs.Load1)))
 	}
 
 	if loadAvgs.Load5 >= l.Cfg.MaxLoad {
-		addIssue(issues, l.Title(), fmt.Sprintf("Load average is greater than %f, %f", l.Cfg.MaxLoad, loadAvgs.Load5))
-		return
+		issues = append(issues, newIssue(l.Title(), fmt.Sprintf("Load average is greater than %f, %f", l.Cfg.MaxLoad, loadAvgs.Load5)))
 	}
 
 	if loadAvgs.Load1 >= l.Cfg.MaxLoad {
-		addIssue(issues, l.Title(), fmt.Sprintf("Load average is greater than %f, %f", l.Cfg.MaxLoad, loadAvgs.Load1))
-		return
+		issues = append(issues, newIssue(l.Title(), fmt.Sprintf("Load average is greater than %f, %f", l.Cfg.MaxLoad, loadAvgs.Load1)))
 	}
+
+	return issues
 }

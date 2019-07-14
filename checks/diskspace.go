@@ -27,12 +27,15 @@ func (d *diskSpace) configure(cfg *pb.Config) error {
 	return nil
 }
 
-func (d diskSpace) doCheck(issues *[]pb.Issue) {
+func (d diskSpace) doCheck() []pb.Issue {
+
+	var issues []pb.Issue
 
 	for _, aDisk := range d.Cfg {
 		usage, err := disk.Usage(aDisk.Partition)
 		if err != nil {
-			addIssue(issues, d.Title(), fmt.Sprintf("Error getting disk usage for "+aDisk.Partition+":", err))
+			//addIssue(issues, d.Title(), fmt.Sprintf("Error getting disk usage for "+aDisk.Partition+":", err))
+			issues = append(issues, newIssue(d.Title(), fmt.Sprintf("Error getting disk usage for "+aDisk.Partition+":", err)))
 			continue
 		}
 
@@ -40,11 +43,11 @@ func (d diskSpace) doCheck(issues *[]pb.Issue) {
 
 		if aDisk.GetMaxUsage() != 0 {
 			if usage.UsedPercent > aDisk.MaxUsage {
-				addIssue(issues, d.Title(), fmt.Sprintf("Disk usage of %s is greater than %s; currently %s", aDisk.Partition, fmt.Sprintf("%.1f", aDisk.MaxUsage), fmt.Sprintf("%.1f", usage.UsedPercent)))
+				issues = append(issues, newIssue(d.Title(), fmt.Sprintf("Disk usage of %s is greater than %s; currently %s", aDisk.Partition, fmt.Sprintf("%.1f", aDisk.MaxUsage), fmt.Sprintf("%.1f", usage.UsedPercent))))
 				continue
 			}
 			if usage.UsedPercent == aDisk.MaxUsage {
-				addIssue(issues, d.Title(), fmt.Sprintf("Disk usage of %s is at %s; currently %s", aDisk.Partition, fmt.Sprintf("%.1f", aDisk.MaxUsage), fmt.Sprintf("%.1f", usage.UsedPercent)))
+				issues = append(issues, newIssue(d.Title(), fmt.Sprintf("Disk usage of %s is at %s; currently %s", aDisk.Partition, fmt.Sprintf("%.1f", aDisk.MaxUsage), fmt.Sprintf("%.1f", usage.UsedPercent))))
 				continue
 			}
 		}
@@ -54,14 +57,15 @@ func (d diskSpace) doCheck(issues *[]pb.Issue) {
 			minBytes := aDisk.MinFreeGb * 1000000000
 			if usage.Free < minBytes {
 				freeGB := usage.Free / 1000000000
-				addIssue(issues, d.Title(), fmt.Sprintf("Free space of %s is less than %v GB; currently %v GB", aDisk.Partition, aDisk.MinFreeGb, freeGB))
+				issues = append(issues, newIssue(d.Title(), fmt.Sprintf("Free space of %s is less than %v GB; currently %v GB", aDisk.Partition, aDisk.MinFreeGb, freeGB)))
 				continue
 			}
 			if usage.Free == minBytes {
 				freeGB := usage.Free / 1000000000
-				addIssue(issues, d.Title(), fmt.Sprintf("Disk usage of %s is at %v GB; currently %v GB", aDisk.Partition, aDisk.MinFreeGb, freeGB))
+				issues = append(issues, newIssue(d.Title(), fmt.Sprintf("Disk usage of %s is at %v GB; currently %v GB", aDisk.Partition, aDisk.MinFreeGb, freeGB)))
 				continue
 			}
 		}
 	}
+	return issues
 }

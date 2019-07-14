@@ -27,16 +27,18 @@ func (m memory) Title() string {
 	return "Memory"
 }
 
-func (m memory) doCheck(issues *[]pb.Issue) {
+func (m memory) doCheck() []pb.Issue {
+	var issues []pb.Issue
 
 	vmStat, err := mem.VirtualMemory()
 	if err != nil {
-		addIssue(issues, m.Title(), fmt.Sprintf("Error fetching virtual memory stats, %v", err))
-		return
+		issues = append(issues, newIssue(m.Title(), fmt.Sprintf("Error fetching virtual memory stats, %v", err)))
+		return issues
 	}
 	if vmStat.UsedPercent >= m.Cfg.MaxUsage {
-		addIssue(issues, m.Title(), fmt.Sprintf("Used memory %% is greater than %f, %f", m.Cfg.MaxUsage, vmStat.UsedPercent))
-		return
+		issues = append(issues, newIssue(m.Title(), fmt.Sprintf("Used memory %% is greater than %f, %f", m.Cfg.MaxUsage, vmStat.UsedPercent)))
 	}
+
+	return issues
 
 }

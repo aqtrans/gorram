@@ -17,6 +17,7 @@ import (
 	//"strings"
 
 	//"github.com/smallnest/goreq"
+
 	pb "git.jba.io/go/gorram/proto"
 )
 
@@ -110,12 +111,12 @@ func (d delugeCheck) Title() string {
 	return "Deluge"
 }
 
-func (d delugeCheck) doCheck(issues *[]pb.Issue) {
+func (d delugeCheck) doCheck() []pb.Issue {
 
 	cookieJar, err := cookiejar.New(nil)
 	if err != nil {
-		addIssue(issues, d.Title(), fmt.Sprintf("Error creating cookiejar: %v", err))
-		return
+		//addIssue(issues, d.Title(), fmt.Sprintf("Error creating cookiejar: %v", err))
+		return []pb.Issue{newIssue(d.Title(), fmt.Sprintf("Error creating cookiejar: %v", err))}
 	}
 
 	client := &http.Client{
@@ -152,25 +153,21 @@ func (d delugeCheck) doCheck(issues *[]pb.Issue) {
 		Params: []string{d.Cfg.Password},
 	})
 	if err != nil {
-		addIssue(issues, d.Title(), fmt.Sprint("Error encoding request to JSON:", err))
-		return
+		return []pb.Issue{newIssue(d.Title(), fmt.Sprint("Error encoding request to JSON:", err))}
 	}
 	r, err := client.Post(d.Cfg.Url, "application/json", bytes.NewBuffer(reqJSON))
 	if err != nil {
-		addIssue(issues, d.Title(), fmt.Sprint("Error sending request to Deluge:", err))
-		return
+		return []pb.Issue{newIssue(d.Title(), fmt.Sprint("Error sending request to Deluge:", err))}
 	}
 	if r.Body != nil {
 		err := json.NewDecoder(r.Body).Decode(&loginJSON)
 		if err != nil {
-			addIssue(issues, d.Title(), fmt.Sprint("Error decoding request to JSON:", err))
-			return
+			return []pb.Issue{newIssue(d.Title(), fmt.Sprint("Error decoding request to JSON:", err))}
 		}
 	}
 
 	if !loginJSON.Result {
-		addIssue(issues, d.Title(), "Error logging into Deluge. Check password.")
-		return
+		return []pb.Issue{newIssue(d.Title(), "Error logging into Deluge. Check password.")}
 	}
 
 	// auth.check_session: Should definitely return true if the cookie set above is set correctly
@@ -202,25 +199,21 @@ func (d delugeCheck) doCheck(issues *[]pb.Issue) {
 		Params: []string{},
 	})
 	if err != nil {
-		addIssue(issues, d.Title(), fmt.Sprint("Error encoding request to JSON:", err))
-		return
+		return []pb.Issue{newIssue(d.Title(), fmt.Sprint("Error encoding request to JSON:", err))}
 	}
 	r2, err := client.Post(d.Cfg.Url, "application/json", bytes.NewBuffer(reqJSON2))
 	if err != nil {
-		addIssue(issues, d.Title(), fmt.Sprint("Error sending request to Deluge:", err))
-		return
+		return []pb.Issue{newIssue(d.Title(), fmt.Sprint("Error sending request to Deluge:", err))}
 	}
 	if r2.Body != nil {
 		err := json.NewDecoder(r2.Body).Decode(&loginOkayJSON)
 		if err != nil {
-			addIssue(issues, d.Title(), fmt.Sprint("Error decoding request to JSON:", err))
-			return
+			return []pb.Issue{newIssue(d.Title(), fmt.Sprint("Error decoding request to JSON:", err))}
 		}
 	}
 
 	if !loginOkayJSON.Result {
-		addIssue(issues, d.Title(), "Error logging into Deluge. Check password.")
-		return
+		return []pb.Issue{newIssue(d.Title(), "Error logging into Deluge. Check password.")}
 	}
 
 	// web.update_ui: Try and retrieve data
@@ -251,19 +244,16 @@ func (d delugeCheck) doCheck(issues *[]pb.Issue) {
 		Params: []string{"name", "time_added"},
 	})
 	if err != nil {
-		addIssue(issues, d.Title(), fmt.Sprint("Error encoding request to JSON:", err))
-		return
+		return []pb.Issue{newIssue(d.Title(), fmt.Sprint("Error encoding request to JSON:", err))}
 	}
 	r3, err := client.Post(d.Cfg.Url, "application/json", bytes.NewBuffer(reqJSON3))
 	if err != nil {
-		addIssue(issues, d.Title(), fmt.Sprint("Error sending request to Deluge:", err))
-		return
+		return []pb.Issue{newIssue(d.Title(), fmt.Sprint("Error sending request to Deluge:", err))}
 	}
 	if r3.Body != nil {
 		err := json.NewDecoder(r3.Body).Decode(&updateResp)
 		if err != nil {
-			addIssue(issues, d.Title(), fmt.Sprint("Error decoding request to JSON:", err))
-			return
+			return []pb.Issue{newIssue(d.Title(), fmt.Sprint("Error decoding request to JSON:", err))}
 		}
 	}
 
@@ -276,8 +266,7 @@ func (d delugeCheck) doCheck(issues *[]pb.Issue) {
 	*/
 
 	if len(updateResp.Result.Filters.State) == 0 {
-		addIssue(issues, d.Title(), "Error: Deluge web-ui likely waiting to connect to a host. Visit the web-ui manually.")
-		return
+		return []pb.Issue{newIssue(d.Title(), "Error: Deluge web-ui likely waiting to connect to a host. Visit the web-ui manually.")}
 	}
 
 	//fmt.Println(updateResp.Result.TorrentsJson)
@@ -294,25 +283,21 @@ func (d delugeCheck) doCheck(issues *[]pb.Issue) {
 	//fmt.Println(dlcnt)
 	//fmt.Println(chkcnt)
 	//fmt.Println(errcnt)
+	var issues []pb.Issue
 	if dlcnt > d.Cfg.MaxTorrents {
-		isBad = true
 		badMsg = strconv.FormatInt(dlcnt, 10) + " downloading torrents is too many."
-
+		issues = append(issues, newIssue(d.Title(), badMsg))
 	}
 	if chkcnt > d.Cfg.MaxTorrents {
-		isBad = true
 		badMsg = strconv.FormatInt(chkcnt, 10) + " checking torrents is too many."
+		issues = append(issues, newIssue(d.Title(), badMsg))
 	}
 	if errcnt > d.Cfg.MaxTorrents {
-		isBad = true
 		badMsg = strconv.FormatInt(errcnt, 10) + " errored torrents is too many."
+		issues = append(issues, newIssue(d.Title(), badMsg))
 	}
 	//fmt.Println(isBad)
 	//fmt.Println(badMsg)
 
-	if isBad {
-		addIssue(issues, d.Title(), badMsg)
-		return
-	}
-
+	return issues
 }

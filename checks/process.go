@@ -70,12 +70,15 @@ func (p processExists) Title() string {
 	return "Process"
 }
 
-func (p processExists) doCheck(issues *[]pb.Issue) {
+func (p processExists) doCheck() []pb.Issue {
+	var issues []pb.Issue
 	//procList := getProcList()
 
 	for _, psCheck := range p.Cfg {
 		if !checkForProc(*psCheck) {
-			addIssue(issues, p.Title(), fmt.Sprintf("%v is not running. Check that the full path is specified.", psCheck.Path))
+			issues = append(issues, newIssue(p.Title(), fmt.Sprintf("%v is not running. Check that the full path is specified.", psCheck.Path)))
 		}
 	}
+
+	return issues
 }
