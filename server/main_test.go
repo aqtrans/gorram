@@ -79,8 +79,14 @@ func TestConfig(t *testing.T) {
 	// Run through pre-defined client names client1, client2, client3
 	for i := 1; i < 4; i++ {
 		clientName := "client" + strconv.Itoa(i)
-		tomlcfg := tomlServer.loadClientConfig(clientName)
-		yamlcfg := yamlServer.loadClientConfig(clientName)
+		tomlcfg, err := tomlServer.loadClientConfig(clientName)
+		if err != nil {
+			t.Fatal(err)
+		}
+		yamlcfg, err := yamlServer.loadClientConfig(clientName)
+		if err != nil {
+			t.Fatal(err)
+		}
 		//hclcfg := hclServer.loadClientConfig(clientName)
 		if !reflect.DeepEqual(tomlcfg, yamlcfg) {
 			t.Log("TestConfig error: ", clientName, "YAML config does not match TOML:")
