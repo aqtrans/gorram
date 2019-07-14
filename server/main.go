@@ -40,6 +40,8 @@ import (
 	"google.golang.org/grpc/stats"
 )
 
+var errUnknownClient = errors.New("Unknown Client Name - Check ClientName in client.toml")
+
 type serverConfig struct {
 	SecretKey       string `yaml:"secret_key,omitempty"`
 	AlertMethod     string `yaml:"alert_method,omitempty"`
@@ -152,7 +154,11 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.PingMsg) (*gorram.P
 
 	// Compare the config last updated time and the last updated received in the ping message
 	var cfgOutOfDate gorram.PingResponse
-	if msg.CfgLastUpdated != s.loadClientConfig(client).LastUpdated {
+	clientCfg, err := s.loadClientConfig(client)
+	if err != nil {
+		return nil, err
+	}
+	if msg.CfgLastUpdated != clientCfg.LastUpdated {
 		log.WithFields(log.Fields{
 			"client": client,
 		}).Infoln("Client config mismatch. Setting cfgOutOfDate to true.")
@@ -161,7 +167,7 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.PingMsg) (*gorram.P
 
 	// pingTime is the time to wait before declaring a client dead
 	var pingTime time.Duration
-	pingTime = time.Duration(s.loadClientConfig(client).Interval*2) * time.Second
+	pingTime = time.Duration(clientCfg.Interval*2) * time.Second
 
 	// Setup a ping timer
 	clientTimer, ok := s.clientTimers.timers.Load(client)
@@ -265,28 +271,30 @@ func (s *gorramServer) RecordIssue(stream gorram.Reporter_RecordIssueServer) err
 	}
 }
 
-func (s *gorramServer) loadClientConfig(client string) gorram.Config {
+func (s *gorramServer) loadClientConfig(client string) (gorram.Config, error) {
 	// Attempt to read the config.toml, and then if it has [clientname] in it, unmarshal the config from there
 	clientCfg, isThere := s.clientCfgs.Load(client)
 	if isThere {
-		return *clientCfg.(*gorram.Config)
+		return *clientCfg.(*gorram.Config), nil
 	}
 
 	// Default config values:
-	return gorram.Config{
-		/*
-			Interval: 60,
-			Load: &gorram.Load{
-				MaxLoad: 0.5,
-			},
-			Disk: []*gorram.DiskSpace{
-				&gorram.DiskSpace{
-					Partition: "/",
-					MaxUsage:  10.0,
+	return gorram.Config{}, errUnknownClient
+	/*
+			gorram.Config{
+				Interval: 60,
+				Load: &gorram.Load{
+					MaxLoad: 0.5,
 				},
-			},
-		*/
-	}
+				Disk: []*gorram.DiskSpace{
+					&gorram.DiskSpace{
+						Partition: "/",
+						MaxUsage:  10.0,
+					},
+				},
+
+		}
+	*/
 }
 
 func (s *gorramServer) ConfigSync(ctx context.Context, req *gorram.ConfigRequest) (*gorram.Config, error) {
@@ -301,7 +309,10 @@ func (s *gorramServer) ConfigSync(ctx context.Context, req *gorram.ConfigRequest
 	//s.reviveDeadClient(clientName)
 
 	// Load config
-	cfg := s.loadClientConfig(clientName)
+	cfg, err := s.loadClientConfig(clientName)
+	if err != nil {
+		return nil, err
+	}
 
 	enabledChecks, ok := s.clientCfgs.Load(clientName + ".checks")
 	if ok {
