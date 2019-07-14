@@ -9,23 +9,27 @@ import (
 	pb "git.jba.io/go/gorram/proto"
 )
 
-type GetURL struct {
+type getURL struct {
 	Cfg []*pb.Config_GetURL
 }
 
 func init() {
-	theChecks = append(theChecks, &GetURL{})
+	theChecks = append(theChecks, &getURL{})
 }
 
-func (g GetURL) Title() string {
+func (g getURL) Title() string {
 	return "GetUrl"
 }
 
-func (g *GetURL) configure(cfg *pb.Config) {
+func (g *getURL) configure(cfg *pb.Config) error {
+	if cfg.GetGetUrl() == nil {
+		return errEmptyConfig
+	}
 	g.Cfg = cfg.GetGetUrl()
+	return nil
 }
 
-func (g GetURL) doCheck(issues *[]pb.Issue) {
+func (g getURL) doCheck(issues *[]pb.Issue) {
 
 	for _, urlCheck := range g.Cfg {
 

@@ -7,23 +7,27 @@ import (
 	"github.com/shirou/gopsutil/mem"
 )
 
-type Memory struct {
+type memory struct {
 	Cfg *pb.Config_Memory
 }
 
 func init() {
-	theChecks = append(theChecks, &Memory{})
+	theChecks = append(theChecks, &memory{})
 }
 
-func (m *Memory) configure(cfg *pb.Config) {
+func (m *memory) configure(cfg *pb.Config) error {
+	if cfg.GetMemory() == nil {
+		return errEmptyConfig
+	}
 	m.Cfg = cfg.GetMemory()
+	return nil
 }
 
-func (m Memory) Title() string {
+func (m memory) Title() string {
 	return "Memory"
 }
 
-func (m Memory) doCheck(issues *[]pb.Issue) {
+func (m memory) doCheck(issues *[]pb.Issue) {
 
 	vmStat, err := mem.VirtualMemory()
 	if err != nil {

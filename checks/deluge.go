@@ -20,16 +20,20 @@ import (
 	pb "git.jba.io/go/gorram/proto"
 )
 
-type DelugeCheck struct {
+type delugeCheck struct {
 	Cfg *pb.Config_Deluge
 }
 
 func init() {
-	theChecks = append(theChecks, &DelugeCheck{})
+	theChecks = append(theChecks, &delugeCheck{})
 }
 
-func (d *DelugeCheck) configure(cfg *pb.Config) {
+func (d *delugeCheck) configure(cfg *pb.Config) error {
+	if cfg.GetDeluge() == nil {
+		return errEmptyConfig
+	}
 	d.Cfg = cfg.GetDeluge()
+	return nil
 }
 
 var (
@@ -102,11 +106,11 @@ func (d DelugeCheck) post(c *http.Client, req *delugeRequest, resp interface{}) 
 }
 */
 
-func (d DelugeCheck) Title() string {
+func (d delugeCheck) Title() string {
 	return "Deluge"
 }
 
-func (d DelugeCheck) doCheck(issues *[]pb.Issue) {
+func (d delugeCheck) doCheck(issues *[]pb.Issue) {
 
 	cookieJar, err := cookiejar.New(nil)
 	if err != nil {

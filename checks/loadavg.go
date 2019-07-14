@@ -7,23 +7,27 @@ import (
 	"github.com/shirou/gopsutil/load"
 )
 
-type LoadAvg struct {
+type loadAvg struct {
 	Cfg *pb.Config_LoadAvg
 }
 
 func init() {
-	theChecks = append(theChecks, &LoadAvg{})
+	theChecks = append(theChecks, &loadAvg{})
 }
 
-func (l *LoadAvg) configure(cfg *pb.Config) {
+func (l *loadAvg) configure(cfg *pb.Config) error {
+	if cfg.GetLoadavg() == nil {
+		return errEmptyConfig
+	}
 	l.Cfg = cfg.GetLoadavg()
+	return nil
 }
 
-func (l LoadAvg) Title() string {
+func (l loadAvg) Title() string {
 	return "Loadavg"
 }
 
-func (l LoadAvg) doCheck(issues *[]pb.Issue) {
+func (l loadAvg) doCheck(issues *[]pb.Issue) {
 
 	loadAvgs, err := load.Avg()
 	if err != nil {

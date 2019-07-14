@@ -1,7 +1,7 @@
 package checks
 
 import (
-	"strings"
+	"errors"
 
 	gorram "git.jba.io/go/gorram/proto"
 	log "github.com/Sirupsen/logrus"
@@ -13,11 +13,13 @@ type checkData struct {
 
 var theChecks []check
 
+var errEmptyConfig = errors.New("Config is empty")
+
 type check interface {
 	doCheck(*[]gorram.Issue)
 	Title() string
 	//Do([]gorram.Issue) []gorram.Issue
-	configure(cfg *gorram.Config)
+	configure(cfg *gorram.Config) error
 	//configure(*[]gorram.Issue, *gorram.Config_Checks)
 }
 
@@ -49,20 +51,28 @@ func addIssue(issues *[]gorram.Issue, title, msg string) {
 func DoChecks(cfg *gorram.Config) []gorram.Issue {
 	var issues []gorram.Issue
 
-	enabledChecks := strings.Split(cfg.EnabledChecks, ",")
-
 	// Loop over the available checks and the client's enabled checks
 	// If the client has an available check enabled, run it
-	for _, ec := range enabledChecks {
-		for _, c := range theChecks {
-			if ec == c.Title() {
-				log.Debugln(ec, "is enabled! Running check...")
-				c.configure(cfg)
-				issues = getCheck(issues, c)
+	/*
+		enabledChecks := strings.Split(cfg.EnabledChecks, ",")
+		for _, ec := range enabledChecks {
+			for _, c := range theChecks {
+				if ec == c.Title() {
+					log.Println(ec, "is enabled! Running check...")
+					log.Println(cfg.Process)
+					c.configure(cfg)
+					issues = getCheck(issues, c)
+				}
 			}
 		}
+	*/
+	for _, c := range theChecks {
+		err := c.configure(cfg)
+		if err == nil {
+			log.Debugln("Config not empty. Running check", c.Title())
+			issues = getCheck(issues, c)
+		}
 	}
-
 	/*
 		// Check loadavg
 		if cfg.Load != nil {

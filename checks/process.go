@@ -9,16 +9,20 @@ import (
 	"github.com/shirou/gopsutil/process"
 )
 
-type ProcessExists struct {
+type processExists struct {
 	Cfg []*pb.Config_ProcessExists
 }
 
 func init() {
-	theChecks = append(theChecks, &ProcessExists{})
+	theChecks = append(theChecks, &processExists{})
 }
 
-func (p *ProcessExists) configure(cfg *pb.Config) {
+func (p *processExists) configure(cfg *pb.Config) error {
+	if cfg.GetProcess() == nil {
+		return errEmptyConfig
+	}
 	p.Cfg = cfg.GetProcess()
+	return nil
 }
 
 func checkForProc(c pb.Config_ProcessExists) bool {
@@ -62,11 +66,11 @@ func checkForProc(c pb.Config_ProcessExists) bool {
 	return procExists
 }
 
-func (p ProcessExists) Title() string {
+func (p processExists) Title() string {
 	return "Process"
 }
 
-func (p ProcessExists) doCheck(issues *[]pb.Issue) {
+func (p processExists) doCheck(issues *[]pb.Issue) {
 	//procList := getProcList()
 
 	for _, psCheck := range p.Cfg {

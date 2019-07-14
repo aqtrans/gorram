@@ -7,23 +7,27 @@ import (
 	"github.com/shirou/gopsutil/disk"
 )
 
-type DiskSpace struct {
+type diskSpace struct {
 	Cfg []*pb.Config_DiskSpace
 }
 
 func init() {
-	theChecks = append(theChecks, &DiskSpace{})
+	theChecks = append(theChecks, &diskSpace{})
 }
 
-func (d DiskSpace) Title() string {
+func (d diskSpace) Title() string {
 	return "Diskspace"
 }
 
-func (d *DiskSpace) configure(cfg *pb.Config) {
+func (d *diskSpace) configure(cfg *pb.Config) error {
+	if cfg.GetDiskspace() == nil {
+		return errEmptyConfig
+	}
 	d.Cfg = cfg.GetDiskspace()
+	return nil
 }
 
-func (d DiskSpace) doCheck(issues *[]pb.Issue) {
+func (d diskSpace) doCheck(issues *[]pb.Issue) {
 
 	for _, aDisk := range d.Cfg {
 		usage, err := disk.Usage(aDisk.Partition)
