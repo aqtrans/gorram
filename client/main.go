@@ -207,78 +207,75 @@ func main() {
 	// Ping and collect issues every X seconds
 	ticker := time.NewTicker(time.Duration(origCfg.Interval) * time.Second)
 	quit := make(chan struct{})
-	cfgChan := make(chan *gorram.Config)
+	//cfgChan := make(chan *gorram.Config)
 
 	go func() {
 		for {
 			select {
 			case <-ticker.C:
-				go func() {
+				// Create RPC context, add client name metadata
+				rpcCtx, rpcCancel := context.WithTimeout(context.Background(), rpcTimeout)
+				rpcCtx = metadata.AppendToOutgoingContext(rpcCtx, "client", tomlCfg.ClientName)
+				defer rpcCancel()
+
+				cfgMutex.Lock()
+				pingResp, err := c.Ping(rpcCtx, &gorram.PingMsg{IsAlive: true, CfgLastUpdated: origCfg.LastUpdated})
+				if err != nil {
+					log.Fatalln("Error with c.Ping:", err)
+				}
+				// This variable should be true if the config is out of sync
+				if pingResp.CfgOutOfSync {
+					// Fetch and set the new config
+					log.Debugln("Configuration out of sync. Fetching new config from server.")
+					var err error
 					// Create RPC context, add client name metadata
 					rpcCtx, rpcCancel := context.WithTimeout(context.Background(), rpcTimeout)
 					rpcCtx = metadata.AppendToOutgoingContext(rpcCtx, "client", tomlCfg.ClientName)
 					defer rpcCancel()
 
-					cfgMutex.Lock()
-					pingResp, err := c.Ping(rpcCtx, &gorram.PingMsg{IsAlive: true, CfgLastUpdated: origCfg.LastUpdated})
+					newCfg, err := c.ConfigSync(rpcCtx, &gorram.ConfigRequest{
+						ClientName: tomlCfg.ClientName,
+					})
 					if err != nil {
-						log.Fatalln("Error with c.Ping:", err)
+						log.Fatalln("Error with c.ConfigSync:", err)
 					}
-					// This variable should be true if the config is out of sync
-					if pingResp.CfgOutOfSync {
-						// Fetch and set the new config
-						log.Debugln("Configuration out of sync. Fetching new config from server.")
-						var err error
-						// Create RPC context, add client name metadata
-						rpcCtx, rpcCancel := context.WithTimeout(context.Background(), rpcTimeout)
-						rpcCtx = metadata.AppendToOutgoingContext(rpcCtx, "client", tomlCfg.ClientName)
-						defer rpcCancel()
+					// Set cfg to newCfg
+					origCfg = newCfg
+				}
+				// Send config, either the new or old, through the channel
+				//cfgChan <- origCfg
+				cfgMutex.Unlock()
+				//close(cfgChan)
 
-						newCfg, err := c.ConfigSync(rpcCtx, &gorram.ConfigRequest{
-							ClientName: tomlCfg.ClientName,
-						})
-						if err != nil {
-							log.Fatalln("Error with c.ConfigSync:", err)
-						}
-						// Set cfg to newCfg
-						origCfg = newCfg
+				// Create RPC context, add client name metadata
+				rpcCtx2, rpcCancel2 := context.WithTimeout(context.Background(), rpcTimeout)
+				rpcCtx2 = metadata.AppendToOutgoingContext(rpcCtx2, "client", tomlCfg.ClientName)
+				defer rpcCancel2()
+
+				//cfg2 := <-cfgChan
+
+				// Do checks
+				i := checks.DoChecks(origCfg)
+				// If there are any checks, open a client-side stream and record them
+				if len(i) > 0 {
+					issueStream, err := c.RecordIssue(rpcCtx2)
+					if err != nil {
+						log.Fatalln("Error recording issue:", err)
 					}
-					// Send config, either the new or old, through the channel
-					cfgChan <- origCfg
-					cfgMutex.Unlock()
-					//close(cfgChan)
-				}()
-				go func() {
-					// Create RPC context, add client name metadata
-					rpcCtx, rpcCancel := context.WithTimeout(context.Background(), rpcTimeout)
-					rpcCtx = metadata.AppendToOutgoingContext(rpcCtx, "client", tomlCfg.ClientName)
-					defer rpcCancel()
 
-					cfg2 := <-cfgChan
-
-					// Do checks
-					i := checks.DoChecks(cfg2)
-					// If there are any checks, open a client-side stream and record them
-					if len(i) > 0 {
-						issueStream, err := c.RecordIssue(rpcCtx)
-						if err != nil {
-							log.Fatalln("Error recording issue:", err)
-						}
-
-						for _, issue := range i {
-							if err := issueStream.Send(&issue); err != nil {
-								log.Fatalln("Error submitting issue:", err)
-							}
-						}
-						reply, err := issueStream.CloseAndRecv()
-						if err != nil {
-							log.Fatalln("Error closing issueStream:", err)
-						}
-						if !reply.SuccessfullySubmitted {
-							log.Fatalln("Error submitting issue; Check server logs.", reply.SuccessfullySubmitted)
+					for _, issue := range i {
+						if err := issueStream.Send(&issue); err != nil {
+							log.Fatalln("Error submitting issue:", err)
 						}
 					}
-				}()
+					reply, err := issueStream.CloseAndRecv()
+					if err != nil {
+						log.Fatalln("Error closing issueStream:", err)
+					}
+					if !reply.SuccessfullySubmitted {
+						log.Fatalln("Error submitting issue; Check server logs.", reply.SuccessfullySubmitted)
+					}
+				}
 				log.Debugln("Number of Goroutines:", runtime.NumGoroutine())
 			case <-quit:
 				ticker.Stop()
