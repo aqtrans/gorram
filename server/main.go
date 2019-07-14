@@ -769,10 +769,10 @@ func (a *alerts) get(issue gorram.Issue) *gorram.Alert {
 	if alertExists {
 		a.Unlock()
 		return theAlert
-	} else {
-		a.Unlock()
-		return nil
 	}
+
+	a.Unlock()
+	return nil
 }
 
 func (s *gorramServer) checkRequiredClients(k, v interface{}) bool {
