@@ -11,21 +11,24 @@ var theChecks []check
 
 var errEmptyConfig = errors.New("Config is empty")
 
-// Each check should implement the following interface
+/*
+
+Each check should implement the following interface
+
+- doCheck() is where the actual 'check' should be done, and return an array of checkIssues, either nil or not.
+Note it is an array, so one check instance may return multiple errors.
+This is useful in disk space and process checks, where multiple disks or processes can produce errors
+
+- Title spits out the Title of the given check, mainly for purposes of alerting.
+
+- configure() takes in the full server config and configures an instance of the check.
+If the server config doesn't have an instance of the check config, it returns errEmptyConfig.
+This is done so that DoChecks has some mechanism of knowing which checks to do.
+
+*/
 type check interface {
-	/*
-		doCheck() is where the actual 'check' should be done, and return an array of checkIssues, either nil or not.
-		Note it is an array, so one check instance may return multiple errors.
-		This is useful in disk space and process checks, where multiple disks or processes can produce errors
-	*/
 	doCheck() []gorram.Issue
-	// Title spits out the Title of the given check, mainly for purposes of alerting.
 	Title() string
-	/*
-		configure() takes in the full server config and configures an instance of the check.
-		If the server config doesn't have an instance of the check config, it returns errEmptyConfig.
-		This is done so that DoChecks has some mechanism of knowing which checks to do.
-	*/
 	configure(cfg *gorram.Config) error
 }
 
