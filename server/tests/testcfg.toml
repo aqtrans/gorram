@@ -1,0 +1,44 @@
+[ServerConfig]
+    SecretKey = "omg123"
+    AlertMethod = "log"
+    #ListenAddress = "0.0.0.0:50000"
+    ListenAddress = "127.0.0.1:50000"
+[client1]
+    Required = true
+    Interval = 5
+    [client1.Deluge]
+    URL = "http://127.0.0.1:8112/json"
+    Password = "password"
+    MaxTorrents = 5
+    [[client1.Diskspace]]
+    Partition = "/"
+    MaxUsage = 90.0
+    [[client1.Diskspace]]
+    Partition = "/media/storage"
+    MinFreeGb = 20
+    [client1.Loadavg]
+    MaxLoad = 2.00
+    [[client1.GetUrl]]
+    Url = "http://google.com"
+    [[client1.GetUrl]]
+    Url = "https://some-site.com/health"
+    ExpectedBody = "{\"alive\": true}"
+    [[client1.Process]]
+    Path = "/usr/lib/firefox/firefox"
+    User = "username"
+    [[client1.Process]]
+    Path = "deluge-gtk"
+    [client1.Memory]
+    MaxUsage = 20.0
+[client2]
+    Interval = 5
+    [client2.Memory]
+    MaxUsage = 15.0
+    [[client2.Diskspace]]
+    Partition = "/"
+    MaxUsage = 100.0
+    [client2.Loadavg]
+    MaxLoad = 6.00
+[client3]
+    [client3.Memory]
+    MaxUsage = 15.0
