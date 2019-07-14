@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"sync"
 
 	pb "git.jba.io/go/gorram/proto"
 )
 
 type getURL struct {
+	sync.Mutex
 	Cfg []*pb.Config_GetURL
 }
 
@@ -17,19 +19,21 @@ func init() {
 	theChecks = append(theChecks, &getURL{})
 }
 
-func (g getURL) Title() string {
+func (g *getURL) Title() string {
 	return "GetUrl"
 }
 
-func (g *getURL) configure(cfg *pb.Config) error {
+func (g *getURL) configure(cfg pb.Config) error {
 	if cfg.GetGetUrl() == nil {
 		return errEmptyConfig
 	}
+	g.Lock()
 	g.Cfg = cfg.GetGetUrl()
+	g.Unlock()
 	return nil
 }
 
-func (g getURL) doCheck() []pb.Issue {
+func (g *getURL) doCheck() []pb.Issue {
 
 	var issues []pb.Issue
 

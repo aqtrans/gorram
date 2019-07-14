@@ -2,12 +2,14 @@ package checks
 
 import (
 	"fmt"
+	"sync"
 
 	pb "git.jba.io/go/gorram/proto"
 	"github.com/shirou/gopsutil/disk"
 )
 
 type diskSpace struct {
+	sync.Mutex
 	Cfg []*pb.Config_DiskSpace
 }
 
@@ -15,19 +17,21 @@ func init() {
 	theChecks = append(theChecks, &diskSpace{})
 }
 
-func (d diskSpace) Title() string {
+func (d *diskSpace) Title() string {
 	return "Diskspace"
 }
 
-func (d *diskSpace) configure(cfg *pb.Config) error {
+func (d *diskSpace) configure(cfg pb.Config) error {
 	if cfg.GetDiskspace() == nil {
 		return errEmptyConfig
 	}
+	d.Lock()
 	d.Cfg = cfg.GetDiskspace()
+	d.Unlock()
 	return nil
 }
 
-func (d diskSpace) doCheck() []pb.Issue {
+func (d *diskSpace) doCheck() []pb.Issue {
 
 	var issues []pb.Issue
 

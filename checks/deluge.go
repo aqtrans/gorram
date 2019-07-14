@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"strconv"
+	"sync"
 	"time"
 
 	//"strings"
@@ -22,6 +23,7 @@ import (
 )
 
 type delugeCheck struct {
+	sync.Mutex
 	Cfg *pb.Config_Deluge
 }
 
@@ -29,11 +31,13 @@ func init() {
 	theChecks = append(theChecks, &delugeCheck{})
 }
 
-func (d *delugeCheck) configure(cfg *pb.Config) error {
+func (d *delugeCheck) configure(cfg pb.Config) error {
 	if cfg.GetDeluge() == nil {
 		return errEmptyConfig
 	}
+	d.Lock()
 	d.Cfg = cfg.GetDeluge()
+	d.Unlock()
 	return nil
 }
 
@@ -107,11 +111,11 @@ func (d DelugeCheck) post(c *http.Client, req *delugeRequest, resp interface{}) 
 }
 */
 
-func (d delugeCheck) Title() string {
+func (d *delugeCheck) Title() string {
 	return "Deluge"
 }
 
-func (d delugeCheck) doCheck() []pb.Issue {
+func (d *delugeCheck) doCheck() []pb.Issue {
 
 	cookieJar, err := cookiejar.New(nil)
 	if err != nil {

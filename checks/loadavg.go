@@ -2,12 +2,14 @@ package checks
 
 import (
 	"fmt"
+	"sync"
 
 	pb "git.jba.io/go/gorram/proto"
 	"github.com/shirou/gopsutil/load"
 )
 
 type loadAvg struct {
+	sync.Mutex
 	Cfg *pb.Config_LoadAvg
 }
 
@@ -15,19 +17,21 @@ func init() {
 	theChecks = append(theChecks, &loadAvg{})
 }
 
-func (l *loadAvg) configure(cfg *pb.Config) error {
+func (l *loadAvg) configure(cfg pb.Config) error {
 	if cfg.GetLoadavg() == nil {
 		return errEmptyConfig
 	}
+	l.Lock()
 	l.Cfg = cfg.GetLoadavg()
+	l.Unlock()
 	return nil
 }
 
-func (l loadAvg) Title() string {
+func (l *loadAvg) Title() string {
 	return "Loadavg"
 }
 
-func (l loadAvg) doCheck() []pb.Issue {
+func (l *loadAvg) doCheck() []pb.Issue {
 	var issues []pb.Issue
 
 	loadAvgs, err := load.Avg()

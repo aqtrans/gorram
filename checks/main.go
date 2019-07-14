@@ -29,7 +29,7 @@ This is done so that DoChecks has some mechanism of knowing which checks to do.
 type check interface {
 	doCheck() []gorram.Issue
 	Title() string
-	configure(cfg *gorram.Config) error
+	configure(cfg gorram.Config) error
 }
 
 // getCheck is a function which all checks should run through.
@@ -58,7 +58,7 @@ func addIssue(issues *[]gorram.Issue, title, msg string) {
 */
 
 // DoChecks is where all the actual checks are done, and an array of "issues" is made
-func DoChecks(cfg *gorram.Config) []gorram.Issue {
+func DoChecks(cfg gorram.Config) []gorram.Issue {
 	var issues []gorram.Issue
 
 	// Loop over the available checks and the client's enabled checks

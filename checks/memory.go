@@ -2,12 +2,14 @@ package checks
 
 import (
 	"fmt"
+	"sync"
 
 	pb "git.jba.io/go/gorram/proto"
 	"github.com/shirou/gopsutil/mem"
 )
 
 type memory struct {
+	sync.Mutex
 	Cfg *pb.Config_Memory
 }
 
@@ -15,19 +17,21 @@ func init() {
 	theChecks = append(theChecks, &memory{})
 }
 
-func (m *memory) configure(cfg *pb.Config) error {
+func (m *memory) configure(cfg pb.Config) error {
 	if cfg.GetMemory() == nil {
 		return errEmptyConfig
 	}
+	m.Lock()
 	m.Cfg = cfg.GetMemory()
+	m.Unlock()
 	return nil
 }
 
-func (m memory) Title() string {
+func (m *memory) Title() string {
 	return "Memory"
 }
 
-func (m memory) doCheck() []pb.Issue {
+func (m *memory) doCheck() []pb.Issue {
 	var issues []pb.Issue
 
 	vmStat, err := mem.VirtualMemory()

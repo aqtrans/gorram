@@ -255,7 +255,7 @@ func main() {
 				//cfg2 := <-cfgChan
 
 				// Do checks
-				i := checks.DoChecks(origCfg)
+				i := checks.DoChecks(*origCfg)
 				// If there are any checks, open a client-side stream and record them
 				if len(i) > 0 {
 					issueStream, err := c.RecordIssue(rpcCtx2)

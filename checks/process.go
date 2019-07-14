@@ -3,6 +3,7 @@ package checks
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	pb "git.jba.io/go/gorram/proto"
 	log "github.com/Sirupsen/logrus"
@@ -10,6 +11,7 @@ import (
 )
 
 type processExists struct {
+	sync.Mutex
 	Cfg []*pb.Config_ProcessExists
 }
 
@@ -17,11 +19,13 @@ func init() {
 	theChecks = append(theChecks, &processExists{})
 }
 
-func (p *processExists) configure(cfg *pb.Config) error {
+func (p *processExists) configure(cfg pb.Config) error {
 	if cfg.GetProcess() == nil {
 		return errEmptyConfig
 	}
+	p.Lock()
 	p.Cfg = cfg.GetProcess()
+	p.Unlock()
 	return nil
 }
 
@@ -66,11 +70,11 @@ func checkForProc(c pb.Config_ProcessExists) bool {
 	return procExists
 }
 
-func (p processExists) Title() string {
+func (p *processExists) Title() string {
 	return "Process"
 }
 
-func (p processExists) doCheck() []pb.Issue {
+func (p *processExists) doCheck() []pb.Issue {
 	var issues []pb.Issue
 	//procList := getProcList()
 
