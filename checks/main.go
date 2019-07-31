@@ -4,7 +4,7 @@ import (
 	"errors"
 
 	gorram "git.jba.io/go/gorram/proto"
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 var theChecks []check

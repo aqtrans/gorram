@@ -6,8 +6,8 @@ import (
 	"sync"
 
 	pb "git.jba.io/go/gorram/proto"
-	log "github.com/Sirupsen/logrus"
 	"github.com/shirou/gopsutil/process"
+	log "github.com/sirupsen/logrus"
 )
 
 type processExists struct {
