@@ -855,6 +855,9 @@ func main() {
 				log.Debugln("CA certificate at cacert.pem does not exist, generating it...")
 				certs.GenerateCACert(*sslPath)
 			}
+			if gs.cfg.TLSHostname == "" {
+				log.Fatalln("Error: Unable to dynamically generate server cert with blank hostname. Please configure 'TLSHostname' in server config.")
+			}
 			// Generate certificates dynamically:
 			log.Debugln("Generating certificate dynamically for", gs.cfg.TLSHostname)
 			tlsCert = certs.GenerateServerCert(gs.cfg.TLSHostname, *sslPath)
