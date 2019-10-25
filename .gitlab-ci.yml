@@ -1,9 +1,9 @@
 image: golang:latest
 
-cache:
-  key: "$CI_COMMIT_REF_NAME"
-  paths:
-    - vendor/
+##cache:
+##  key: "$CI_COMMIT_REF_NAME"
+##  paths:
+##    - vendor/
 
 before_script:
   - echo deb http://deb.debian.org/debian/ stable main > /etc/apt/sources.list
@@ -11,8 +11,8 @@ before_script:
   - curl -o protoc.zip -sL https://github.com/protocolbuffers/protobuf/releases/download/v3.6.1/protoc-3.6.1-linux-x86_64.zip
   - unzip protoc.zip -d /protoc
   - export PATH=$PATH:/protoc/bin:$GOPATH/bin
-  - ln -s /builds /go/src/git.jba.io
-  - cd /go/src/git.jba.io/go/gorram
+  ##- ln -s /builds /go/src/git.jba.io
+  ##- cd /go/src/git.jba.io/go/gorram
   #- 'which ssh-agent || ( apt-get update -y && apt-get install openssh-client -y )'
   #- eval $(ssh-agent -s)
   #- ssh-add <(echo "$SSH_PRIVATE_KEY")
