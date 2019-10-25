@@ -38,13 +38,13 @@ install-go:
 build-my-project:
   stage: build
   script:
-    - curl -o dep -sL https://github.com/golang/dep/releases/download/v0.5.4/dep-linux-amd64
-    - chmod +x dep
+    #- curl -o dep -sL https://github.com/golang/dep/releases/download/v0.5.4/dep-linux-amd64
+    #- chmod +x dep
     - cd server
-    - ../dep ensure
+    #- ../dep ensure
     - go get -d
     - cd ../checks
-    - ../dep ensure
+    #- ../dep ensure
     - go get -d
     - cd ../client
     - go get -d
