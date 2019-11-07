@@ -16,7 +16,7 @@ type postgres struct {
 type pgStatReplication struct {
 	stat struct {
 		State string
-	} `pg:"pg_stat_replication"`
+	} `pg:"pg_stat_replication,alias:pg_stat_replication"`
 }
 
 func init() {
