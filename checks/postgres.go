@@ -13,8 +13,10 @@ type postgres struct {
 	Cfg *proto.Config_Postgres
 }
 
-type replicationStatus struct {
-	state string
+type pgStatReplication struct {
+	stats struct {
+		State string
+	} `pg:"pg_stat_replication"`
 }
 
 func init() {
@@ -46,13 +48,13 @@ func (p *postgres) doCheck() []proto.Issue {
 	})
 	defer db.Close()
 
-	var stats replicationStatus
+	var stats pgStatReplication
 	err := db.Model(&stats).Select()
 	if err != nil {
 		issues = append(issues, newIssue(p.Title(), fmt.Sprintf("Error fetching Postgres replication stats, %v", err)))
 		return issues
 	}
-	if stats.state == "" {
+	if stats.stats.State == "" {
 		issues = append(issues, newIssue(p.Title(), fmt.Sprintf("Postgres replication is not functional")))
 	}
 
