@@ -72,6 +72,11 @@ message Config {
     message Memory {
         double max_usage = 1;
     }
+    message Postgres {
+        string address = 1;
+		string user = 2; 
+		string password = 3; 
+    }
     
     // Used internally to tell when config was last updated
     int64 last_updated = 1;
@@ -80,7 +85,6 @@ message Config {
     // Configurations for various checks
     Deluge deluge = 3;
     LoadAvg loadavg = 4;
-    Memory memory = 10;
     repeated DiskSpace diskspace = 5;
     repeated ProcessExists process = 6;
     repeated GetURL get_url = 7;
@@ -89,6 +93,9 @@ message Config {
     // Whether client is required to connect
     // Since the server is stateless, this ensures an offline client is detected when the server is restarted
     bool required = 9;
+
+    Memory memory = 10;
+    Postgres postgres = 11;    
 }
 
 service Querier {
