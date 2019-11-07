@@ -1,22 +1,18 @@
 package checks
 
 import (
+	"database/sql"
 	"fmt"
+	"log"
 	"sync"
 
 	proto "git.jba.io/go/gorram/proto"
-	"github.com/go-pg/pg/v9"
+	_ "github.com/lib/pq"
 )
 
 type postgres struct {
 	sync.Mutex
 	Cfg *proto.Config_Postgres
-}
-
-type pgStatReplication struct {
-	stat struct {
-		State string
-	} `pg:"pg_stat_replication,alias:pg_stat_replication"`
 }
 
 func init() {
@@ -40,24 +36,24 @@ func (p *postgres) Title() string {
 func (p *postgres) doCheck() []proto.Issue {
 	var issues []proto.Issue
 
-	db := pg.Connect(&pg.Options{
-		User:     p.Cfg.User,
-		Addr:     p.Cfg.Address,
-		Password: p.Cfg.Password,
-		Database: "postgres",
-	})
-	defer db.Close()
-
-	var stats pgStatReplication
-	err := db.Model(&stats).Select()
+	connStr := p.Cfg.ConnectString
+	db, err := sql.Open("postgres", connStr)
 	if err != nil {
-		issues = append(issues, newIssue(p.Title(), fmt.Sprintf("Error fetching Postgres replication stats, %v", err)))
-		return issues
+		log.Fatal(err)
 	}
-	if stats.stat.State == "" {
+
+	var clientState string
+	err = db.QueryRow("SELECT client_addr, state FROM pg_stat_replication WHERE client_addr=?", p.Cfg.ClientAddress).Scan(&clientState)
+	if err == sql.ErrNoRows {
 		issues = append(issues, newIssue(p.Title(), fmt.Sprintf("Postgres replication is not functional")))
 	}
+	if err != nil {
+		issues = append(issues, newIssue(p.Title(), fmt.Sprintf("Error fetching Postgres replication stats, %v", err)))
+		db.Close()
+		return issues
+	}
 
+	db.Close()
 	return issues
 
 }

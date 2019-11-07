@@ -73,9 +73,8 @@ message Config {
         double max_usage = 1;
     }
     message Postgres {
-        string address = 1;
-		string user = 2; 
-		string password = 3; 
+        string connect_string = 1;
+        string client_address = 2;
     }
     
     // Used internally to tell when config was last updated
