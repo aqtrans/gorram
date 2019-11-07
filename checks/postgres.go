@@ -43,7 +43,7 @@ func (p *postgres) doCheck() []proto.Issue {
 	}
 
 	var clientState string
-	err = db.QueryRow("SELECT client_addr, state FROM pg_stat_replication WHERE client_addr=?", p.Cfg.ClientAddress).Scan(&clientState)
+	err = db.QueryRow("SELECT client_addr, state FROM pg_stat_replication WHERE client_addr = $1", p.Cfg.ClientAddress).Scan(&clientState)
 	if err == sql.ErrNoRows {
 		issues = append(issues, newIssue(p.Title(), fmt.Sprintf("Postgres replication is not functional")))
 	}
