@@ -101,13 +101,18 @@ type gorramServer struct {
 	clientTimers
 	clientCfgs       sync.Map
 	cfg              serverConfig
-	connectedClients gorram.ClientList
+	connectedClients clients
 	alertsMap        alerts
 	/*
 		pingTimers    map[string]*time.Timer
 		clientList    map[string]chan bool
 		clientTickers map[string]*time.Ticker
 	*/
+}
+
+type clients struct {
+	sync.Mutex
+	m gorram.ClientList
 }
 
 type alerts struct {
@@ -632,7 +637,7 @@ func (s *gorramServer) loadConfig(confFile string) {
 
 func (s *gorramServer) List(ctx context.Context, qr *gorram.QueryRequest) (*gorram.ClientList, error) {
 
-	return &s.connectedClients, nil
+	return &s.connectedClients.m, nil
 }
 
 func (s *gorramServer) Delete(ctx context.Context, cn *gorram.ClientName) (*gorram.ClientList, error) {
@@ -642,13 +647,14 @@ func (s *gorramServer) Delete(ctx context.Context, cn *gorram.ClientName) (*gorr
 	if clientTicker, ok := s.clientTimers.tickers.Load(clientName); ok {
 		clientTicker.(*time.Ticker).Stop()
 		s.clientTimers.tickers.Delete(clientName)
-		delete(s.connectedClients.Clients, clientName)
+		//delete(s.connectedClients.Clients, clientName)
+		s.connectedClients.delete(clientName)
 		log.WithFields(log.Fields{
 			"client": clientName,
 		}).Infoln("Deleted from client list.")
 	}
 
-	return &s.connectedClients, nil
+	return &s.connectedClients.m, nil
 }
 
 func (s *gorramServer) Debug(ctx context.Context, dr *gorram.DebugRequest) (*gorram.DebugResponse, error) {
@@ -663,7 +669,7 @@ func (s *gorramServer) Debug(ctx context.Context, dr *gorram.DebugRequest) (*gor
 		return true
 	})
 
-	aString := fmt.Sprintf("Connected clients: %s | Timers: %s | Tickers: %s", s.connectedClients.String(), timers, tickers)
+	aString := fmt.Sprintf("Connected clients: %v | Timers: %s | Tickers: %s", s.connectedClients.m, timers, tickers)
 	return &gorram.DebugResponse{
 		Resp: aString,
 	}, nil
@@ -685,10 +691,11 @@ func (s *gorramServer) Hello(ctx context.Context, req *gorram.ConfigRequest) (*g
 	}
 
 	// As this should only be called on client connection, record the client name and address here
-	s.connectedClients.Clients[clientName] = &gorram.Client{
+	c := gorram.Client{
 		Name:    clientName,
 		Address: clientAddress,
 	}
+	s.connectedClients.add(c)
 
 	// Reset and then delete the ticker for the client
 	s.reviveDeadClient(clientName)
@@ -775,9 +782,47 @@ func (a *alerts) get(issue gorram.Issue) *gorram.Alert {
 	return nil
 }
 
+func (c *clients) add(client gorram.Client) {
+	c.Lock()
+	c.m.Clients[client.Name] = &client
+	c.Unlock()
+}
+
+func (c *clients) exists(clientName string) bool {
+	c.Lock()
+	_, clientExists := c.m.Clients[clientName]
+	c.Unlock()
+	return clientExists
+}
+
+func (c *clients) get(clientName string) *gorram.Client {
+	c.Lock()
+	theClient, clientExists := c.m.Clients[clientName]
+	if clientExists {
+		c.Unlock()
+		return theClient
+	}
+
+	c.Unlock()
+	return nil
+}
+
+func (c *clients) delete(clientName string) {
+	c.Lock()
+	_, clientExists := c.m.Clients[clientName]
+	if clientExists {
+		c.Unlock()
+		return
+	}
+	delete(c.m.Clients, clientName)
+
+	c.Unlock()
+	return
+}
+
 func (s *gorramServer) checkRequiredClients(k, v interface{}) bool {
 	if clientName, isString := k.(string); isString {
-		if _, ok := s.connectedClients.Clients[clientName]; !ok {
+		if s.connectedClients.exists(clientName) {
 			clientCfg, isThere := s.clientCfgs.Load(clientName)
 			if isThere {
 				if actualClientCfg, isCfg := clientCfg.(*gorram.Config); isCfg {
@@ -823,7 +868,7 @@ func main() {
 	gs := gorramServer{
 		cfg:              serverConfig{},
 		clientCfgs:       *new(sync.Map),
-		connectedClients: *new(gorram.ClientList),
+		connectedClients: *new(clients),
 	}
 
 	gs.loadConfig(*confFile)
@@ -914,7 +959,7 @@ func main() {
 
 	gs.alertsMap.m = make(map[string]*gorram.Alert)
 
-	gs.connectedClients.Clients = make(map[string]*gorram.Client)
+	gs.connectedClients.m.Clients = make(map[string]*gorram.Client)
 
 	gorram.RegisterReporterServer(server, &gs)
 
