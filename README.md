@@ -6,7 +6,7 @@ Written in Go. This is my attempt at a creating a monitoring system, similar to 
 Inspired by Telegraf, a single-binary metrics agent, the goal is to have no external dependencies or process forking unless absolutely necessary. 
 A vast majority of the current checks are implemented using the same library as Telegraf, [gopsutil](github.com/shirou/gopsutil).
 
-gRPC is used for the client-server communication, protected by Mutual TLS and a password. TLS communication can be bypassed using the `-insecure` flag on both the client and server.  
+gRPC is used for the client-server communication, protected by Mutual TLS and a shared secret. TLS communication can be bypassed using the `-insecure` flag on both the client and server.  
 
 Mutual TLS is used either via pre-generated (likely self-signed) CA, server, and client certificates ([gorram-certs](git.jba.io/go/gorram/certs/gorram-certs) can assist with this), or optionally the server and clients can generate dynamic certificates on startup, using a common CA certificate and key.
 
@@ -16,7 +16,7 @@ Copy that generated CA certificate and key to the client in order to allow the c
 A very basic heartbeat is implemented, with the server waiting for a ping from the client every `$interval` seconds, right after connect. 
 If the ping is not received, the timer expires and a ticker fires off that alerts every `$interval`+10 seconds until the client re-connects.  
 
-The server holds all configuration information in a TOML file on a per-client basis, and that client config is pushed to the client upon connect. 
+The server holds all configuration information in a TOML or YAML file on a per-client basis, and that client config is pushed to the client upon connect. 
 [fsnotify](https://github.com/fsnotify/fsnotify) is used to watch and reload and send the config to the client as necessary, as part of the ping/heartbeat. 
 
 The client only needs to be pointed at the server with either it's own TLS certificate and secret key, or a common CA certificate and key in hand, greatly simplifying management of the checks. 
@@ -64,6 +64,11 @@ Generating your own certificates ahead of time, using `gorram-certs`:
 - Process Existence: check that a given process is running, full path to the binary.  
 - HTTP GET: checks that a specified URL returns a 200, and optionally, checks that the response body matches a given string.  
 - Memory Usage: check percentage of used memory
+- Postgres Replication: query the `pg_stat_replication` table on a Postgres master for a specific `client_addr`. 
+
+Postgres check needs some aditional setup:  
+- To create user: `create user gorram with password '[reallySecurePassword]';`  
+- To grant user permissions to monitor replication status: `grant pg_monitor to gorram;`  
 
 ## Quickstart:
 Fetch the package itself: `go get git.jba.io/go/gorram`
@@ -76,9 +81,9 @@ Install dependencies, using [dep](https://github.com/golang/dep):
 - `cd ~/go/src/git.jba.io/go/gorram/server`, copy/edit `config.dist.toml` as needed, noting the `SecretKey` and `ListenAddress`
 - `cd ~/go/src/git.jba.io/go/gorram/client`, copy/edit `client.dist.toml` as needed, matching up the `ServerSecret` and `ServerAddress`
 
-Generate SSL certs used to encrypt the traffic: `go run server/main.go server/generate_cert.go -conf ./config.toml -cert ./cert.pem -key ./cert.key -generate-certs`  
-Start server: `go run server/main.go server/generate_cert.go -conf ./config.toml -cert ./cert.pem -key ./cert.key`  
-Start client: `go run client/main.go -conf ./client.toml`  
+Generate SSL certs used to encrypt the traffic: `go run server/main.go -conf ./config.toml -ssl-path ./ -generate-certs`  
+Start server: `go run server/main.go -conf ./config.toml -ssl-path ./`  
+Start client: `go run client/main.go -conf ./client.toml -ssl-path ./`  
 
 If successful, you should see something similar to the following on the server-side, showing the client connecting and fetching it's config:
 ```
@@ -90,12 +95,15 @@ If successful, you should see something similar to the following on the server-s
 2019/03/24 21:34:05 a-client has synced config.
 ```
 
+## Alerts:  
+Alerts will be sent if the number of identical alert occurences is 1, greater than 5, or the occurrences is evenly divisible by 10.  
+This is a very rudimentary 'backoff' implementation. 
+
 ## Todo:  
 - [x] Add additional alerting mechanisms (Pushover, email, etc). 
     - Currently [Pushover](https://pushover.net/) push notifications and log are implemented. 
 - [ ] Add client expiration/deletion.  
     - Right now if a client disappears, the server will start alerting and never stop until the client re-appears. 
-    - Might implement some hold-off mechanism so the alerts get longer and longer apart, but still allow a manual deletion.
 - [ ] Related to the above, implement some kind of frontend to interact with the server; manually delete clients, reload config, etc.  
     - CLI is in the works, but still working on the gRPC server endpoints
     - I'd then like to implement a chat bot based on those implemented endpoints
