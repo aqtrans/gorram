@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package gorram;
+package proto;
 
 service Reporter {
     // Hello should be called once upon initial connection. It syncs the config and stops any timers

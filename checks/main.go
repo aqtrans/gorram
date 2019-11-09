@@ -3,7 +3,7 @@ package checks
 import (
 	"errors"
 
-	gorram "git.jba.io/go/gorram/proto"
+	"git.jba.io/go/gorram/proto"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -27,9 +27,9 @@ This is done so that DoChecks has some mechanism of knowing which checks to do.
 
 */
 type check interface {
-	doCheck() []gorram.Issue
+	doCheck() []proto.Issue
 	Title() string
-	configure(cfg gorram.Config) error
+	configure(cfg proto.Config) error
 }
 
 // getCheck is a function which all checks should run through.
@@ -41,8 +41,8 @@ func getCheck(issues []gorram.Issue, c check) []gorram.Issue {
 }
 */
 
-func newIssue(title, msg string) gorram.Issue {
-	return gorram.Issue{
+func newIssue(title, msg string) proto.Issue {
+	return proto.Issue{
 		Title:   title,
 		Message: msg,
 	}
@@ -58,8 +58,8 @@ func addIssue(issues *[]gorram.Issue, title, msg string) {
 */
 
 // DoChecks is where all the actual checks are done, and an array of "issues" is made
-func DoChecks(cfg gorram.Config) []gorram.Issue {
-	var issues []gorram.Issue
+func DoChecks(cfg proto.Config) []proto.Issue {
+	var issues []proto.Issue
 
 	// Loop over the available checks and the client's enabled checks
 	// If the client has an available check enabled, run it

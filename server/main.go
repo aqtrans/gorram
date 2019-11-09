@@ -30,7 +30,7 @@ import (
 	_ "github.com/tevjef/go-runtime-metrics/expvar"
 
 	"git.jba.io/go/gorram/certs"
-	gorram "git.jba.io/go/gorram/proto"
+	"git.jba.io/go/gorram/proto"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -53,7 +53,7 @@ type serverConfig struct {
 }
 
 type statHandler struct {
-	list gorram.ClientList
+	list proto.ClientList
 	// TagRPC can attach some information to the given context.
 	// The context used for the rest lifetime of the RPC will be derived from
 	// the returned context.
@@ -112,12 +112,12 @@ type gorramServer struct {
 
 type clients struct {
 	sync.Mutex
-	m gorram.ClientList
+	m proto.ClientList
 }
 
 type alerts struct {
 	sync.Mutex
-	m map[string]*gorram.Alert
+	m map[string]*proto.Alert
 }
 
 type clientTimers struct {
@@ -147,7 +147,7 @@ func getClientName(ctx context.Context) string {
 //   It works by spawning a Timer and Ticker for each client
 //   - The timer is reset on every successful ping
 //   - The ticker triggers the dead-client alerts, once the above timer has expired
-func (s *gorramServer) Ping(ctx context.Context, msg *gorram.PingMsg) (*gorram.PingResponse, error) {
+func (s *gorramServer) Ping(ctx context.Context, msg *proto.PingMsg) (*proto.PingResponse, error) {
 	/*
 		// Variables to eventually change into config values, fetched from the client's configured interval
 		// deadClienttime is the time to wait between alerting after a client has been declared dead
@@ -158,7 +158,7 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.PingMsg) (*gorram.P
 	client := getClientName(ctx)
 
 	// Compare the config last updated time and the last updated received in the ping message
-	var cfgOutOfDate gorram.PingResponse
+	var cfgOutOfDate proto.PingResponse
 	clientCfg, err := s.loadClientConfig(client)
 	if err != nil {
 		return nil, err
@@ -210,7 +210,7 @@ func (s *gorramServer) Ping(ctx context.Context, msg *gorram.PingMsg) (*gorram.P
 // reviveDeadClient checks and resets the ticket a dead client sets off
 func (s *gorramServer) reviveDeadClient(clientName string) {
 	if clientTicker, ok := s.clientTimers.tickers.Load(clientName); ok {
-		s.alert(clientName, gorram.Issue{
+		s.alert(clientName, proto.Issue{
 			Title:   "Client Revived",
 			Message: fmt.Sprintf("%v is alive again!", clientName),
 		})
@@ -233,7 +233,7 @@ func (s *gorramServer) deadClientTicker(clientName string) {
 	s.clientTimers.timers.Delete(clientName)
 
 	for t := range ticker.C {
-		s.alert(clientName, gorram.Issue{
+		s.alert(clientName, proto.Issue{
 			Title:   "Dead Client",
 			Message: fmt.Sprintf("%v is dead, since %v", clientName, t),
 		})
@@ -257,13 +257,13 @@ func (c *clientTimers) getTicker(clientName string) *time.Ticker {
 	return ticker.(*time.Ticker)
 }
 
-func (s *gorramServer) RecordIssue(stream gorram.Reporter_RecordIssueServer) error {
+func (s *gorramServer) RecordIssue(stream proto.Reporter_RecordIssueServer) error {
 
 	for {
 		issue, err := stream.Recv()
 		if err == io.EOF {
 
-			return stream.SendAndClose(&gorram.Submitted{
+			return stream.SendAndClose(&proto.Submitted{
 				SuccessfullySubmitted: true,
 			})
 		}
@@ -276,15 +276,15 @@ func (s *gorramServer) RecordIssue(stream gorram.Reporter_RecordIssueServer) err
 	}
 }
 
-func (s *gorramServer) loadClientConfig(client string) (gorram.Config, error) {
+func (s *gorramServer) loadClientConfig(client string) (proto.Config, error) {
 	// Attempt to read the config.toml, and then if it has [clientname] in it, unmarshal the config from there
 	clientCfg, isThere := s.clientCfgs.Load(client)
 	if isThere {
-		return *clientCfg.(*gorram.Config), nil
+		return *clientCfg.(*proto.Config), nil
 	}
 
 	// Default config values:
-	return gorram.Config{}, errUnknownClient
+	return proto.Config{}, errUnknownClient
 	/*
 			gorram.Config{
 				Interval: 60,
@@ -302,7 +302,7 @@ func (s *gorramServer) loadClientConfig(client string) (gorram.Config, error) {
 	*/
 }
 
-func (s *gorramServer) ConfigSync(ctx context.Context, req *gorram.ConfigRequest) (*gorram.Config, error) {
+func (s *gorramServer) ConfigSync(ctx context.Context, req *proto.ConfigRequest) (*proto.Config, error) {
 
 	clientName := getClientName(ctx)
 
@@ -365,7 +365,7 @@ func (cfg serverConfig) streamInterceptor(srv interface{}, stream grpc.ServerStr
 	return handler(srv, stream)
 }
 
-func (s *gorramServer) alert(client string, issue gorram.Issue) {
+func (s *gorramServer) alert(client string, issue proto.Issue) {
 
 	// Tie the issue with the given client name here
 	issue.Host = client
@@ -409,7 +409,7 @@ func (s *gorramServer) alert(client string, issue gorram.Issue) {
 			"issue":  issue.String(),
 		}).Debugln("Issue does not exist. Adding to map.")
 
-		a := gorram.Alert{
+		a := proto.Alert{
 			Issue:         &issue,
 			TimeSubmitted: time.Now().Unix(),
 			Occurrences:   1,
@@ -466,7 +466,7 @@ func (s *gorramServer) loadConfig(confFile string) {
 			}
 
 			clientCfgTree := cfgTree.Get(clientName).(*toml.Tree)
-			clientCfg := gorram.Config{}
+			clientCfg := proto.Config{}
 			err := clientCfgTree.Unmarshal(&clientCfg)
 			if err != nil {
 				log.Fatalln("Error unmarshaling "+confFile+" for client "+clientName+":", err)
@@ -509,8 +509,8 @@ func (s *gorramServer) loadConfig(confFile string) {
 		// TODO: get EnabledChecks building working
 
 		type yamlCfg struct {
-			Server  serverConfig              `yaml:"server,inline"`
-			Clients map[string]*gorram.Config `yaml:",inline"`
+			Server  serverConfig             `yaml:"server,inline"`
+			Clients map[string]*proto.Config `yaml:",inline"`
 		}
 
 		cfgBytes, err := ioutil.ReadFile(confFile)
@@ -635,12 +635,12 @@ func (s *gorramServer) loadConfig(confFile string) {
 	}
 }
 
-func (s *gorramServer) List(ctx context.Context, qr *gorram.QueryRequest) (*gorram.ClientList, error) {
+func (s *gorramServer) List(ctx context.Context, qr *proto.QueryRequest) (*proto.ClientList, error) {
 
 	return &s.connectedClients.m, nil
 }
 
-func (s *gorramServer) Delete(ctx context.Context, cn *gorram.ClientName) (*gorram.ClientList, error) {
+func (s *gorramServer) Delete(ctx context.Context, cn *proto.ClientName) (*proto.ClientList, error) {
 	clientName := cn.GetName()
 	// Stop and delete clientName's ticker, and delete it from the ClientList
 	// TODO: Delete timer too?
@@ -657,7 +657,7 @@ func (s *gorramServer) Delete(ctx context.Context, cn *gorram.ClientName) (*gorr
 	return &s.connectedClients.m, nil
 }
 
-func (s *gorramServer) Debug(ctx context.Context, dr *gorram.DebugRequest) (*gorram.DebugResponse, error) {
+func (s *gorramServer) Debug(ctx context.Context, dr *proto.DebugRequest) (*proto.DebugResponse, error) {
 	timers := make(map[interface{}]interface{})
 	s.clientTimers.timers.Range(func(k, v interface{}) bool {
 		timers[k] = v
@@ -670,12 +670,12 @@ func (s *gorramServer) Debug(ctx context.Context, dr *gorram.DebugRequest) (*gor
 	})
 
 	aString := fmt.Sprintf("Connected clients: %v | Timers: %s | Tickers: %s", s.connectedClients.m, timers, tickers)
-	return &gorram.DebugResponse{
+	return &proto.DebugResponse{
 		Resp: aString,
 	}, nil
 }
 
-func (s *gorramServer) Hello(ctx context.Context, req *gorram.ConfigRequest) (*gorram.Config, error) {
+func (s *gorramServer) Hello(ctx context.Context, req *proto.ConfigRequest) (*proto.Config, error) {
 
 	clientName := getClientName(ctx)
 
@@ -691,7 +691,7 @@ func (s *gorramServer) Hello(ctx context.Context, req *gorram.ConfigRequest) (*g
 	}
 
 	// As this should only be called on client connection, record the client name and address here
-	c := gorram.Client{
+	c := proto.Client{
 		Name:    clientName,
 		Address: clientAddress,
 	}
@@ -742,7 +742,7 @@ func (a *alerts) exists(client string, alert gorram.Alert, interval int64) (rese
 }
 */
 
-func (a *alerts) add(alert gorram.Alert) {
+func (a *alerts) add(alert proto.Alert) {
 	a.Lock()
 	if len(a.m) > 20 {
 		log.WithFields(log.Fields{
@@ -755,7 +755,7 @@ func (a *alerts) add(alert gorram.Alert) {
 	a.Unlock()
 }
 
-func (a *alerts) count(issue gorram.Issue) int64 {
+func (a *alerts) count(issue proto.Issue) int64 {
 	a.Lock()
 	v := a.m[issue.String()]
 	v.Occurrences = v.Occurrences + 1
@@ -763,14 +763,14 @@ func (a *alerts) count(issue gorram.Issue) int64 {
 	return v.Occurrences
 }
 
-func (a *alerts) exists(issue gorram.Issue) bool {
+func (a *alerts) exists(issue proto.Issue) bool {
 	a.Lock()
 	_, alertExists := a.m[issue.String()]
 	a.Unlock()
 	return alertExists
 }
 
-func (a *alerts) get(issue gorram.Issue) *gorram.Alert {
+func (a *alerts) get(issue proto.Issue) *proto.Alert {
 	a.Lock()
 	theAlert, alertExists := a.m[issue.String()]
 	if alertExists {
@@ -782,7 +782,7 @@ func (a *alerts) get(issue gorram.Issue) *gorram.Alert {
 	return nil
 }
 
-func (c *clients) add(client gorram.Client) {
+func (c *clients) add(client proto.Client) {
 	c.Lock()
 	c.m.Clients[client.Name] = &client
 	c.Unlock()
@@ -795,7 +795,7 @@ func (c *clients) exists(clientName string) bool {
 	return clientExists
 }
 
-func (c *clients) get(clientName string) *gorram.Client {
+func (c *clients) get(clientName string) *proto.Client {
 	c.Lock()
 	theClient, clientExists := c.m.Clients[clientName]
 	if clientExists {
@@ -825,9 +825,9 @@ func (s *gorramServer) checkRequiredClients(k, v interface{}) bool {
 		if s.connectedClients.exists(clientName) {
 			clientCfg, isThere := s.clientCfgs.Load(clientName)
 			if isThere {
-				if actualClientCfg, isCfg := clientCfg.(*gorram.Config); isCfg {
+				if actualClientCfg, isCfg := clientCfg.(*proto.Config); isCfg {
 					if actualClientCfg.Required {
-						s.alert(clientName, gorram.Issue{
+						s.alert(clientName, proto.Issue{
 							Title:   "Client Offline",
 							Message: clientName + " has not connected",
 						})
@@ -957,13 +957,13 @@ func main() {
 		server = grpc.NewServer(grpc.Creds(creds), grpc.StatsHandler(&sh), grpc.UnaryInterceptor(gs.cfg.unaryInterceptor), grpc.KeepaliveParams(kp), grpc.KeepaliveEnforcementPolicy(kpe))
 	}
 
-	gs.alertsMap.m = make(map[string]*gorram.Alert)
+	gs.alertsMap.m = make(map[string]*proto.Alert)
 
-	gs.connectedClients.m.Clients = make(map[string]*gorram.Client)
+	gs.connectedClients.m.Clients = make(map[string]*proto.Client)
 
-	gorram.RegisterReporterServer(server, &gs)
+	proto.RegisterReporterServer(server, &gs)
 
-	gorram.RegisterQuerierServer(server, &gs)
+	proto.RegisterQuerierServer(server, &gs)
 
 	// Start listening, in a goroutine so SIGINTs can be caught below
 	go func() {

@@ -19,7 +19,8 @@ import (
 
 	"git.jba.io/go/gorram/certs"
 	"git.jba.io/go/gorram/checks"
-	gorram "git.jba.io/go/gorram/proto"
+	"git.jba.io/go/gorram/proto"
+
 	toml "github.com/pelletier/go-toml"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -185,14 +186,14 @@ func main() {
 
 	defer conn.Close()
 
-	c := gorram.NewReporterClient(conn)
+	c := proto.NewReporterClient(conn)
 
 	// Create RPC context, add client name metadata
 	rpcCtx, rpcCancel := context.WithTimeout(context.Background(), rpcTimeout)
 	rpcCtx = metadata.AppendToOutgoingContext(rpcCtx, "client", tomlCfg.ClientName)
 
 	// Hello: Get config from server, and ensure dead tickers are stopped
-	origCfg, err := c.Hello(rpcCtx, &gorram.ConfigRequest{
+	origCfg, err := c.Hello(rpcCtx, &proto.ConfigRequest{
 		ClientName: tomlCfg.ClientName,
 	})
 	if err != nil {
@@ -219,7 +220,7 @@ func main() {
 				defer rpcCancel()
 
 				cfgMutex.Lock()
-				pingResp, err := c.Ping(rpcCtx, &gorram.PingMsg{IsAlive: true, CfgLastUpdated: origCfg.LastUpdated})
+				pingResp, err := c.Ping(rpcCtx, &proto.PingMsg{IsAlive: true, CfgLastUpdated: origCfg.LastUpdated})
 				if err != nil {
 					log.Fatalln("Error with c.Ping:", err)
 				}
@@ -233,7 +234,7 @@ func main() {
 					rpcCtx = metadata.AppendToOutgoingContext(rpcCtx, "client", tomlCfg.ClientName)
 					defer rpcCancel()
 
-					newCfg, err := c.ConfigSync(rpcCtx, &gorram.ConfigRequest{
+					newCfg, err := c.ConfigSync(rpcCtx, &proto.ConfigRequest{
 						ClientName: tomlCfg.ClientName,
 					})
 					if err != nil {
