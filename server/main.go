@@ -352,39 +352,39 @@ func (s *gorramServer) alert(client string, issue proto.Issue) {
 
 		log.WithFields(log.Fields{
 			"client":      client,
-			"issue":       issue.String(),
+			"check":       issue.Title,
 			"occurrences": occurrences,
-		}).Debugln("Issue exists. Increasing occurrence count.")
+		}).Debugln("Issue exists. Increasing occurrence count.", issue.Message)
 
 		if occurrences < 5 {
 			log.WithFields(log.Fields{
 				"client":      client,
-				"issue":       issue.String(),
+				"check":       issue.Title,
 				"occurrences": occurrences,
-			}).Debugln("Less than 5 occurrences. Continuing alerts.")
+			}).Debugln("Less than 5 occurrences. Continuing alerts.", issue.Message)
 		} else if (occurrences % 10) == 0 {
 			log.WithFields(log.Fields{
 				"client":      client,
-				"issue":       issue.String(),
+				"check":       issue.Title,
 				"occurrences": occurrences,
-			}).Debugln("Sending alert as it meets occurrences count.")
+			}).Debugln("Sending alert as it meets occurrences count.", issue.Message)
 			s.alertsMap.Lock()
 			issue.Message = issue.Message + " | Occurrences: " + strconv.FormatInt(occurrences, 10) + "| First occurred:" + time.Unix(s.alertsMap.m[issue.String()].TimeSubmitted, 0).String()
 			s.alertsMap.Unlock()
 		} else {
 			log.WithFields(log.Fields{
 				"client":      client,
-				"issue":       issue.String(),
+				"check":       issue.Title,
 				"occurrences": occurrences,
-			}).Debugln("Skipping alert...")
+			}).Debugln("Skipping alert...", issue.Message)
 			return
 		}
 
 	} else {
 		log.WithFields(log.Fields{
 			"client": client,
-			"issue":  issue.String(),
-		}).Debugln("Issue does not exist. Adding to map.")
+			"check":  issue.Title,
+		}).Debugln("Issue does not exist. Adding to map.", issue.Message)
 
 		a := proto.Alert{
 			Issue:         &issue,
@@ -398,13 +398,13 @@ func (s *gorramServer) alert(client string, issue proto.Issue) {
 	case "log":
 		log.WithFields(log.Fields{
 			"client": client,
-			"issue":  issue.String(),
-		}).Warnln("[ALERT] "+client+" - "+issue.Title+":", issue.Message)
+			"check":  issue.Title,
+		}).Warnln("[ALERT] ", issue.Message)
 	case "pushover":
 		log.WithFields(log.Fields{
 			"client": client,
-			"issue":  issue.String(),
-		}).Debugln("[ALERT] "+client+" - "+issue.Title+":", issue.Message)
+			"check":  issue.Title,
+		}).Debugln("[ALERT] ", issue.Message)
 
 		app := pushover.New(s.cfg.PushoverAppKey)
 		recipient := pushover.NewRecipient(s.cfg.PushoverUserKey)
