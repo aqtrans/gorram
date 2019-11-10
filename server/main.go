@@ -873,6 +873,11 @@ func main() {
 	//alertMethodF := flag.String("alert", "log", "Alert method to use. Right now, log. To come: pushover.")
 	flag.Parse()
 
+	// Set debug from flag here to allow debugging config loading and cert generation
+	if *debug {
+		log.SetLevel(log.DebugLevel)
+	}
+
 	if *generateCAcert {
 		log.Infoln("Generating cacert.pem and cacert.key...")
 		certs.GenerateCACert(*sslPath)
@@ -886,7 +891,7 @@ func main() {
 
 	gs.loadConfig(*confFile)
 
-	if *debug || gs.cfg.Debug {
+	if gs.cfg.Debug {
 		log.SetLevel(log.DebugLevel)
 	}
 
