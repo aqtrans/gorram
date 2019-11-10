@@ -207,7 +207,6 @@ func main() {
 
 	// Ping and collect issues every X seconds
 	ticker := time.NewTicker(time.Duration(origCfg.Interval) * time.Second)
-	quit := make(chan struct{})
 	//cfgChan := make(chan *gorram.Config)
 
 	go func() {
@@ -278,7 +277,7 @@ func main() {
 					}
 				}
 				log.Debugln("Number of Goroutines:", runtime.NumGoroutine())
-			case <-quit:
+			case <-done:
 				ticker.Stop()
 				return
 			}
@@ -293,6 +292,8 @@ func main() {
 
 	<-done
 	log.Println("Client exiting...")
+	dialCancel()
+	rpcCancel()
 	ticker.Stop()
 	err = conn.Close()
 	if err != nil {
