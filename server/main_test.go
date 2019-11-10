@@ -61,12 +61,18 @@ func TestReviveDeadClient(t *testing.T) {
 func TestConfig(t *testing.T) {
 	tomlServer := &gorramServer{}
 	yamlServer := &gorramServer{}
-	//hclServer := &gorramServer{}
+	hclServer := &gorramServer{}
 	tomlServer.loadConfig("tests/testcfg.toml")
 	yamlServer.loadConfig("tests/testcfg.yaml")
-	//hclServer.loadConfig("tests/testcfg.hcl")
+	hclServer.loadConfig("tests/testcfg.hcl")
 	if !reflect.DeepEqual(yamlServer.cfg, tomlServer.cfg) {
 		t.Fatal("YAML and TOML server configs do not match:", yamlServer.cfg, tomlServer.cfg)
+	}
+	if !reflect.DeepEqual(hclServer.cfg, tomlServer.cfg) {
+		t.Fatal("HCL and TOML server configs do not match:", hclServer.cfg, tomlServer.cfg)
+	}
+	if !reflect.DeepEqual(hclServer.cfg, yamlServer.cfg) {
+		t.Fatal("HCL and YAML server configs do not match:", hclServer.cfg, yamlServer.cfg)
 	}
 	//t.Log("YAML", yamlServer.cfg)
 	//t.Log("TOML", tomlServer.cfg)
@@ -82,20 +88,30 @@ func TestConfig(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		//hclcfg := hclServer.loadClientConfig(clientName)
+		hclcfg, err := hclServer.loadClientConfig(clientName)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if !reflect.DeepEqual(tomlcfg, yamlcfg) {
 			t.Log("TestConfig error: ", clientName, "YAML config does not match TOML:")
 			t.Log("TOML:", tomlcfg)
 			t.Log("YAML:", yamlcfg)
 			t.Fail()
 		}
-		/*
-			if !reflect.DeepEqual(tomlcfg, hclcfg) {
-				t.Log("TestConfig error: ", clientName, "HCL config does not match TOML:")
-				t.Log("TOML:", tomlcfg)
-				t.Log("HCL:", hclcfg)
-				t.Fail()
-			}
-		*/
+
+		if !reflect.DeepEqual(tomlcfg, hclcfg) {
+			t.Log("TestConfig error: ", clientName, "HCL config does not match TOML:")
+			t.Log("TOML:", tomlcfg)
+			t.Log("HCL:", hclcfg)
+			t.Fail()
+		}
+
+		if !reflect.DeepEqual(yamlcfg, hclcfg) {
+			t.Log("TestConfig error: ", clientName, "HCL config does not match YAML:")
+			t.Log("YAML:", yamlcfg)
+			t.Log("HCL:", hclcfg)
+			t.Fail()
+		}
+
 	}
 }

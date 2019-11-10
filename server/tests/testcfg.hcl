@@ -18,11 +18,11 @@ Client "client1" {
     }
 
     Process = [
-        { Path = "deluge-gtk" },
-        { Path = "/usr/lib/firefox/firefox" User = "username" }
+        { Path = "/usr/lib/firefox/firefox" User = "username" },
+        { Path = "deluge-gtk" }
     ]
 
-    GetUrl { Url = "https://google.com/" }
+    GetUrl { Url = "http://google.com" }
     GetUrl { Url = "https://some-site.com/health" ExpectedBody = "{\"alive\": true}" }
     
     Diskspace { Partition = "/" MaxUsage = 90.0 }
@@ -53,7 +53,6 @@ Client "client2" {
 }
 
 Client "client3" {
-    Interval = 5
     Memory {
         MaxUsage = 15.0
     } 
