@@ -59,7 +59,7 @@ message Config {
     message DiskSpace {
         string partition = 1;
         double max_usage = 2;
-        uint64  min_free_gb = 3;
+        int64  min_free_gb = 3;
     }
     message ProcessExists {
         string path = 1;

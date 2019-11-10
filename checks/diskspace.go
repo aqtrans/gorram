@@ -59,12 +59,12 @@ func (d *diskSpace) doCheck() []pb.Issue {
 		if aDisk.GetMinFreeGb() != 0 {
 			// Calculate the given GB to bytes:
 			minBytes := aDisk.MinFreeGb * 1000000000
-			if usage.Free < minBytes {
+			if usage.Free < uint64(minBytes) {
 				freeGB := usage.Free / 1000000000
 				issues = append(issues, newIssue(d.Title(), fmt.Sprintf("Free space of %s is less than %v GB; currently %v GB", aDisk.Partition, aDisk.MinFreeGb, freeGB)))
 				continue
 			}
-			if usage.Free == minBytes {
+			if usage.Free == uint64(minBytes) {
 				freeGB := usage.Free / 1000000000
 				issues = append(issues, newIssue(d.Title(), fmt.Sprintf("Disk usage of %s is at %v GB; currently %v GB", aDisk.Partition, aDisk.MinFreeGb, freeGB)))
 				continue
