@@ -14,7 +14,7 @@ Without certificates in place, the server will generate and save a CA certificat
 Copy that generated CA certificate and key to the client in order to allow the client to dynamically generate a client certificate. 
 
 A very basic heartbeat is implemented, with the server waiting for a ping from the client every `$interval` seconds, right after connect. 
-If the ping is not received, the timer expires and a ticker fires off that alerts every `$interval`+10 seconds until the client re-connects.  
+If the ping is not received, the timer expires and a ticker fires off that alerts every `$interval`*2 seconds until the client re-connects.  
 
 The server holds all configuration information in a TOML or YAML file on a per-client basis, and that client config is pushed to the client upon connect. 
 [fsnotify](https://github.com/fsnotify/fsnotify) is used to watch and reload and send the config to the client as necessary, as part of the ping/heartbeat. 
