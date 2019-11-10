@@ -5,7 +5,6 @@ import (
 	"reflect"
 	"strconv"
 	"testing"
-	"time"
 
 	gorram "git.jba.io/go/gorram/proto"
 	"google.golang.org/grpc/metadata"
@@ -53,10 +52,6 @@ func TestReviveDeadClient(t *testing.T) {
 	//ctx := testCtx()
 	s := &gorramServer{}
 	s.alertsMap.m = make(map[string]*gorram.Alert)
-
-	// Create and store new ticker
-	ticker := time.NewTicker(60 * time.Second)
-	s.clientTimers.tickers.Store(clientName, ticker)
 
 	s.reviveDeadClient(clientName)
 

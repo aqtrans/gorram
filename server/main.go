@@ -27,6 +27,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 
+	_ "net/http/pprof"
+
 	_ "github.com/tevjef/go-runtime-metrics/expvar"
 
 	"git.jba.io/go/gorram/certs"
@@ -43,13 +45,15 @@ import (
 var errUnknownClient = errors.New("Unknown Client Name - Check ClientName in client.toml")
 
 type serverConfig struct {
-	SecretKey       string `yaml:"secret_key,omitempty"`
-	AlertMethod     string `yaml:"alert_method,omitempty"`
-	PushoverAppKey  string `yaml:"pushover_app_key,omitempty"`
-	PushoverUserKey string `yaml:"pushover_user_key,omitempty"`
-	PushoverDevice  string `yaml:"pushover_device,omitempty"`
-	ListenAddress   string `yaml:"listen_address,omitempty"`
-	TLSHostname     string `yaml:"tls_host,omitempty"`
+	SecretKey        string `yaml:"secret_key,omitempty"`
+	AlertMethod      string `yaml:"alert_method,omitempty"`
+	PushoverAppKey   string `yaml:"pushover_app_key,omitempty"`
+	PushoverUserKey  string `yaml:"pushover_user_key,omitempty"`
+	PushoverDevice   string `yaml:"pushover_device,omitempty"`
+	ListenAddress    string `yaml:"listen_address,omitempty"`
+	TLSHostname      string `yaml:"tls_host,omitempty"`
+	HeartbeatSeconds int64  `yaml:"heartbeat_seconds,omitempty"`
+	Debug            bool   `yaml:"debug,omitempty"`
 }
 
 type statHandler struct {
@@ -98,7 +102,7 @@ func (s *statHandler) HandleConn(ctx context.Context, connStats stats.ConnStats)
 }
 
 type gorramServer struct {
-	clientTimers
+	//clientTimers
 	clientCfgs       sync.Map
 	cfg              serverConfig
 	connectedClients clients
@@ -120,10 +124,12 @@ type alerts struct {
 	m map[string]*proto.Alert
 }
 
+/*
 type clientTimers struct {
 	tickers sync.Map
 	timers  sync.Map
 }
+*/
 
 func getClientName(ctx context.Context) string {
 	p, pok := peer.FromContext(ctx)
@@ -157,6 +163,9 @@ func (s *gorramServer) Ping(ctx context.Context, msg *proto.PingMsg) (*proto.Pin
 
 	client := getClientName(ctx)
 
+	// Update LastPingTime
+	s.connectedClients.updatePingTime(client)
+
 	// Compare the config last updated time and the last updated received in the ping message
 	var cfgOutOfDate proto.PingResponse
 	clientCfg, err := s.loadClientConfig(client)
@@ -170,91 +179,58 @@ func (s *gorramServer) Ping(ctx context.Context, msg *proto.PingMsg) (*proto.Pin
 		cfgOutOfDate.CfgOutOfSync = true
 	}
 
-	// pingTime is the time to wait before declaring a client dead
-	var pingTime time.Duration
-	pingTime = time.Duration(clientCfg.Interval*2) * time.Second
+	/*
+		// pingTime is the time to wait before declaring a client dead
+		var pingTime time.Duration
+		pingTime = time.Duration(clientCfg.Interval*2) * time.Second
 
-	// Setup a ping timer
-	clientTimer, ok := s.clientTimers.timers.Load(client)
+		// Setup a ping timer
+		clientTimer, ok := s.clientTimers.timers.Load(client)
 
-	if ok {
-		ct := clientTimer.(*time.Timer)
-		// Reset the client's timer
-		if !ct.Stop() {
-			log.WithFields(log.Fields{
-				"client": client,
-			}).Debugln("ct.Stop() hit. Draining channel.")
-			<-ct.C
+		if ok {
+			ct := clientTimer.(*time.Timer)
+			// Reset the client's timer
+
+				if !ct.Stop() {
+					log.WithFields(log.Fields{
+						"client": client,
+					}).Debugln("ct.Stop() hit. Draining channel.")
+					<-ct.C
+				}
+
+			ct.Reset(pingTime)
+
+		} else {
+			// Check if the client was dead, and reset it's ticker
+			s.reviveDeadClient(client)
+
+			// create a ticker to store and reference
+			ticker := time.NewTicker(pingTime)
+			s.clientTimers.tickers.Store(client, ticker)
+
+			// Create a timer to store and reference
+			timer := time.NewTimer(pingTime)
+			s.clientTimers.timers.Store(client, timer)
+
+			// Fire off a goroutine that expires in 60 seconds, then ticking every 30 seconds
+			go s.deadClientTicker(client)
 		}
-		ct.Reset(pingTime)
-
-	} else {
-		// Check if the client was dead, and reset it's ticker
-		s.reviveDeadClient(client)
-
-		// create a ticker to store and reference
-		ticker := time.NewTicker(pingTime)
-		s.clientTimers.tickers.Store(client, ticker)
-
-		// Create a timer to store and reference
-		timer := time.NewTimer(pingTime)
-		s.clientTimers.timers.Store(client, timer)
-
-		// Fire off a goroutine that expires in 60 seconds, then ticking every 30 seconds
-		go s.deadClientTicker(client)
-	}
+	*/
 
 	return &cfgOutOfDate, nil
 }
 
-// reviveDeadClient checks and resets the ticket a dead client sets off
+// reviveDeadClient checks if the client ever connected and
+//  never cleanly disconnected. If so, an alert is sent,
+//  and the LastPingTime is updated.
 func (s *gorramServer) reviveDeadClient(clientName string) {
-	if clientTicker, ok := s.clientTimers.tickers.Load(clientName); ok {
+	if s.connectedClients.exists(clientName) {
 		s.alert(clientName, proto.Issue{
 			Title:   "Client Revived",
 			Message: fmt.Sprintf("%v is alive again!", clientName),
 		})
-		clientTicker.(*time.Ticker).Stop()
-		s.clientTimers.tickers.Delete(clientName)
+		s.connectedClients.updatePingTime(clientName)
 	}
-}
-
-func (s *gorramServer) deadClientTicker(clientName string) {
-	timer := s.clientTimers.getTimer(clientName)
-	ticker := s.clientTimers.getTicker(clientName)
-
-	// This should block until the given clients timer has not been reset, considering the client dead
-	<-timer.C
-	log.WithFields(log.Fields{
-		"client": clientName,
-	}).Debugln("timer has expired.")
-	timer.Stop()
-
-	s.clientTimers.timers.Delete(clientName)
-
-	for t := range ticker.C {
-		s.alert(clientName, proto.Issue{
-			Title:   "Dead Client",
-			Message: fmt.Sprintf("%v is dead, since %v", clientName, t),
-		})
-	}
-
-}
-
-func (c *clientTimers) getTimer(clientName string) *time.Timer {
-	timer, ok := c.timers.Load(clientName)
-	if !ok {
-		log.Fatalln("[TIMER] getTimer Error: no timer for", clientName)
-	}
-	return timer.(*time.Timer)
-}
-
-func (c *clientTimers) getTicker(clientName string) *time.Ticker {
-	ticker, ok := c.tickers.Load(clientName)
-	if !ok {
-		log.Fatalln("[TIMER] getTimer Error: no ticker for", clientName)
-	}
-	return ticker.(*time.Ticker)
 }
 
 func (s *gorramServer) RecordIssue(stream proto.Reporter_RecordIssueServer) error {
@@ -280,7 +256,8 @@ func (s *gorramServer) loadClientConfig(client string) (proto.Config, error) {
 	// Attempt to read the config.toml, and then if it has [clientname] in it, unmarshal the config from there
 	clientCfg, isThere := s.clientCfgs.Load(client)
 	if isThere {
-		return *clientCfg.(*proto.Config), nil
+		cfg := *clientCfg.(*proto.Config)
+		return cfg, nil
 	}
 
 	// Default config values:
@@ -498,6 +475,7 @@ func (s *gorramServer) loadConfig(confFile string) {
 				}).Debugln("No interval configured. Setting to 60 seconds.")
 				clientCfg.Interval = 60
 			}
+
 			clientCfg.LastUpdated = time.Now().Unix()
 
 			// Store the enabled checks
@@ -542,6 +520,7 @@ func (s *gorramServer) loadConfig(confFile string) {
 				}).Debugln("No interval configured. Setting to 60 seconds.")
 				clientConfig.Interval = 60
 			}
+
 			clientConfig.LastUpdated = time.Now().Unix()
 
 			// Store the enabled checks
@@ -633,6 +612,12 @@ func (s *gorramServer) loadConfig(confFile string) {
 	default:
 		log.Fatalln("Only able to load TOML and YAML files currently. Unable to load", confFile)
 	}
+
+	// Set a default HeartbeatSeconds if not set
+	if s.cfg.HeartbeatSeconds == 0 {
+		log.Println("HeartbeatSeconds is 0, setting to default of 60.")
+		s.cfg.HeartbeatSeconds = 60
+	}
 }
 
 func (s *gorramServer) List(ctx context.Context, qr *proto.QueryRequest) (*proto.ClientList, error) {
@@ -644,9 +629,7 @@ func (s *gorramServer) Delete(ctx context.Context, cn *proto.ClientName) (*proto
 	clientName := cn.GetName()
 	// Stop and delete clientName's ticker, and delete it from the ClientList
 	// TODO: Delete timer too?
-	if clientTicker, ok := s.clientTimers.tickers.Load(clientName); ok {
-		clientTicker.(*time.Ticker).Stop()
-		s.clientTimers.tickers.Delete(clientName)
+	if s.connectedClients.exists(clientName) {
 		//delete(s.connectedClients.Clients, clientName)
 		s.connectedClients.delete(clientName)
 		log.WithFields(log.Fields{
@@ -658,18 +641,8 @@ func (s *gorramServer) Delete(ctx context.Context, cn *proto.ClientName) (*proto
 }
 
 func (s *gorramServer) Debug(ctx context.Context, dr *proto.DebugRequest) (*proto.DebugResponse, error) {
-	timers := make(map[interface{}]interface{})
-	s.clientTimers.timers.Range(func(k, v interface{}) bool {
-		timers[k] = v
-		return true
-	})
-	tickers := make(map[interface{}]interface{})
-	s.clientTimers.tickers.Range(func(k, v interface{}) bool {
-		tickers[k] = v
-		return true
-	})
 
-	aString := fmt.Sprintf("Connected clients: %v | Timers: %s | Tickers: %s", s.connectedClients.m, timers, tickers)
+	aString := fmt.Sprintf("Connected clients: %v", s.connectedClients.m)
 	return &proto.DebugResponse{
 		Resp: aString,
 	}, nil
@@ -678,6 +651,9 @@ func (s *gorramServer) Debug(ctx context.Context, dr *proto.DebugRequest) (*prot
 func (s *gorramServer) Hello(ctx context.Context, req *proto.ConfigRequest) (*proto.Config, error) {
 
 	clientName := getClientName(ctx)
+
+	// Check if the client has connected before
+	s.reviveDeadClient(clientName)
 
 	var clientAddress string
 	p, ok := peer.FromContext(ctx)
@@ -692,13 +668,11 @@ func (s *gorramServer) Hello(ctx context.Context, req *proto.ConfigRequest) (*pr
 
 	// As this should only be called on client connection, record the client name and address here
 	c := proto.Client{
-		Name:    clientName,
-		Address: clientAddress,
+		Name:         clientName,
+		Address:      clientAddress,
+		LastPingTime: time.Now().Unix(),
 	}
 	s.connectedClients.add(c)
-
-	// Reset and then delete the ticker for the client
-	s.reviveDeadClient(clientName)
 
 	return s.ConfigSync(ctx, req)
 }
@@ -820,22 +794,65 @@ func (c *clients) delete(clientName string) {
 	return
 }
 
-func (s *gorramServer) checkRequiredClients(k, v interface{}) bool {
+func (c *clients) updatePingTime(clientName string) {
+	c.Lock()
+	_, clientExists := c.m.Clients[clientName]
+	if clientExists {
+		c.m.Clients[clientName].LastPingTime = time.Now().Unix()
+
+		c.Unlock()
+		return
+	}
+	c.Unlock()
+	return
+}
+
+func (c *clients) expired(clientName string, pingInterval int64) bool {
+	c.Lock()
+	_, clientExists := c.m.Clients[clientName]
+	if clientExists {
+		now := time.Now()
+		lastPingTime := time.Unix(c.m.Clients[clientName].LastPingTime, 0)
+		// If client hasn't pinged in pingInterval * 2, consider it expired
+		log.Debugln(clientName, "difference between now and last ping time:", now.Sub(lastPingTime).String())
+		if now.Sub(lastPingTime).Seconds() > float64(pingInterval*2) {
+			c.Unlock()
+			return true
+		}
+		c.Unlock()
+		return false
+	}
+	c.Unlock()
+	return false
+}
+
+func (s *gorramServer) checkClients(k, v interface{}) bool {
 	if clientName, isString := k.(string); isString {
-		if s.connectedClients.exists(clientName) {
-			clientCfg, isThere := s.clientCfgs.Load(clientName)
-			if isThere {
-				if actualClientCfg, isCfg := clientCfg.(*proto.Config); isCfg {
-					if actualClientCfg.Required {
-						s.alert(clientName, proto.Issue{
-							Title:   "Client Offline",
-							Message: clientName + " has not connected",
-						})
-					}
-				}
+		clientCfg, err := s.loadClientConfig(clientName)
+		if err == errUnknownClient {
+			log.Debugln("No config found for", clientName)
+			return false
+		}
+		if err != nil {
+			log.Debugln("Error loading config for", clientName)
+			return false
+		}
+		// Check if client is Required and has not connected
+		if clientCfg.Required && !s.connectedClients.exists(clientName) {
+			s.alert(clientName, proto.Issue{
+				Title:   "Client Offline",
+				Message: clientName + " has not connected",
+			})
+		}
 
-			}
-
+		// Check if connected client hasn't pinged in a while, client interval times 2
+		if s.connectedClients.exists(clientName) && s.connectedClients.expired(clientName, clientCfg.Interval) {
+			log.Debugln(clientName, "has expired")
+			// TODO: should add time they've been offline to the alert
+			s.alert(clientName, proto.Issue{
+				Title:   "Client dropped offline",
+				Message: clientName + " has dropped offline",
+			})
 		}
 	}
 	return true
@@ -856,10 +873,6 @@ func main() {
 	//alertMethodF := flag.String("alert", "log", "Alert method to use. Right now, log. To come: pushover.")
 	flag.Parse()
 
-	if *debug {
-		log.SetLevel(log.DebugLevel)
-	}
-
 	if *generateCAcert {
 		log.Infoln("Generating cacert.pem and cacert.key...")
 		certs.GenerateCACert(*sslPath)
@@ -873,10 +886,9 @@ func main() {
 
 	gs.loadConfig(*confFile)
 
-	// Expose expvars on port 50001
-	go func() {
-		http.ListenAndServe("127.0.0.1:50001", nil)
-	}()
+	if *debug || gs.cfg.Debug {
+		log.SetLevel(log.DebugLevel)
+	}
 
 	// TLS stuff
 	var creds credentials.TransportCredentials
@@ -965,6 +977,12 @@ func main() {
 
 	proto.RegisterQuerierServer(server, &gs)
 
+	// Watch for config.toml changes
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Fatalln("Error watching config file for changes:", err)
+	}
+
 	// Start listening, in a goroutine so SIGINTs can be caught below
 	go func() {
 		if err := server.Serve(lis); err != nil {
@@ -972,12 +990,15 @@ func main() {
 		}
 	}()
 
-	// Watch for config.toml changes
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		log.Fatalln("Error watching config file for changes:", err)
-	}
+	// Expose expvars and pprof on http://127.0.0.1:50001
+	go func() {
+		if err := http.ListenAndServe("127.0.0.1:50001", nil); err != nil {
+			log.Fatalf("Failed to serve: %v", err)
+		}
+	}()
 
+	// Watch config for changes, and every HeartbeatSeconds check for 'dead' clients
+	heartbeatTicker := time.NewTicker(time.Duration(gs.cfg.HeartbeatSeconds) * time.Second)
 	go func() {
 		for {
 			select {
@@ -989,6 +1010,12 @@ func main() {
 				if err != nil {
 					log.Errorln("Error watching config.toml:", err)
 				}
+			case <-heartbeatTicker.C:
+				gs.clientCfgs.Range(gs.checkClients)
+				//gs.isClientConnected
+			case <-done:
+				heartbeatTicker.Stop()
+				return
 			}
 		}
 	}()
@@ -997,23 +1024,6 @@ func main() {
 	if err != nil {
 		log.Fatalln("Error watching config.toml:", err)
 	}
-
-	// Now start checking if clients flagged as 'required' have connected:
-	// Currently checking every 5 minutes; May want to work this into a config variable
-	ticker := time.NewTicker(300 * time.Second)
-	quit := make(chan struct{})
-	go func() {
-		for {
-			select {
-			case <-ticker.C:
-				gs.clientCfgs.Range(gs.checkRequiredClients)
-				//gs.isClientConnected
-			case <-quit:
-				ticker.Stop()
-				return
-			}
-		}
-	}()
 
 	// Listen for Ctrl+C
 	go func() {
@@ -1025,8 +1035,7 @@ func main() {
 	// When Ctrl+C is caught, do this
 	<-done
 	log.Infoln("Server exiting...")
-	ticker.Stop()
+	heartbeatTicker.Stop()
 	watcher.Close()
-	server.GracefulStop()
-
+	server.Stop()
 }

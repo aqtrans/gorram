@@ -115,6 +115,7 @@ message ClientList {
 message Client {
     string name = 1;
     string address = 2;
+    int64 last_ping_time = 3;
 }
 
 message ClientName {
