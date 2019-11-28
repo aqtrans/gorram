@@ -18,6 +18,11 @@ steps:
     - name: deps
       path: /go
   commands:
+    - echo deb http://deb.debian.org/debian/ stable main > /etc/apt/sources.list
+    - apt-get update -y && apt-get install unzip -y
+    - curl -o protoc.zip -sL https://github.com/protocolbuffers/protobuf/releases/download/v3.11.0/protoc-3.11.0-linux-x86_64.zip
+    - unzip protoc.zip -d /protoc  
+    - export PATH=$PATH:/protoc/bin:$GOPATH/bin
     - go get -u github.com/golang/protobuf/protoc-gen-go
     - go generate
 
@@ -83,17 +88,17 @@ steps:
     SSH_KEY:
       from_secret: ssh_key
   commands:
-  - mkdir $HOME/.ssh
-  - echo "$SSH_KEY" > $HOME/.ssh/id_ed25519
-  - cat $HOME/.ssh/id_ed25519
-  - chmod 600 $HOME/.ssh/id_ed25519
-  - apk add --no-cache openssh
-  - ssh-keyscan -H bob.jba.io > $HOME/.ssh/known_hosts
-  - ssh-keyscan -H rick.jba.io > $HOME/.ssh/known_hosts
-  - scp ./client/gorram-client.deb ./server/gorram-server.deb deploy@bob.jba.io:/home/deploy/
-  - ssh deploy@bob.jba.io sudo dpkg -i gorram-server.deb gorram-client.deb
-  - scp ./client/gorram-client.deb deploy@rick.jba.io:/home/deploy/
-  - ssh deploy@rick.jba.io sudo dpkg -i gorram-client.deb  
+    - mkdir $HOME/.ssh
+    - echo "$SSH_KEY" > $HOME/.ssh/id_ed25519
+    - cat $HOME/.ssh/id_ed25519
+    - chmod 600 $HOME/.ssh/id_ed25519
+    - apk add --no-cache openssh
+    - ssh-keyscan -H bob.jba.io > $HOME/.ssh/known_hosts
+    - ssh-keyscan -H rick.jba.io > $HOME/.ssh/known_hosts
+    - scp ./client/gorram-client.deb ./server/gorram-server.deb deploy@bob.jba.io:/home/deploy/
+    - ssh deploy@bob.jba.io sudo dpkg -i gorram-server.deb gorram-client.deb
+    - scp ./client/gorram-client.deb deploy@rick.jba.io:/home/deploy/
+    - ssh deploy@rick.jba.io sudo dpkg -i gorram-client.deb  
 
 - name: notify
   image: plugins/matrix
