@@ -1,0 +1,110 @@
+kind: pipeline
+name: esg
+
+steps:
+- name: get deps
+  image: golang
+  volumes:
+    - name: deps
+      path: /go
+  commands:
+    - go get -d
+    - cd checks/
+    - go get -d
+
+- name: generate protobuf
+  image: golang
+  volumes:
+    - name: deps
+      path: /go
+  commands:
+    - go get -u github.com/golang/protobuf/protoc-gen-go
+    - go generate
+
+- name: test server
+  image: golang
+  volumes:
+    - name: deps
+      path: /go
+  commands:
+    - cd server/
+    - go test
+    - go test -race
+    - go test -cover
+    - go test -bench=.
+
+- name: build server
+  image: golang
+  volumes:
+    - name: deps
+      path: /go
+  commands:
+    - cd server/
+    - go build -o ../gorram-server
+
+- name: test client
+  image: golang
+  volumes:
+    - name: deps
+      path: /go
+  commands:
+    - cd client/
+    - go test
+    - go test -race
+    - go test -cover
+    - go test -bench=.
+
+- name: build client
+  image: golang
+  volumes:
+    - name: deps
+      path: /go
+  commands:
+    - cd client/
+    - go build -o ../gorram-client
+
+- name: package
+  pull: never
+  image: deb-pkg
+  commands: 
+    - cp gorram-client client/
+    - cp gorram-server server/
+    - cd server/
+    - dch -M -v 1.0-$DRONE_COMMIT_BRANCH-$DRONE_BUILD_NUMBER "New version from Git" && dch -M -r -D buster ""
+    - debuild -us -uc -b
+    - cd ../client/
+    - dch -M -v 1.0-$DRONE_COMMIT_BRANCH-$DRONE_BUILD_NUMBER "New version from Git" && dch -M -r -D buster ""
+    - debuild -us -uc -b
+    - cd ../ && mv gorram-client_*.deb client/gorram-client.deb && mv gorram-server_*.deb server/gorram-server.deb
+
+- name: deploy
+  image: alpine
+  environment:
+    SSH_KEY:
+      from_secret: ssh_key
+  commands:
+  - mkdir $HOME/.ssh
+  - echo "$SSH_KEY" > $HOME/.ssh/id_ed25519
+  - cat $HOME/.ssh/id_ed25519
+  - chmod 600 $HOME/.ssh/id_ed25519
+  - apk add --no-cache openssh
+  - ssh-keyscan -H bob.jba.io > $HOME/.ssh/known_hosts
+  - ssh-keyscan -H rick.jba.io > $HOME/.ssh/known_hosts
+  - scp ./client/gorram-client.deb ./server/gorram-server.deb deploy@bob.jba.io:/home/deploy/
+  - ssh deploy@bob.jba.io sudo dpkg -i gorram-server.deb gorram-client.deb
+  - scp ./client/gorram-client.deb deploy@rick.jba.io:/home/deploy/
+  - ssh deploy@rick.jba.io sudo dpkg -i gorram-client.deb  
+
+- name: notify
+  image: plugins/matrix
+  settings:
+    homeserver: https://squanch.space
+    roomid: WJRHcFjDqYlolDerNY:squanch.space
+    username:
+      from_secret: matrix_username
+    password:
+      from_secret: matrix_password
+
+volumes:
+  - name: deps
+    temp: {}  
