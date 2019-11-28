@@ -94,7 +94,7 @@ steps:
     - chmod 600 $HOME/.ssh/id_ed25519
     - apk add --no-cache openssh
     - ssh-keyscan -H bob.jba.io > $HOME/.ssh/known_hosts
-    - ssh-keyscan -H rick.jba.io > $HOME/.ssh/known_hosts
+    - ssh-keyscan -H rick.jba.io >> $HOME/.ssh/known_hosts
     - scp ./client/gorram-client.deb ./server/gorram-server.deb deploy@bob.jba.io:/home/deploy/
     - ssh deploy@bob.jba.io sudo dpkg -i gorram-server.deb gorram-client.deb
     - scp ./client/gorram-client.deb deploy@rick.jba.io:/home/deploy/
