@@ -79,10 +79,10 @@ func main() {
 		return
 	}
 
-	c := gorram.NewQuerierClient(conn)
+	c := proto.NewQuerierClient(conn)
 
 	if *list {
-		cl, err := c.List(ctx, &gorram.QueryRequest{
+		cl, err := c.List(ctx, &proto.QueryRequest{
 			TimeSubmitted: time.Now().Unix(),
 		})
 		if err != nil {
@@ -91,7 +91,7 @@ func main() {
 		log.Println(cl.Clients)
 	}
 	if *deleteClient != "" {
-		cl, err := c.Delete(ctx, &gorram.ClientName{
+		cl, err := c.Delete(ctx, &proto.ClientName{
 			Name: *deleteClient,
 		})
 		if err != nil {
@@ -100,7 +100,7 @@ func main() {
 		log.Println(cl.Clients)
 	}
 	if *debug {
-		cl, err := c.Debug(ctx, &gorram.DebugRequest{
+		cl, err := c.Debug(ctx, &proto.DebugRequest{
 			Debug: true,
 		})
 		if err != nil {
