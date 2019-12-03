@@ -5,7 +5,7 @@ go 1.13
 require (
 	git.jba.io/go/gorram/certs v0.0.0-00010101000000-000000000000
 	git.jba.io/go/gorram/proto v0.0.0-00010101000000-000000000000
-	github.com/aqtrans/hcl v1.0.1
+	github.com/aqtrans/hcl v1.0.2
 	github.com/fsnotify/fsnotify v1.4.7
 	github.com/gregdel/pushover v0.0.0-20180208231006-1e03358b8e7e
 	github.com/hashicorp/hcl v1.0.0
