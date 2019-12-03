@@ -16,11 +16,12 @@ func main() {
 	generateHost := flag.String("host", "127.0.0.1", "If generate-certs is specified, override the host in the cert.")
 	generateClient := flag.Bool("client", false, "Generate client certs if given.")
 	generateCA := flag.Bool("ca", false, "Generate CA cert if given.")
+	sslPath := flag.String("ssl-path", "/etc/gorram/", "Path to write SSL certs to.")
 
 	flag.Parse()
 
 	if *generateCA {
-		certs.GenerateCACert()
+		certs.GenerateCACert(*sslPath)
 	}
 
 	if *generateServer {
@@ -28,19 +29,18 @@ func main() {
 		if _, err := os.Stat("server.pem"); err == nil {
 			log.Fatalln("server.pem already exists. Not overwriting. Manually remove it and cert.key if you need to re-generate them.")
 		}
-		log.Println("Generating", *generateHost, "certs to server.pem and server.key")
-		certs.SaveServerCert(*generateHost, "cacert.pem", "cacert.key")
+		log.Println("Generating", *generateHost, "certs to", *sslPath)
+		certs.SaveServerCert(*generateHost, *sslPath)
 	}
 
 	if *generateClient {
 		clientCert := *generateHost + ".pem"
-		clientKey := *generateHost + ".key"
 		// Only generate cert.pem if it do not exist
 		if _, err := os.Stat(clientCert); err == nil {
 			log.Fatalln(clientCert, "already exists. Not overwriting. Manually remove it and cert.key if you need to re-generate them.")
 		}
-		log.Println("Generating certs to", clientCert, "and", clientKey)
-		certs.SaveClientCert(*generateHost, "cacert.pem", "cacert.key")
+		log.Println("Generating certs to", *sslPath)
+		certs.SaveClientCert(*generateHost, *sslPath)
 	}
 
 }
