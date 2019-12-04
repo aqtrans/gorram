@@ -1,0 +1,8 @@
+gorram-server usr/bin/
+gorram-client usr/bin/
+gorram-cli usr/bin/
+gorram-certs usr/bin/
+gorram-server.service lib/systemd/system/
+gorram-client.service lib/systemd/system/
+config.dist.toml etc/gorram/
+client.dist.toml etc/gorram/

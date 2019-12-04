@@ -68,6 +68,24 @@ steps:
     - cd client/
     - go build -o ../gorram-client
 
+- name: build cli
+  image: golang
+  volumes:
+    - name: deps
+      path: /go
+  commands:
+    - cd cli/
+    - go build -o ../gorram-cli
+
+- name: build certs
+  image: golang
+  volumes:
+    - name: deps
+      path: /go
+  commands:
+    - cd certs/gorram-certs
+    - go build -o ../../gorram-certs
+
 - name: package
   pull: never
   image: deb-pkg

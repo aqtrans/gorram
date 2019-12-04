@@ -1,0 +1,11 @@
+gorram (1.0-master-01) buster; urgency=medium
+
+  * New version from Git
+
+ -- aqtrans <aqtrans@jba.io>  Wed, 04 Dec 2019 03:20:02 +0000
+
+gorram (0.1) stretch; urgency=low
+
+  * Initial release.
+
+ -- Jordan Anderson <aqtrans@jba.io>  Sat, 02 Mar 2019 21:57:17 -0600

@@ -1,0 +1,11 @@
+Source: gorram
+Section: admin
+Priority: optional
+Maintainer: aqtrans <aqtrans@jba.io>
+Homepage: https://git.jba.io/go/gorram
+
+Package: gorram
+Architecture: amd64
+Depends: libc6, adduser
+Description: Gorram, the single-process system monitoring solution. 
+ A system monitoring tool inspired by Telegraf and Sensu. Written in Golang.
