@@ -94,7 +94,7 @@ steps:
     - debuild -us -uc -b
     - mv ../gorram_*.deb ./gorram.deb
 
-- name: deploy
+- name: deploy to bob
   image: alpine
   environment:
     SSH_KEY:
@@ -106,9 +106,21 @@ steps:
     - chmod 600 $HOME/.ssh/id_ed25519
     - apk add --no-cache openssh
     - ssh-keyscan -H bob.jba.io > $HOME/.ssh/known_hosts
-    - ssh-keyscan -H rick.jba.io >> $HOME/.ssh/known_hosts
     - scp ./gorram.deb deploy@bob.jba.io:/home/deploy/
     - ssh deploy@bob.jba.io sudo dpkg -i gorram.deb
+
+- name: deploy to rick
+  image: alpine
+  environment:
+    SSH_KEY:
+      from_secret: ssh_key
+  commands:
+    - mkdir $HOME/.ssh
+    - echo "$SSH_KEY" > $HOME/.ssh/id_ed25519
+    - cat $HOME/.ssh/id_ed25519
+    - chmod 600 $HOME/.ssh/id_ed25519
+    - apk add --no-cache openssh
+    - ssh-keyscan -H rick.jba.io > $HOME/.ssh/known_hosts
     - scp ./gorram.deb deploy@rick.jba.io:/home/deploy/
     - ssh deploy@rick.jba.io sudo dpkg -i gorram.deb  
 
