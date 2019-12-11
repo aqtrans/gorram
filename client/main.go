@@ -62,6 +62,12 @@ func loadConfig(confFile string) clientConfig {
 
 func main() {
 
+	formatter := new(log.TextFormatter)
+	formatter.TimestampFormat = "01-02-2006 03:04:05pm"
+	formatter.FullTimestamp = true
+	formatter.DisableLevelTruncation = true
+	log.SetFormatter(formatter)	
+
 	// Set config via flags
 	confFile := flag.String("conf", "config.toml", "Path to the TOML config file.")
 	sslPath := flag.String("ssl-path", "/etc/gorram/", "Path to read/write SSL certs from.")
