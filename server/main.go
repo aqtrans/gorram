@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"errors"
 	"flag"
 	"fmt"
@@ -56,6 +57,7 @@ type serverConfig struct {
 	TLSHostname      string `yaml:"tls_host,omitempty"`
 	HeartbeatSeconds int64  `yaml:"heartbeat_seconds,omitempty"`
 	Debug            bool   `yaml:"debug,omitempty"`
+	Domain           string `yaml:"domain,omitempty"`
 	//Client           []proto.Config `hcl:"Client,block"`
 }
 
@@ -380,7 +382,7 @@ func (s *gorramServer) alert(client string, issue proto.Issue) {
 				"occurrences": occurrences,
 			}).Debugln("Sending alert as it meets occurrences count.", issue.Message)
 			s.alertsMap.Lock()
-			issue.Message = issue.Message + " | Occurrences: " + strconv.FormatInt(occurrences, 10) + "| First occurred:" + time.Unix(s.alertsMap.m[issue.String()].TimeSubmitted, 0).String()
+			issue.Message = issue.Message + " | Occurrences: " + strconv.FormatInt(occurrences, 10) + "| First occurred:" + time.Unix(s.alertsMap.m[generateMapKey(issue)].TimeSubmitted, 0).String()
 			s.alertsMap.Unlock()
 		} else {
 			log.WithFields(log.Fields{
@@ -405,7 +407,9 @@ func (s *gorramServer) alert(client string, issue proto.Issue) {
 		s.alertsMap.add(a)
 	}
 
-	s.alertsMap.mute(issue)
+	//s.alertsMap.mute(generateMapKey(issue))
+
+	log.Debugln("IssueID:", generateMapKey(issue))
 
 	if s.alertsMap.isMuted(issue) {
 		log.Println("issue is muted. not sending alert")
@@ -427,6 +431,8 @@ func (s *gorramServer) alert(client string, issue proto.Issue) {
 		app := pushover.New(s.cfg.PushoverAppKey)
 		recipient := pushover.NewRecipient(s.cfg.PushoverUserKey)
 		message := pushover.NewMessageWithTitle(issue.Message, client+" - "+issue.Title)
+		message.URL = s.cfg.Domain + "/mute?id=" + generateMapKey(issue)
+		message.URLTitle = "Mute Issue"
 		// Set an optional device name to send alerts to
 		if s.cfg.PushoverDevice != "" {
 			message.DeviceName = s.cfg.PushoverDevice
@@ -751,6 +757,12 @@ func (a *alerts) exists(client string, alert gorram.Alert, interval int64) (rese
 }
 */
 
+// MapKey should consist of host+title, allowing message to continue updating
+// This allows disk space and other alerts to change without unmuting
+func generateMapKey(i proto.Issue) string {
+	return base64.URLEncoding.EncodeToString([]byte(i.Host + i.Title))
+}
+
 func (a *alerts) add(alert proto.Alert) {
 	a.Lock()
 	if len(a.m) > 20 {
@@ -760,13 +772,13 @@ func (a *alerts) add(alert proto.Alert) {
 			"occurrences": alert.Occurrences,
 		}).Debugln("issues map is greater than 20", len(a.m))
 	}
-	a.m[alert.Issue.String()] = &alert
+	a.m[generateMapKey(*alert.Issue)] = &alert
 	a.Unlock()
 }
 
 func (a *alerts) count(issue proto.Issue) int64 {
 	a.Lock()
-	v := a.m[issue.String()]
+	v := a.m[generateMapKey(issue)]
 	v.Occurrences = v.Occurrences + 1
 	a.Unlock()
 	return v.Occurrences
@@ -774,14 +786,14 @@ func (a *alerts) count(issue proto.Issue) int64 {
 
 func (a *alerts) exists(issue proto.Issue) bool {
 	a.Lock()
-	_, alertExists := a.m[issue.String()]
+	_, alertExists := a.m[generateMapKey(issue)]
 	a.Unlock()
 	return alertExists
 }
 
 func (a *alerts) get(issue proto.Issue) *proto.Alert {
 	a.Lock()
-	theAlert, alertExists := a.m[issue.String()]
+	theAlert, alertExists := a.m[generateMapKey(issue)]
 	if alertExists {
 		a.Unlock()
 		return theAlert
@@ -791,9 +803,9 @@ func (a *alerts) get(issue proto.Issue) *proto.Alert {
 	return nil
 }
 
-func (a *alerts) mute(issue proto.Issue) {
+func (a *alerts) mute(issueID string) {
 	a.Lock()
-	v := a.m[issue.String()]
+	v := a.m[issueID]
 	v.Muted = true
 	a.Unlock()
 }
@@ -801,7 +813,7 @@ func (a *alerts) mute(issue proto.Issue) {
 func (a *alerts) isMuted(issue proto.Issue) bool {
 	var isIt bool
 	a.Lock()
-	v := a.m[issue.String()]
+	v := a.m[generateMapKey(issue)]
 	isIt = v.Muted
 	a.Unlock()
 	return isIt
@@ -907,6 +919,24 @@ func (s *gorramServer) checkClients(k, v interface{}) bool {
 		}
 	}
 	return true
+}
+
+func (s *gorramServer) muteHandler(w http.ResponseWriter, r *http.Request) {
+	issueIDs, ok := r.URL.Query()["id"]
+	if !ok {
+		w.Write([]byte("No IDs given to mute"))
+		return
+	}
+	/*
+		decodedID, err := base64.URLEncoding.DecodeString(issueIDs[0])
+		if err != nil {
+			log.Println("Error decoding ID", err)
+			w.Write([]byte("Error decoding given ID"))
+			return
+		}
+	*/
+	s.alertsMap.mute(issueIDs[0])
+	w.Write([]byte("Muted"))
 }
 
 func main() {
@@ -1054,6 +1084,7 @@ func main() {
 
 	// Expose expvars and pprof on http://127.0.0.1:50001
 	go func() {
+		http.HandleFunc("/mute", gs.muteHandler)
 		if err := http.ListenAndServe("127.0.0.1:50001", nil); err != nil {
 			log.Fatalf("Failed to serve: %v", err)
 		}
