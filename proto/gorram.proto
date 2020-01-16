@@ -41,6 +41,8 @@ message Alert {
     int64 time_submitted = 3;
     // How many times this identical alert has been sent
     int64 occurrences = 4;
+    // If alert was muted
+    bool muted = 5;
 }
 
 message ConfigRequest {

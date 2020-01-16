@@ -405,6 +405,13 @@ func (s *gorramServer) alert(client string, issue proto.Issue) {
 		s.alertsMap.add(a)
 	}
 
+	s.alertsMap.mute(issue)
+
+	if s.alertsMap.isMuted(issue) {
+		log.Println("issue is muted. not sending alert")
+		return
+	}
+
 	switch s.cfg.AlertMethod {
 	case "log":
 		log.WithFields(log.Fields{
@@ -782,6 +789,22 @@ func (a *alerts) get(issue proto.Issue) *proto.Alert {
 
 	a.Unlock()
 	return nil
+}
+
+func (a *alerts) mute(issue proto.Issue) {
+	a.Lock()
+	v := a.m[issue.String()]
+	v.Muted = true
+	a.Unlock()
+}
+
+func (a *alerts) isMuted(issue proto.Issue) bool {
+	var isIt bool
+	a.Lock()
+	v := a.m[issue.String()]
+	isIt = v.Muted
+	a.Unlock()
+	return isIt
 }
 
 func (c *clients) add(client proto.Client) {
