@@ -806,7 +806,7 @@ func (a *alerts) get(issue proto.Issue) *proto.Alert {
 func (a *alerts) mute(issueID string) {
 	a.Lock()
 	v := a.m[issueID]
-	v.Silenced = true
+	v.Muted = true
 	a.Unlock()
 }
 
@@ -814,7 +814,7 @@ func (a *alerts) isMuted(issue proto.Issue) bool {
 	var isIt bool
 	a.Lock()
 	v := a.m[generateMapKey(issue)]
-	isIt = v.Silenced
+	isIt = v.Muted
 	a.Unlock()
 	return isIt
 }
