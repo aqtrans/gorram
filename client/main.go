@@ -66,7 +66,7 @@ func main() {
 	formatter.TimestampFormat = "01-02-2006 03:04:05pm"
 	formatter.FullTimestamp = true
 	formatter.DisableLevelTruncation = true
-	log.SetFormatter(formatter)	
+	log.SetFormatter(formatter)
 
 	// Set config via flags
 	confFile := flag.String("conf", "config.toml", "Path to the TOML config file.")
@@ -85,7 +85,7 @@ func main() {
 	}
 
 	// Set a global RPC timeout, to be used in context.WithTimeout()'s alongside each RPC call
-	rpcTimeout := 10 * time.Second
+	rpcTimeout := 180 * time.Second
 
 	// Catch Ctrl+C, sigint
 	sigs := make(chan os.Signal, 1)
@@ -266,7 +266,7 @@ func main() {
 				if len(i) > 0 {
 					issueStream, err := c.RecordIssue(rpcCtx2)
 					if err != nil {
-						log.Fatalln("Error recording issue:", err)
+						log.Fatalln("Error recording issue:", i, err)
 					}
 
 					for _, issue := range i {
