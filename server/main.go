@@ -458,12 +458,17 @@ func (s *gorramServer) loadConfig(confFile string) {
 		log.Fatalln(err)
 	}
 	for _, cfg := range cfgFiles {
+		if filepath.Ext(cfg.Name()) != ".hcl" {
+			continue
+		}
 		fullpath := path.Join(confFile, cfg.Name())
 		newBytes, err := ioutil.ReadFile(fullpath)
 		if err != nil {
 			log.Fatalln("Error reading", fullpath, err)
 		}
 		cfgBytes = append(cfgBytes, newBytes...)
+
+		log.Debugln("Loaded", fullpath)
 	}
 
 	/*
@@ -502,7 +507,7 @@ func (s *gorramServer) loadConfig(confFile string) {
 			"client": clientName,
 			"file":   confFile,
 			"cfg":    &clientCfg,
-		}).Debugln("Loaded config for", clientName, "from", confFile)
+		}).Debugln("Parsed config for", clientName, "from", confFile)
 
 		/*
 			clientCfgList, aok := v.Val.(*ast.ObjectType)

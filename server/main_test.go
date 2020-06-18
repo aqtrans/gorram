@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"reflect"
-	"strconv"
 	"testing"
 
 	gorram "git.jba.io/go/gorram/proto"
@@ -57,6 +55,7 @@ func TestReviveDeadClient(t *testing.T) {
 
 }
 
+/*
 // TestConfig tests that all supported config formats are equal
 func TestConfig(t *testing.T) {
 	tomlServer := &gorramServer{}
@@ -115,3 +114,4 @@ func TestConfig(t *testing.T) {
 
 	}
 }
+*/
