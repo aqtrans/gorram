@@ -504,8 +504,8 @@ func (s *gorramServer) loadConfig(confPath string) {
 		// Set a default interval of 60 seconds if not configured
 		if newCfg.Interval == 0 {
 			log.WithFields(log.Fields{
-				"client": fullpath,
-				"config": clientName,
+				"config": fullpath,
+				"client": clientName,
 			}).Debugln("No interval configured. Setting to 60 seconds.")
 			newCfg.Interval = 60
 		}
@@ -811,7 +811,7 @@ func main() {
 	log.SetFormatter(formatter)
 
 	// Set config via flags
-	confFile := flag.String("conf", "config.toml", "Path to the TOML config file.")
+	confPath := flag.String("conf", "/etc/gorram/", "Path where server.yml and a conf.d directory (for client configs) are stored.")
 	insecure := flag.Bool("insecure", false, "Disable TLS. Allow insecure client connections.")
 	generateCAcert := flag.Bool("generate-ca", false, "Generate CA certificates, at cacert.pem and cacert.key.")
 	sslPath := flag.String("ssl-path", "/etc/gorram/", "Path to read/write SSL certs from.")
@@ -839,7 +839,7 @@ func main() {
 		connectedClients: *new(clients),
 	}
 
-	gs.loadConfig(*confFile)
+	gs.loadConfig(*confPath)
 
 	if gs.cfg.Debug {
 		log.SetLevel(log.DebugLevel)
@@ -960,7 +960,7 @@ func main() {
 			select {
 			case event := <-watcher.Events:
 				if event.Op&fsnotify.Write == fsnotify.Write {
-					gs.loadConfig(*confFile)
+					gs.loadConfig(*confPath)
 				}
 			case err := <-watcher.Errors:
 				if err != nil {
@@ -976,9 +976,16 @@ func main() {
 		}
 	}()
 
-	err = watcher.Add(*confFile)
+	// Watch confPath/server.yml and confPath/conf.d/ for changes
+	serverCfg := filepath.Join(*confPath, "server.yml")
+	clientCfgs := filepath.Join(*confPath, "conf.d")
+	err = watcher.Add(serverCfg)
 	if err != nil {
-		log.Fatalln("Error watching config.toml:", err)
+		log.Fatalln("Error watching server.yml:", err)
+	}
+	err = watcher.Add(clientCfgs)
+	if err != nil {
+		log.Fatalln("Error watching conf.d:", err)
 	}
 
 	// Listen for Ctrl+C
