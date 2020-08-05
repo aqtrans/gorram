@@ -806,7 +806,9 @@ func (s *gorramServer) listAlertsHandler(w http.ResponseWriter, r *http.Request)
 
 	s.alertsMap.Lock()
 
-	w.Write([]byte(`<html><body>
+	w.Write([]byte(`<!DOCTYPE html>
+	<html lang="en">
+	<body>
 	<table>
 		<thead>
 			<tr>
@@ -820,10 +822,10 @@ func (s *gorramServer) listAlertsHandler(w http.ResponseWriter, r *http.Request)
 			</tr>
 		</thead>
 		<tbody>
-			<tr>
 	`))
 	for alertID, v := range s.alertsMap.m {
 		fmt.Fprintf(w, `
+		<tr>
 		<td><a href="/mute?id=%s">%s</a></td>
 		<td>%s</td>
 		<td>%s</td>
@@ -831,7 +833,8 @@ func (s *gorramServer) listAlertsHandler(w http.ResponseWriter, r *http.Request)
 		<td>%d</td>
 		<td>%q</td>
 		<td>%t</td>
-		</tr>`,
+		</tr>
+		`,
 			alertID,
 			alertID,
 			v.Issue.Host,
@@ -848,7 +851,9 @@ func (s *gorramServer) listAlertsHandler(w http.ResponseWriter, r *http.Request)
 		//w.Write([]byte("occurrences: " + v.Occurrences + "\n"))
 		//w.Write([]byte("time: " + v.TimeSubmitted + "\n"))
 	}
-	w.Write([]byte("</tbody></body></html>"))
+	w.Write([]byte(`</tbody>
+	</body>
+	</html>`))
 	//w.Write([]byte("Total Alerts:", s.alertsMap))
 	s.alertsMap.Unlock()
 }
