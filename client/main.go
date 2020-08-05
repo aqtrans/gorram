@@ -21,17 +21,17 @@ import (
 	"git.jba.io/go/gorram/checks"
 	"git.jba.io/go/gorram/proto"
 
-	toml "github.com/pelletier/go-toml"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
+	"gopkg.in/yaml.v2"
 )
 
 type clientConfig struct {
-	ClientName    string
-	ServerSecret  string
-	ServerAddress string
+	ClientName    string `yaml:"name,omitempty"`
+	ServerSecret  string `yaml:"secret_key,omitempty"`
+	ServerAddress string `yaml:"server_address,omitempty"`
 }
 
 type secret struct {
@@ -52,11 +52,16 @@ func (s *secret) RequireTransportSecurity() bool {
 func loadConfig(confFile string) clientConfig {
 	var cfg clientConfig
 	// Load config.toml here
-	cfgTree, err := toml.LoadFile(confFile)
+	cfgBytes, err := ioutil.ReadFile(confFile)
 	if err != nil {
-		log.Fatalln("Error reading config.toml", err)
+		log.Fatalln("Error reading confFile:", err)
 	}
-	cfgTree.Unmarshal(&cfg)
+
+	err = yaml.Unmarshal(cfgBytes, &cfg)
+	if err != nil {
+		log.Fatalln("Error unmarshaling confFile:", err)
+	}
+
 	return cfg
 }
 
@@ -69,7 +74,7 @@ func main() {
 	log.SetFormatter(formatter)
 
 	// Set config via flags
-	confFile := flag.String("conf", "config.toml", "Path to the TOML config file.")
+	confFile := flag.String("conf", "config.yml", "Path to the TOML config file.")
 	sslPath := flag.String("ssl-path", "/etc/gorram/", "Path to read/write SSL certs from.")
 	//clientName := flag.String("name", "unnamed", "Name of the client, as seen by the server. Should be unique.")
 	//serverAddress := flag.String("server-address", "127.0.0.1:50000", "Address and port of the server.")
