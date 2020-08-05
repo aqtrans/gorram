@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"strings"
 
 	//"log"
 	"net"
@@ -22,11 +23,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/aqtrans/hcl"
 	"github.com/fsnotify/fsnotify"
 	"github.com/gregdel/pushover"
-	"github.com/hashicorp/hcl/hcl/ast"
-	"github.com/pelletier/go-toml"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 
@@ -48,17 +46,18 @@ import (
 var errUnknownClient = errors.New("Unknown Client Name - Check ClientName in client.toml")
 
 type serverConfig struct {
-	SecretKey        string `yaml:"secret_key,omitempty"`
-	AlertMethod      string `yaml:"alert_method,omitempty"`
-	PushoverAppKey   string `yaml:"pushover_app_key,omitempty"`
-	PushoverUserKey  string `yaml:"pushover_user_key,omitempty"`
-	PushoverDevice   string `yaml:"pushover_device,omitempty"`
+	SecretKey   string `yaml:"secret_key,omitempty"`
+	AlertMethod string `yaml:"alert_method,omitempty"`
+	Pushover    struct {
+		AppKey  string `yaml:"app_key,omitempty"`
+		UserKey string `yaml:"user_key,omitempty"`
+		Device  string `yaml:"device,omitempty"`
+	} `yaml:"pushover,omitempty"`
 	ListenAddress    string `yaml:"listen_address,omitempty"`
 	TLSHostname      string `yaml:"tls_host,omitempty"`
 	HeartbeatSeconds int64  `yaml:"heartbeat_seconds,omitempty"`
 	Debug            bool   `yaml:"debug,omitempty"`
 	Domain           string `yaml:"domain,omitempty"`
-	//Client           []proto.Config `hcl:"Client,block"`
 }
 
 type statHandler struct {
@@ -428,14 +427,14 @@ func (s *gorramServer) alert(client string, issue proto.Issue) {
 			"check":  issue.Title,
 		}).Debugln("[ALERT] ", issue.Message)
 
-		app := pushover.New(s.cfg.PushoverAppKey)
-		recipient := pushover.NewRecipient(s.cfg.PushoverUserKey)
+		app := pushover.New(s.cfg.Pushover.AppKey)
+		recipient := pushover.NewRecipient(s.cfg.Pushover.UserKey)
 		message := pushover.NewMessageWithTitle(issue.Message, client+" - "+issue.Title)
 		message.URL = s.cfg.Domain + "/mute?id=" + generateMapKey(issue)
 		message.URLTitle = "Mute Issue"
 		// Set an optional device name to send alerts to
-		if s.cfg.PushoverDevice != "" {
-			message.DeviceName = s.cfg.PushoverDevice
+		if s.cfg.Pushover.Device != "" {
+			message.DeviceName = s.cfg.Pushover.Device
 		}
 		response, err := app.SendMessage(message, recipient)
 		if err != nil {
@@ -449,209 +448,72 @@ func (s *gorramServer) alert(client string, issue proto.Issue) {
 	}
 }
 
-func (s *gorramServer) loadConfig(confFile string) {
-	ext := filepath.Ext(confFile)
-	switch ext {
-	case ".toml":
-		// Load TOML here
-		cfgTree, err := toml.LoadFile(confFile)
-		if err != nil {
-			log.Fatalln("Error reading", confFile, err)
+func (s *gorramServer) loadConfig(confPath string) {
+	//ext := filepath.Ext(confFile)
+
+	// Load server config
+	serverCfg, err := ioutil.ReadFile(filepath.Join(confPath, "server.yml"))
+	if err != nil {
+		log.Fatalln("Error reading server.yml:", err)
+	}
+
+	// Load client configs from conf.d/*.yml
+	cfgFiles, err := ioutil.ReadDir(filepath.Join(confPath, "conf.d"))
+	if err != nil {
+		log.Fatalln("Error reading configs from conf.d:", err)
+	}
+
+	err = yaml.Unmarshal(serverCfg, &s.cfg)
+	if err != nil {
+		log.Fatalln("Error unmarshaling server.yml:", err)
+	}
+
+	log.Println("server config:", s.cfg)
+
+	for _, cfg := range cfgFiles {
+		var newCfg proto.Config
+		clientName := strings.TrimSuffix(cfg.Name(), filepath.Ext(cfg.Name()))
+		filename := cfg.Name()
+
+		// Only read .yml files
+		if filepath.Ext(filename) != ".yml" {
+			continue
 		}
-		for _, clientName := range cfgTree.Keys() {
-			// Allow configuring server-specific variables inside a ServerConfig table
-			if clientName == "ServerConfig" {
-				serverCfgTree := cfgTree.Get(clientName).(*toml.Tree)
-				serverCfgTree.Unmarshal(&s.cfg)
-				continue
-			}
 
-			clientCfgTree := cfgTree.Get(clientName).(*toml.Tree)
-			clientCfg := proto.Config{}
-			err := clientCfgTree.Unmarshal(&clientCfg)
-			if err != nil {
-				log.Fatalln("Error unmarshaling "+confFile+" for client "+clientName+":", err)
-			}
-
+		fullpath := filepath.Join(confPath, "conf.d", filename)
+		newBytes, err := ioutil.ReadFile(fullpath)
+		if err != nil {
 			log.WithFields(log.Fields{
+				"config": fullpath,
 				"client": clientName,
-				"config": confFile,
-			}).Debugln("Loaded config for", clientName, "from", confFile, clientCfg)
-
-			/*
-				checkKeys := clientCfgTree.Keys()
-				var enabledChecks []string
-				for _, v := range checkKeys {
-					if v == "Required" {
-
-					} else if v == "Interval" {
-
-					} else {
-						enabledChecks = append(enabledChecks, v)
-					}
-				}
-			*/
-
-			if clientCfg.Interval == 0 {
-				log.WithFields(log.Fields{
-					"client": clientName,
-					"config": confFile,
-				}).Debugln("No interval configured. Setting to 60 seconds.")
-				clientCfg.Interval = 60
-			}
-
-			clientCfg.LastUpdated = time.Now().Unix()
-
-			// Store the enabled checks
-			//s.clientCfgs.Store(clientName+".checks", strings.Join(enabledChecks, ","))
-			s.clientCfgs.Store(clientName, &clientCfg)
-			//getEnabledChecks(clientCfg)
+			}).Fatalln("Error reading client config", err)
 		}
-	case ".yaml":
-		// TODO: get EnabledChecks building working
-
-		type yamlCfg struct {
-			Server  serverConfig             `yaml:"server,inline"`
-			Clients map[string]*proto.Config `yaml:",inline"`
-		}
-
-		cfgBytes, err := ioutil.ReadFile(confFile)
+		err = yaml.Unmarshal(newBytes, &newCfg)
 		if err != nil {
-			log.Fatalln("Error reading", confFile, err)
-		}
-		var m yamlCfg
-		err = yaml.Unmarshal(cfgBytes, &m)
-		if err != nil {
-			log.Fatalf("cannot unmarshal data: %v", err)
+			log.WithFields(log.Fields{
+				"config": fullpath,
+				"client": clientName,
+			}).Fatalln("Error unmarshaling client config", err)
 		}
 
 		log.WithFields(log.Fields{
-			"config": confFile,
-		}).Debugln("Loaded config from", confFile, &m)
+			"config": fullpath,
+			"client": clientName,
+		}).Debugln("Loaded config from", cfg.Name(), &newCfg)
 
-		s.cfg = m.Server
-
-		for clientName, clientConfig := range m.Clients {
+		// Set a default interval of 60 seconds if not configured
+		if newCfg.Interval == 0 {
 			log.WithFields(log.Fields{
-				"client": clientName,
-				"config": confFile,
-			}).Debugln("Loaded config for", clientName, "from", confFile, clientConfig)
-
-			if clientConfig.Interval == 0 {
-				log.WithFields(log.Fields{
-					"client": clientName,
-					"config": confFile,
-				}).Debugln("No interval configured. Setting to 60 seconds.")
-				clientConfig.Interval = 60
-			}
-
-			clientConfig.LastUpdated = time.Now().Unix()
-
-			// Store the enabled checks
-			//s.clientCfgs.Store(clientName+".checks", strings.Join(enabledChecks, ","))
-			s.clientCfgs.Store(clientName, clientConfig)
-			//getEnabledChecks(*clientConfig)
+				"client": fullpath,
+				"config": clientName,
+			}).Debugln("No interval configured. Setting to 60 seconds.")
+			newCfg.Interval = 60
 		}
 
-	/*
-		var newCfg Config
-		newCfg.Clients = make(map[string]*gorram.Config)
-		newCfg.Clients["omg"] = &gorram.Config{
-			Memory: &gorram.Config_Memory{
-				MaxUsage: 5.0,
-			},
-			Deluge: &gorram.Config_Deluge{
-				MaxTorrents: 5,
-			},
-		}
-		log.Println(newCfg.Clients["omg"])
-		yb, err := yaml.Marshal(&newCfg)
-		if err != nil {
-			log.Fatalln("Error marshaling YAML:", err)
-		}
-		log.Println("Generated YAML:", string(yb))
-	*/
+		newCfg.LastUpdated = time.Now().Unix()
 
-	case ".hcl":
-		log.Warnln("WARNING: HCL currently has parsing issues. Proceed at your own caution.")
+		s.clientCfgs.Store(clientName, &newCfg)
 
-		cfgBytes, err := ioutil.ReadFile(confFile)
-		if err != nil {
-			log.Fatalln("Error reading", confFile, err)
-		}
-
-		/*
-			var srvCfg serverConfig
-			err = hcl.Unmarshal(cfgBytes, &srvCfg)
-			if err != nil {
-				log.Fatalln("Error parsing HCL", err)
-			}
-			log.Println("HCL config:", srvCfg.Client)
-
-			for k, v := range srvCfg.Client {
-				log.Println(k, v.Process)
-			}
-		*/
-
-		cfgAst, err := hcl.ParseBytes(cfgBytes)
-		if err != nil {
-			log.Fatalln("Error parsing", confFile, err)
-		}
-		// Decode server-level config
-		hcl.DecodeObject(&s.cfg, cfgAst.Node)
-
-		list, ok := cfgAst.Node.(*ast.ObjectList)
-		if !ok {
-			log.Fatalln("CfgAst Node is not an ObjectList")
-		}
-		clients := list.Filter("Client")
-		for _, v := range clients.Items {
-			clientName := v.Keys[0].Token.Value().(string)
-
-			// Decode each client-level config
-			var clientCfg proto.Config
-			hcl.DecodeObject(&clientCfg, v.Val)
-
-			log.WithFields(log.Fields{
-				"client": clientName,
-				"file":   confFile,
-				"cfg":    &clientCfg,
-			}).Debugln("Loaded config for", clientName, "from", confFile)
-
-			/*
-				clientCfgList, aok := v.Val.(*ast.ObjectType)
-				if !aok {
-					log.Fatalln("Error: clientCfgList is not an ObjectType.")
-				}
-				var enabledChecks []string
-				for _, vv := range clientCfgList.List.Items {
-					key := vv.Keys[0].Token.Value().(string)
-					if key == "Required" {
-
-					} else if key == "Interval" {
-
-					} else {
-						enabledChecks = append(enabledChecks, key)
-					}
-				}
-			*/
-
-			if clientCfg.Interval == 0 {
-				log.WithFields(log.Fields{
-					"client": clientName,
-					"config": confFile,
-				}).Debugln("No interval configured. Setting to 60 seconds.")
-				clientCfg.Interval = 60
-			}
-			clientCfg.LastUpdated = time.Now().Unix()
-
-			// Store the enabled checks
-			//s.clientCfgs.Store(clientName+".checks", strings.Join(enabledChecks, ","))
-			s.clientCfgs.Store(clientName, &clientCfg)
-		}
-
-	default:
-		log.Fatalln("Only able to load HCL, TOML, and YAML files currently. Unable to load", confFile)
 	}
 
 	// Set a default HeartbeatSeconds if not set
@@ -659,6 +521,7 @@ func (s *gorramServer) loadConfig(confFile string) {
 		log.Println("HeartbeatSeconds is 0, setting to default of 60.")
 		s.cfg.HeartbeatSeconds = 60
 	}
+
 }
 
 func (s *gorramServer) List(ctx context.Context, qr *proto.QueryRequest) (*proto.ClientList, error) {
