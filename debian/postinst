@@ -11,4 +11,4 @@ fi
 systemctl --system daemon-reload >/dev/null
 deb-systemd-invoke start gorram-server.service >/dev/null 
 deb-systemd-invoke start gorram-client.service >/dev/null 
-mkdir /etc/gorram/conf.d/
+mkdir -p /etc/gorram/conf.d/
