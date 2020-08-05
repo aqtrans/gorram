@@ -1,5 +1,5 @@
 kind: pipeline
-name: esg
+name: gorram
 
 steps:
 - name: get deps
