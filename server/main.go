@@ -623,7 +623,7 @@ func (a *alerts) exists(client string, alert gorram.Alert, interval int64) (rese
 // MapKey should consist of host+title, allowing message to continue updating
 // This allows disk space and other alerts to change without unmuting
 func generateMapKey(i proto.Issue) string {
-	return base64.URLEncoding.EncodeToString([]byte(i.Host + i.Title))
+	return base64.RawURLEncoding.EncodeToString([]byte(i.Host + i.Title))
 }
 
 func (a *alerts) add(alert proto.Alert) {
@@ -802,6 +802,57 @@ func (s *gorramServer) muteHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("Muted"))
 }
 
+func (s *gorramServer) listAlertsHandler(w http.ResponseWriter, r *http.Request) {
+
+	s.alertsMap.Lock()
+
+	w.Write([]byte(`<html><body>
+	<table>
+		<thead>
+			<tr>
+				<th>Alert ID</th>
+				<th>Host</th>
+				<th>Message</th>
+				<th>Title</th>
+				<th>Occurrences</th>
+				<th>First Time</th>
+				<th>Muted</th>
+			</tr>
+		</thead>
+		<tbody>
+			<tr>
+	`))
+	for alertID, v := range s.alertsMap.m {
+		fmt.Fprintf(w, `
+		<td><a href="/mute?id=%s">%s</a></td>
+		<td>%s</td>
+		<td>%s</td>
+		<td>%s</td>
+		<td>%d</td>
+		<td>%q</td>
+		<td>%t</td>
+		</tr>`,
+			alertID,
+			alertID,
+			v.Issue.Host,
+			v.Issue.Message,
+			v.Issue.Title,
+			v.Occurrences,
+			time.Unix(v.TimeSubmitted, 0).String(),
+			v.Muted)
+		//w.Write([]byte("host: " + v.Issue.Host + "\n"))
+		//w.Write([]byte("msg: " + v.Issue.Message + "\n"))
+		//w.Write([]byte("title: " + v.Issue.Title + "\n"))
+		//w.Write([]byte("alert: " + v.String() + "\n"))
+		//w.Write([]byte("muted: " + v.Muted + "\n"))
+		//w.Write([]byte("occurrences: " + v.Occurrences + "\n"))
+		//w.Write([]byte("time: " + v.TimeSubmitted + "\n"))
+	}
+	w.Write([]byte("</tbody></body></html>"))
+	//w.Write([]byte("Total Alerts:", s.alertsMap))
+	s.alertsMap.Unlock()
+}
+
 func main() {
 
 	formatter := new(log.TextFormatter)
@@ -947,6 +998,7 @@ func main() {
 
 	// Expose expvars and pprof on http://127.0.0.1:50001
 	go func() {
+		http.HandleFunc("/list", gs.listAlertsHandler)
 		http.HandleFunc("/mute", gs.muteHandler)
 		if err := http.ListenAndServe("127.0.0.1:50001", nil); err != nil {
 			log.Fatalf("Failed to serve: %v", err)
