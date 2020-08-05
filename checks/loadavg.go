@@ -41,15 +41,18 @@ func (l *loadAvg) doCheck() []pb.Issue {
 	}
 
 	if loadAvgs.Load15 >= l.Cfg.MaxLoad {
-		issues = append(issues, newIssue(l.Title(), fmt.Sprintf("Load average is greater than %f, %f", l.Cfg.MaxLoad, loadAvgs.Load1)))
+		issues = append(issues, newIssue(l.Title(), fmt.Sprintf("Load average (15) is greater than %f, %f", l.Cfg.MaxLoad, loadAvgs.Load15)))
+		return issues
 	}
 
 	if loadAvgs.Load5 >= l.Cfg.MaxLoad {
-		issues = append(issues, newIssue(l.Title(), fmt.Sprintf("Load average is greater than %f, %f", l.Cfg.MaxLoad, loadAvgs.Load5)))
+		issues = append(issues, newIssue(l.Title(), fmt.Sprintf("Load average (5) is greater than %f, %f", l.Cfg.MaxLoad, loadAvgs.Load5)))
+		return issues
 	}
 
 	if loadAvgs.Load1 >= l.Cfg.MaxLoad {
-		issues = append(issues, newIssue(l.Title(), fmt.Sprintf("Load average is greater than %f, %f", l.Cfg.MaxLoad, loadAvgs.Load1)))
+		issues = append(issues, newIssue(l.Title(), fmt.Sprintf("Load average (1) is greater than %f, %f", l.Cfg.MaxLoad, loadAvgs.Load1)))
+		return issues
 	}
 
 	return issues
