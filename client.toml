@@ -1,0 +1,3 @@
+ClientName = "client1"
+ServerSecret = "omg"
+ServerAddress = "127.0.0.1:50000"

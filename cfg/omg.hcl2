@@ -1,0 +1,12 @@
+Client "client2" {
+    Interval = 15
+    DiskSpace = [
+        {
+            Partition = "/"
+            MaxUsage = 100.0
+        }
+    ]
+    LoadAvg {
+        MaxLoad = 5.50
+    }    
+}
