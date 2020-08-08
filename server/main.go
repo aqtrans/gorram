@@ -43,7 +43,7 @@ import (
 	"google.golang.org/grpc/stats"
 )
 
-var errUnknownClient = errors.New("Unknown Client Name - Check ClientName in client.toml")
+var errUnknownClient = errors.New("Unknown Client Name - Check ClientName in client.yml")
 
 type serverConfig struct {
 	SecretKey   string `yaml:"secret_key,omitempty"`
@@ -257,7 +257,7 @@ func (s *gorramServer) RecordIssue(stream proto.Reporter_RecordIssueServer) erro
 }
 
 func (s *gorramServer) loadClientConfig(client string) (proto.Config, error) {
-	// Attempt to read the config.toml, and then if it has [clientname] in it, unmarshal the config from there
+	// Attempt to read the config.yml, and then if it has [clientname] in it, unmarshal the config from there
 	clientCfg, isThere := s.clientCfgs.Load(client)
 	if isThere {
 		/*
@@ -988,7 +988,7 @@ func main() {
 
 	proto.RegisterQuerierServer(server, &gs)
 
-	// Watch for config.toml changes
+	// Watch for config.yml changes
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		log.Fatalln("Error watching config file for changes:", err)
@@ -1021,7 +1021,7 @@ func main() {
 				}
 			case err := <-watcher.Errors:
 				if err != nil {
-					log.Errorln("Error watching config.toml:", err)
+					log.Errorln("Error watching config files:", err)
 				}
 			case <-heartbeatTicker.C:
 				gs.clientCfgs.Range(gs.checkClients)

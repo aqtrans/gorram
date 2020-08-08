@@ -13,11 +13,11 @@ while [ "$1" != "" ]; do
     case $PARAM in
         run-server)
             build_proto
-            go run -race server/main.go -ssl-path "./" -debug -conf "./config.hcl" $@
+            go run -race server/main.go -ssl-path "./" -debug -conf "./config.yml" $@
             ;;
         run-client)
             build_proto
-            go run -race client/main.go -ssl-path "./" -debug -conf "./client.toml" $@
+            go run -race client/main.go -ssl-path "./" -debug -conf "./client.yml" $@
             ;;            
         proto)
             build_proto

@@ -51,7 +51,7 @@ func (s *secret) RequireTransportSecurity() bool {
 
 func loadConfig(confFile string) clientConfig {
 	var cfg clientConfig
-	// Load config.toml here
+	// Load client.yml here
 	cfgBytes, err := ioutil.ReadFile(confFile)
 	if err != nil {
 		log.Fatalln("Error reading confFile:", err)
@@ -74,7 +74,7 @@ func main() {
 	log.SetFormatter(formatter)
 
 	// Set config via flags
-	confFile := flag.String("conf", "config.yml", "Path to the TOML config file.")
+	confFile := flag.String("conf", "client.yml", "Path to the YAML config file.")
 	sslPath := flag.String("ssl-path", "/etc/gorram/", "Path to read/write SSL certs from.")
 	//clientName := flag.String("name", "unnamed", "Name of the client, as seen by the server. Should be unique.")
 	//serverAddress := flag.String("server-address", "127.0.0.1:50000", "Address and port of the server.")
@@ -97,7 +97,7 @@ func main() {
 	done := make(chan bool, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
-	tomlCfg := loadConfig(*confFile)
+	yamlCfg := loadConfig(*confFile)
 
 	/* Trying to send client-name as early as possible...
 		Doesn't seem to send on the Dial
@@ -125,10 +125,10 @@ func main() {
 	if *insecure {
 		conn, err = grpc.DialContext(
 			dialCtx,
-			tomlCfg.ServerAddress,
+			yamlCfg.ServerAddress,
 			grpc.WithInsecure(),
 			grpc.WithPerRPCCredentials(&secret{
-				Secret: tomlCfg.ServerSecret,
+				Secret: yamlCfg.ServerSecret,
 				TLS:    false,
 			}),
 			grpc.WithKeepaliveParams(kp),
@@ -137,8 +137,8 @@ func main() {
 		// If a certificate at $ClientName.pem exists, load it, otherwise generate one dynamically
 		var tlsCert tls.Certificate
 		caCertPath := filepath.Join(*sslPath, "cacert.pem")
-		certPath := filepath.Join(*sslPath, tomlCfg.ClientName+".pem")
-		certKeyPath := filepath.Join(*sslPath, tomlCfg.ClientName+".key")
+		certPath := filepath.Join(*sslPath, yamlCfg.ClientName+".pem")
+		certKeyPath := filepath.Join(*sslPath, yamlCfg.ClientName+".key")
 		if _, err := os.Stat(certPath); err == nil {
 			// Load static cert from $ClientName.pem:
 			log.Debugln(certPath, "exists. Loading cert.")
@@ -154,14 +154,14 @@ func main() {
 
 			// Generate certificates dynamically:
 			log.Debugln("Generating certificate dynamically...")
-			tlsCert = certs.GenerateClientCert(tomlCfg.ClientName, *sslPath)
+			tlsCert = certs.GenerateClientCert(yamlCfg.ClientName, *sslPath)
 		}
 
 		var host string
-		host, _, err := net.SplitHostPort(tomlCfg.ServerAddress)
+		host, _, err := net.SplitHostPort(yamlCfg.ServerAddress)
 		if err != nil {
 			log.Warnln("Error parsing ServerAddress from config; Watch out for TLS issues due to ServerName mismatch.", err)
-			host = tomlCfg.ServerAddress
+			host = yamlCfg.ServerAddress
 		}
 
 		caCertRaw, err := ioutil.ReadFile(caCertPath)
@@ -181,10 +181,10 @@ func main() {
 
 		conn, err = grpc.DialContext(
 			dialCtx,
-			tomlCfg.ServerAddress,
+			yamlCfg.ServerAddress,
 			grpc.WithTransportCredentials(creds),
 			grpc.WithPerRPCCredentials(&secret{
-				Secret: tomlCfg.ServerSecret,
+				Secret: yamlCfg.ServerSecret,
 				TLS:    true,
 			}),
 			grpc.WithKeepaliveParams(kp),
@@ -201,11 +201,11 @@ func main() {
 
 	// Create RPC context, add client name metadata
 	rpcCtx, rpcCancel := context.WithTimeout(context.Background(), rpcTimeout)
-	rpcCtx = metadata.AppendToOutgoingContext(rpcCtx, "client", tomlCfg.ClientName)
+	rpcCtx = metadata.AppendToOutgoingContext(rpcCtx, "client", yamlCfg.ClientName)
 
 	// Hello: Get config from server, and ensure dead tickers are stopped
 	origCfg, err := c.Hello(rpcCtx, &proto.ConfigRequest{
-		ClientName: tomlCfg.ClientName,
+		ClientName: yamlCfg.ClientName,
 	})
 	if err != nil {
 		log.Fatalln("Error with c.Hello:", err)
@@ -226,7 +226,7 @@ func main() {
 			case <-ticker.C:
 				// Create RPC context, add client name metadata
 				rpcCtx, rpcCancel := context.WithTimeout(context.Background(), rpcTimeout)
-				rpcCtx = metadata.AppendToOutgoingContext(rpcCtx, "client", tomlCfg.ClientName)
+				rpcCtx = metadata.AppendToOutgoingContext(rpcCtx, "client", yamlCfg.ClientName)
 				defer rpcCancel()
 
 				cfgMutex.Lock()
@@ -241,11 +241,11 @@ func main() {
 					var err error
 					// Create RPC context, add client name metadata
 					rpcCtx, rpcCancel := context.WithTimeout(context.Background(), rpcTimeout)
-					rpcCtx = metadata.AppendToOutgoingContext(rpcCtx, "client", tomlCfg.ClientName)
+					rpcCtx = metadata.AppendToOutgoingContext(rpcCtx, "client", yamlCfg.ClientName)
 					defer rpcCancel()
 
 					newCfg, err := c.ConfigSync(rpcCtx, &proto.ConfigRequest{
-						ClientName: tomlCfg.ClientName,
+						ClientName: yamlCfg.ClientName,
 					})
 					if err != nil {
 						log.Fatalln("Error with c.ConfigSync:", err)
@@ -260,7 +260,7 @@ func main() {
 
 				// Create RPC context, add client name metadata
 				rpcCtx2, rpcCancel2 := context.WithTimeout(context.Background(), rpcTimeout)
-				rpcCtx2 = metadata.AppendToOutgoingContext(rpcCtx2, "client", tomlCfg.ClientName)
+				rpcCtx2 = metadata.AppendToOutgoingContext(rpcCtx2, "client", yamlCfg.ClientName)
 				defer rpcCancel2()
 
 				//cfg2 := <-cfgChan
