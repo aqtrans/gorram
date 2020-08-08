@@ -4,6 +4,6 @@ gorram-cli usr/bin/
 gorram-certs usr/bin/
 gorram-server.service lib/systemd/system/
 gorram-client.service lib/systemd/system/
-config.yml.dist etc/gorram/
+server.yml.dist etc/gorram/
 client.yml.dist etc/gorram/
 clientname.yml.dist etc/gorram/conf.d
