@@ -1,4 +1,0 @@
-gorram-server usr/bin/
-gorram-server.service lib/systemd/system/
-config.dist.toml etc/gorram/
-

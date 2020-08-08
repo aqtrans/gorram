@@ -1,3 +1,0 @@
-gorram-client usr/bin/
-gorram-client.service lib/systemd/system/
-client.dist.toml etc/gorram/
