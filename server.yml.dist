@@ -1,0 +1,11 @@
+secret_key: "omg123"
+listen_address: "127.0.0.1:50000"
+alert_method: "log"
+tls_host: "server.example"
+debug: true
+domain: "https://server.example/gorram/"
+#alert_method: "pushover"
+pushover: 
+    app_key: "app-key-from-pushover"
+    user_key: "user-key-from-pushover"
+

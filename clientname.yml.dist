@@ -1,0 +1,23 @@
+required: true
+deluge:
+    url: "http://127.0.0.1:8112/json"
+    password: "deluge"
+    maxtorrents: 5
+diskspace:
+    - partition: "/"
+      maxusage: 90
+    - partition: "/media/games"
+      maxusage: 100
+loadavg:
+    maxload: 2
+geturl:
+    - url: "http://google.com"
+    - url: "https://server.example/health"
+      expectedbody: "{\"alive\": true}"
+process:
+#    - path: "/usr/lib/firefox/firefox"
+#      user: "nobody"
+    - path: "deluge"
+      user: deluge
+memory:
+    maxusage: 20

@@ -1,0 +1,3 @@
+name: "clientname"
+secret_key: "omg123"
+server_address: "127.0.0.1:50000"
