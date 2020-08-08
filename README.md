@@ -16,10 +16,29 @@ Copy that generated CA certificate and key to the client in order to allow the c
 A very basic heartbeat is implemented, with the server waiting for a ping from the client every `$interval` seconds, right after connect. 
 If the ping is not received, the timer expires and a ticker fires off that alerts every `$interval`*2 seconds until the client re-connects.  
 
-The server holds all configuration information in a TOML or YAML file on a per-client basis, and that client config is pushed to the client upon connect. 
+The server holds all configuration information in a YAML file on a per-client basis, and that client config is pushed to the client upon connect. 
 [fsnotify](https://github.com/fsnotify/fsnotify) is used to watch and reload and send the config to the client as necessary, as part of the ping/heartbeat. 
 
 The client only needs to be pointed at the server with either it's own TLS certificate and secret key, or a common CA certificate and key in hand, greatly simplifying management of the checks. 
+
+## Quickstart:  
+- Fetch the package itself: `go get git.jba.io/go/gorram`  
+- Or clone from git: `git clone https://git.jba.io/go/gorram`  
+- Build: `./build.sh build`  
+- Move/edit `client.yml.dist`, `clientname.yml.dist`, and `server.yml.dist` as necessary: 
+    - `server.yml` is stored on the server-side
+    - `client.yml` is stored on the client-side 
+    - `clientname.yml` files are stored in a `conf.d` directory on the server-side
+        - One yml file per-client, with the filename matching the `clientname` 
+    - `secret_key` in `client.yml` and `server.yml` must match
+    - `tls_host` in `server.yml` must be edited as necessary to allow TLS certificate generation
+        - You can set it to an IP
+- Startup the server: `./gorram-server -generate-ca -debug -conf ./ -ssl-path ./`
+    - With `-generate-ca`, a CA key and certificate will be generated to `ssl-path` on startup, so if the client and server are running on different machines
+        for this quickstart, you must copy them to the client's `ssl-path`
+- Startup the client: `./gorram-client -debug -conf ./client.yml -ssl-path ./`
+
+After 60 seconds, the checks should start flowing, checking anything specified in `clientname.yml` on the client. 
 
 ## Mutual TLS with pre-generated certificates:
 Generating your own certificates ahead of time, using `gorram-certs`:
@@ -28,34 +47,10 @@ Generating your own certificates ahead of time, using `gorram-certs`:
 - Generate a server cert: `gorram-certs -host "IP or hostname of server" -server`
 - Generate a client cert: `gorram-certs -host "client name" -client`
 
-## Config file example:
-```
-[clientName]
-    Interval = 5
-
-    [clientName.Deluge]
-    URL = "http://127.0.0.1:8112/json"
-    Password = "deluge"
-    MaxTorrents = 5
-
-    [[clientName.Disk]]
-    Partition = "/"
-
-    [[clientName.Disk]]
-    Partition = "/media/USB"    
-    MaxUsage = 10.0
-
-    [[clientName.Ps]]
-    FullPath = "/usr/lib/firefox/firefox"
-
-    [clientName.Load]
-    MaxLoad = 0.50
-
-    [[clientName.GetUrl]]
-    Url = "https://example.tld/health"
-    # Quotes must be escaped, per TOML spec:
-    ExpectedBody = "{\"alive\": true}"    
-```  
+## Config files:
+- `client.yml.dist` is an example of the client-side configuration file
+- `clientname.yml.dist` is an example of a server-side, client-specific configuration file, storing all the checks for the client
+- `server.yml.dist` is an example of the server-side configuration file
 
 ## Currently implemented checks:
 - Deluge: max number of torrents in an error, checking, or downloading state.  
@@ -66,34 +61,9 @@ Generating your own certificates ahead of time, using `gorram-certs`:
 - Memory Usage: check percentage of used memory
 - Postgres Replication: query the `pg_stat_replication` table on a Postgres master for a specific `client_addr`. 
 
-Postgres check needs some aditional setup:  
+Postgres check needs some aditional setup using `psql`:  
 - To create user: `create user gorram with password '[reallySecurePassword]';`  
 - To grant user permissions to monitor replication status: `grant pg_monitor to gorram;`  
-
-## Quickstart:
-Fetch the package itself: `go get git.jba.io/go/gorram`
-
-Install dependencies, using [dep](https://github.com/golang/dep):  
-- `go get -u github.com/golang/dep/cmd/dep` might be used to install it, but in my experience their HEAD is usually broken
-- `cd ~/go/src/git.jba.io/go/gorram/server && ~/go/bin/dep ensure && go get -d`
-- `cd ~/go/src/git.jba.io/go/gorram/checks && ~/go/bin/dep ensure && go get -d`
-- `cd ~/go/src/git.jba.io/go/gorram/client && go get -d`
-- `cd ~/go/src/git.jba.io/go/gorram/server`, copy/edit `config.dist.toml` as needed, noting the `SecretKey` and `ListenAddress`
-- `cd ~/go/src/git.jba.io/go/gorram/client`, copy/edit `client.dist.toml` as needed, matching up the `ServerSecret` and `ServerAddress`
-
-Generate SSL certs used to encrypt the traffic: `go run server/main.go -conf ./config.toml -ssl-path ./ -generate-certs`  
-Start server: `go run server/main.go -conf ./config.toml -ssl-path ./`  
-Start client: `go run client/main.go -conf ./client.toml -ssl-path ./`  
-
-If successful, you should see something similar to the following on the server-side, showing the client connecting and fetching it's config:
-```
-2019/03/24 21:34:01 Loaded config for a-client from config.toml...
-2019/03/24 21:34:01 Loaded config for another-client from config.toml...
-2019/03/24 21:34:01 Listening on 127.0.0.1:50000
-2019/03/24 21:34:05 Inbound connection from 127.0.0.1:12345
-2019/03/24 21:34:05 Connection has begun
-2019/03/24 21:34:05 a-client has synced config.
-```
 
 ## Alerts:  
 Alerts will be sent if the number of identical alert occurences is 1, greater than 5, or the occurrences is evenly divisible by 10.  
@@ -106,4 +76,4 @@ This is a very rudimentary 'backoff' implementation.
     - Right now if a client disappears, the server will start alerting and never stop until the client re-appears. 
 - [ ] Related to the above, implement some kind of frontend to interact with the server; manually delete clients, reload config, etc.  
     - CLI is in the works, but still working on the gRPC server endpoints
-    - I'd then like to implement a chat bot based on those implemented endpoints
+    - Basic web UI has been implemented, currently used to list and mute alerts
