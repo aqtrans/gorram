@@ -18,7 +18,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -354,6 +353,29 @@ func (cfg serverConfig) streamInterceptor(srv interface{}, stream grpc.ServerStr
 	return handler(srv, stream)
 }
 
+// sendAlert() decides whether to send alerts
+//// Uses a very basic cooloff method:
+//// - always under 5
+//// - less than 50 and divisible by 10
+//// - greater than 50 and divisible by 50
+//// - greater than 500 and divisible by 100
+func sendAlert(i int64) bool {
+	if i < 5 {
+		return true
+	}
+	if i < 50 && (i%10) == 0 {
+		return true
+	}
+	if i > 500 && (i%100) == 0 {
+		return true
+	}
+	if i > 50 && (i%50) == 0 {
+		return true
+	}
+
+	return false
+}
+
 func (s *gorramServer) alert(client string, issue proto.Issue) {
 
 	// Tie the issue with the given client name here
@@ -368,22 +390,15 @@ func (s *gorramServer) alert(client string, issue proto.Issue) {
 			"occurrences": occurrences,
 		}).Debugln("Issue exists. Increasing occurrence count.", issue.Message)
 
-		if occurrences < 5 {
+		if sendAlert(occurrences) {
+			// Send alert...
 			log.WithFields(log.Fields{
 				"client":      client,
 				"check":       issue.Title,
 				"occurrences": occurrences,
-			}).Debugln("Less than 5 occurrences. Continuing alerts.", issue.Message)
-		} else if (occurrences % 10) == 0 {
-			log.WithFields(log.Fields{
-				"client":      client,
-				"check":       issue.Title,
-				"occurrences": occurrences,
-			}).Debugln("Sending alert as it meets occurrences count.", issue.Message)
-			s.alertsMap.Lock()
-			issue.Message = issue.Message + " | Occurrences: " + strconv.FormatInt(occurrences, 10) + "| First occurred:" + time.Unix(s.alertsMap.m[generateMapKey(issue)].TimeSubmitted, 0).String()
-			s.alertsMap.Unlock()
+			}).Debugln("Sending alert", issue.Message)
 		} else {
+			// Skip alert...
 			log.WithFields(log.Fields{
 				"client":      client,
 				"check":       issue.Title,
@@ -391,6 +406,32 @@ func (s *gorramServer) alert(client string, issue proto.Issue) {
 			}).Debugln("Skipping alert...", issue.Message)
 			return
 		}
+
+		/*
+			if occurrences < 5 {
+				log.WithFields(log.Fields{
+					"client":      client,
+					"check":       issue.Title,
+					"occurrences": occurrences,
+				}).Debugln("Less than 5 occurrences. Continuing alerts.", issue.Message)
+			} else if (occurrences % 10) == 0 {
+				log.WithFields(log.Fields{
+					"client":      client,
+					"check":       issue.Title,
+					"occurrences": occurrences,
+				}).Debugln("Sending alert as it meets occurrences count.", issue.Message)
+				s.alertsMap.Lock()
+				issue.Message = issue.Message + " | Occurrences: " + strconv.FormatInt(occurrences, 10) + "| First occurred:" + time.Unix(s.alertsMap.m[generateMapKey(issue)].TimeSubmitted, 0).String()
+				s.alertsMap.Unlock()
+			} else {
+				log.WithFields(log.Fields{
+					"client":      client,
+					"check":       issue.Title,
+					"occurrences": occurrences,
+				}).Debugln("Skipping alert...", issue.Message)
+				return
+			}
+		*/
 
 	} else {
 		log.WithFields(log.Fields{
@@ -639,6 +680,8 @@ func (a *alerts) add(alert proto.Alert) {
 	a.Unlock()
 }
 
+// count increases the number of occurrences and returns it
+//  it should only be called in alert(), ensuring the occurrences always increase
 func (a *alerts) count(issue proto.Issue) int64 {
 	a.Lock()
 	v := a.m[generateMapKey(issue)]
