@@ -124,13 +124,13 @@ steps:
     - scp ./gorram.deb deploy@rick.jba.io:/home/deploy/
     - ssh deploy@rick.jba.io sudo dpkg -i gorram.deb  
 
-  - name: deploy to repo
-    image: alpine
-    environment:
-      DEPLOY_HOST: 'repo@bob.jba.io'
-      SSH_KEY:
-        from_secret: ssh_key    
-    commands:
+- name: deploy to repo
+  image: alpine
+  environment:
+    DEPLOY_HOST: 'repo@bob.jba.io'
+    SSH_KEY:
+      from_secret: ssh_key    
+  commands:
     - mkdir $HOME/.ssh
     - echo "$SSH_KEY" > $HOME/.ssh/id_ed25519
     - chmod 600 $HOME/.ssh/id_ed25519
