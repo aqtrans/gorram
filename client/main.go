@@ -28,6 +28,11 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+var (
+	sha1ver   string // git commit to be set when built
+	buildTime string // date+time to be set when built
+)
+
 type clientConfig struct {
 	ClientName    string `yaml:"name,omitempty"`
 	ServerSecret  string `yaml:"secret_key,omitempty"`
@@ -83,7 +88,13 @@ func main() {
 	//secretKey := flag.String("server-secret", "omg12345", "Secret key of the server.")
 	//interval := flag.Duration("interval", 60*time.Second, "Number of seconds to check for issues on.")
 	debug := flag.Bool("debug", false, "Toggle debug logging.")
+	showVersion := flag.Bool("version", false, "Print server version")
 	flag.Parse()
+
+	if *showVersion {
+		log.Printf("Build date: %s\nGit commit: %s\n", buildTime, sha1ver)
+		os.Exit(0)
+	}
 
 	if *debug {
 		log.SetLevel(log.DebugLevel)

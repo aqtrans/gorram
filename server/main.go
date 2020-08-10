@@ -42,7 +42,11 @@ import (
 	"google.golang.org/grpc/stats"
 )
 
-var errUnknownClient = errors.New("Unknown Client Name - Check ClientName in client.yml")
+var (
+	errUnknownClient = errors.New("Unknown Client Name - Check ClientName in client.yml")
+	sha1ver          string // git commit to be set when built
+	buildTime        string // date+time to be set when built
+)
 
 type serverConfig struct {
 	SecretKey   string `yaml:"secret_key,omitempty"`
@@ -915,12 +919,18 @@ func main() {
 	generateCAcert := flag.Bool("generate-ca", false, "Generate CA certificates, at cacert.pem and cacert.key.")
 	sslPath := flag.String("ssl-path", "/etc/gorram/", "Path to read/write SSL certs from.")
 	debug := flag.Bool("debug", false, "Toggle debug logging.")
+	showVersion := flag.Bool("version", false, "Print server version")
 	//serverAddress := flag.String("listen-address", "127.0.0.1:50000", "Address and port to listen on.")
 	//serverCert := flag.String("cert", "cert.pem", "Path to the server certificate.")
 	//serverCertKey := flag.String("key", "cert.key", "Path to the server certificate key.")
 	//secret := flag.String("server-secret", "omg12345", "Secret key of the server.")
 	//alertMethodF := flag.String("alert", "log", "Alert method to use. Right now, log. To come: pushover.")
 	flag.Parse()
+
+	if *showVersion {
+		log.Printf("Build date: %s\nGit commit: %s\n", buildTime, sha1ver)
+		os.Exit(0)
+	}
 
 	// Set debug from flag here to allow debugging config loading and cert generation
 	if *debug {

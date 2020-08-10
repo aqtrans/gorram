@@ -45,7 +45,7 @@ steps:
       path: /go
   commands:
     - cd server/
-    - go build -o ../gorram-server
+    - go build -ldflags "-X main.sha1ver=$(git rev-parse HEAD) -X main.buildTime=$(date +'%Y-%m-%d_%T')" -o ../gorram-server
 
 - name: test client
   image: golang
@@ -66,7 +66,7 @@ steps:
       path: /go
   commands:
     - cd client/
-    - go build -o ../gorram-client
+    - go build -ldflags "-X main.sha1ver=$(git rev-parse HEAD) -X main.buildTime=$(date +'%Y-%m-%d_%T')" -o ../gorram-client
 
 - name: build cli
   image: golang
@@ -90,7 +90,7 @@ steps:
   pull: never
   image: deb-pkg
   commands: 
-    - dch -M -v 1.0-$DRONE_BUILD_STARTED-$DRONE_COMMIT_BRANCH "New version from Git" && dch -M -r -D buster ""
+    - dch -M -v 1.0.$DRONE_BUILD_STARTED "New version from Git commit $(git rev-parse HEAD)" && dch -M -r -D buster ""
     - debuild -us -uc -b
     - mv ../gorram_*.deb ./gorram.deb
 

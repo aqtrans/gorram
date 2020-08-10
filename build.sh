@@ -25,8 +25,8 @@ while [ "$1" != "" ]; do
             ;;
         build)
             build_proto
-            GO111MODULE=on go build -o gorram-server ./server
-            GO111MODULE=on go build -o gorram-client ./client
+            GO111MODULE=on go build -ldflags "-X main.sha1ver=$(git rev-parse HEAD) -X main.buildTime=$(date +'%Y-%m-%d_%T')" -o gorram-server ./server
+            GO111MODULE=on go build -ldflags "-X main.sha1ver=$(git rev-parse HEAD) -X main.buildTime=$(date +'%Y-%m-%d_%T')" -o gorram-client ./client
             exit
             ;;
         generate-ca)
