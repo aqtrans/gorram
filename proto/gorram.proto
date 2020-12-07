@@ -43,6 +43,8 @@ message Alert {
     int64 occurrences = 4;
     // If alert was muted
     bool muted = 5;
+    // When issue last occurred
+    int64 time_last = 6;
 }
 
 message ConfigRequest {
