@@ -385,7 +385,7 @@ func (s *gorramServer) alert(client string, issue proto.Issue) {
 	// Tie the issue with the given client name here
 	issue.Host = client
 
-	// Expire alerts stale for longer than 6 hours:
+	// Expire alerts stale for longer than 1 hour:
 	s.alertsMap.expire(issue)
 
 	if s.alertsMap.exists(issue) {
@@ -735,7 +735,7 @@ func (a *alerts) isMuted(issue proto.Issue) bool {
 	return isIt
 }
 
-// expire expires issues that have been stale for 6 hours
+// expire expires issues that have been stale for 1 hour
 func (a *alerts) expire(issue proto.Issue) {
 	a.Lock()
 	issueID := generateMapKey(issue)
@@ -745,7 +745,7 @@ func (a *alerts) expire(issue proto.Issue) {
 
 		lastOccurrence := time.Since(time.Unix(v.TimeLast, 0))
 
-		if lastOccurrence.Hours() > 6.00 {
+		if lastOccurrence.Hours() > 1.00 {
 			log.WithFields(log.Fields{
 				"issue": v.Issue.Title,
 				"host":  v.Issue.Host,
