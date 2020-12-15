@@ -741,7 +741,7 @@ func (a *alerts) expire(issue proto.Issue) {
 	issueID := generateMapKey(issue)
 	v, alertExists := a.m[issueID]
 
-	if !alertExists {
+	if alertExists {
 
 		lastOccurrence := time.Since(time.Unix(v.TimeLast, 0))
 
