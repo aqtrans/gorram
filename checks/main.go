@@ -9,7 +9,7 @@ import (
 
 var theChecks []check
 
-var errEmptyConfig = errors.New("Config is empty")
+var errEmptyConfig = errors.New("config is empty")
 
 /*
 

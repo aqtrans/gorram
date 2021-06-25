@@ -42,7 +42,6 @@ func (d *delugeCheck) configure(cfg *pb.Config) error {
 }
 
 var (
-	isBad  bool
 	badMsg string
 )
 
