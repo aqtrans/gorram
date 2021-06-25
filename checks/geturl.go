@@ -23,7 +23,7 @@ func (g *getURL) Title() string {
 	return "GetUrl"
 }
 
-func (g *getURL) configure(cfg pb.Config) error {
+func (g *getURL) configure(cfg *pb.Config) error {
 	if cfg.GetGetUrl() == nil {
 		return errEmptyConfig
 	}
@@ -33,9 +33,9 @@ func (g *getURL) configure(cfg pb.Config) error {
 	return nil
 }
 
-func (g *getURL) doCheck() []pb.Issue {
+func (g *getURL) doCheck() []*pb.Issue {
 
-	var issues []pb.Issue
+	var issues []*pb.Issue
 
 	for _, urlCheck := range g.Cfg {
 

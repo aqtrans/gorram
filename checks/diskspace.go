@@ -21,7 +21,7 @@ func (d *diskSpace) Title() string {
 	return "Diskspace"
 }
 
-func (d *diskSpace) configure(cfg pb.Config) error {
+func (d *diskSpace) configure(cfg *pb.Config) error {
 	if cfg.GetDiskspace() == nil {
 		return errEmptyConfig
 	}
@@ -31,9 +31,9 @@ func (d *diskSpace) configure(cfg pb.Config) error {
 	return nil
 }
 
-func (d *diskSpace) doCheck() []pb.Issue {
+func (d *diskSpace) doCheck() []*pb.Issue {
 
-	var issues []pb.Issue
+	var issues []*pb.Issue
 
 	for _, aDisk := range d.Cfg {
 		usage, err := disk.Usage(aDisk.Partition)

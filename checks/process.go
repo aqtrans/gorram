@@ -19,7 +19,7 @@ func init() {
 	theChecks = append(theChecks, &processExists{})
 }
 
-func (p *processExists) configure(cfg pb.Config) error {
+func (p *processExists) configure(cfg *pb.Config) error {
 	if cfg.GetProcess() == nil {
 		return errEmptyConfig
 	}
@@ -29,7 +29,7 @@ func (p *processExists) configure(cfg pb.Config) error {
 	return nil
 }
 
-func checkForProc(c pb.Config_ProcessExists) bool {
+func checkForProc(c *pb.Config_ProcessExists) bool {
 	var procExists bool
 
 	procs, err := process.Processes()
@@ -74,12 +74,12 @@ func (p *processExists) Title() string {
 	return "Process"
 }
 
-func (p *processExists) doCheck() []pb.Issue {
-	var issues []pb.Issue
+func (p *processExists) doCheck() []*pb.Issue {
+	var issues []*pb.Issue
 	//procList := getProcList()
 
 	for _, psCheck := range p.Cfg {
-		if !checkForProc(*psCheck) {
+		if !checkForProc(psCheck) {
 			issues = append(issues, newIssue(p.Title(), fmt.Sprintf("%v is not running. Check that the full path is specified.", psCheck.Path)))
 		}
 	}

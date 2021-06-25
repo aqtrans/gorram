@@ -20,7 +20,7 @@ func init() {
 	theChecks = append(theChecks, &postgres{})
 }
 
-func (p *postgres) configure(cfg proto.Config) error {
+func (p *postgres) configure(cfg *proto.Config) error {
 	if cfg.GetPostgres() == nil {
 		return errEmptyConfig
 	}
@@ -34,8 +34,8 @@ func (p *postgres) Title() string {
 	return "Postgres"
 }
 
-func (p *postgres) doCheck() []proto.Issue {
-	var issues []proto.Issue
+func (p *postgres) doCheck() []*proto.Issue {
+	var issues []*proto.Issue
 
 	connStr := p.Cfg.ConnectString
 	db, err := sql.Open("postgres", connStr)

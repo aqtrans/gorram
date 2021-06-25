@@ -17,7 +17,7 @@ func init() {
 	theChecks = append(theChecks, &loadAvg{})
 }
 
-func (l *loadAvg) configure(cfg pb.Config) error {
+func (l *loadAvg) configure(cfg *pb.Config) error {
 	if cfg.GetLoadavg() == nil {
 		return errEmptyConfig
 	}
@@ -31,8 +31,8 @@ func (l *loadAvg) Title() string {
 	return "Loadavg"
 }
 
-func (l *loadAvg) doCheck() []pb.Issue {
-	var issues []pb.Issue
+func (l *loadAvg) doCheck() []*pb.Issue {
+	var issues []*pb.Issue
 
 	loadAvgs, err := load.Avg()
 	if err != nil {

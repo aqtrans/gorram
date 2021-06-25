@@ -17,7 +17,7 @@ func init() {
 	theChecks = append(theChecks, &memory{})
 }
 
-func (m *memory) configure(cfg pb.Config) error {
+func (m *memory) configure(cfg *pb.Config) error {
 	if cfg.GetMemory() == nil {
 		return errEmptyConfig
 	}
@@ -31,8 +31,8 @@ func (m *memory) Title() string {
 	return "Memory"
 }
 
-func (m *memory) doCheck() []pb.Issue {
-	var issues []pb.Issue
+func (m *memory) doCheck() []*pb.Issue {
+	var issues []*pb.Issue
 
 	vmStat, err := mem.VirtualMemory()
 	if err != nil {

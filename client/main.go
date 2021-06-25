@@ -277,7 +277,7 @@ func main() {
 				//cfg2 := <-cfgChan
 
 				// Do checks
-				i := checks.DoChecks(*origCfg)
+				i := checks.DoChecks(origCfg)
 				// If there are any checks, open a client-side stream and record them
 				if len(i) > 0 {
 					issueStream, err := c.RecordIssue(rpcCtx2)
@@ -286,7 +286,7 @@ func main() {
 					}
 
 					for _, issue := range i {
-						if err := issueStream.Send(&issue); err != nil {
+						if err := issueStream.Send(issue); err != nil {
 							log.Fatalln("Error submitting issue:", err)
 						}
 					}
