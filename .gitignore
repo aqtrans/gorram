@@ -3,3 +3,5 @@ server/vendor/*
 client/vendor/*
 *.pem
 *.key
+proto/gorram_grpc.pb.go
+proto/gorram.pb.go
