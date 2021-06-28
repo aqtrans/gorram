@@ -1,10 +1,6 @@
-Source: gorram
-Section: admin
-Priority: optional
-Maintainer: Jordan Anderson <aqtrans@jba.io>
-Homepage: https://git.jba.io/go/gorram
-
 Package: gorram
+Maintainer: Jordan Anderson <me@jba.io>
+Version: 1.0
 Architecture: amd64
 Depends: libc6, adduser
 Description: Gorram, the single-process system monitoring solution. 
