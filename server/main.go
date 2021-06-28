@@ -114,6 +114,8 @@ type gorramServer struct {
 	cfg              serverConfig
 	connectedClients clients
 	alertsMap        alerts
+	proto.UnimplementedQuerierServer
+	proto.UnimplementedReporterServer
 	/*
 		pingTimers    map[string]*time.Timer
 		clientList    map[string]chan bool
