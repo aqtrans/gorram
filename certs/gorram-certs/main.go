@@ -2,9 +2,11 @@ package main
 
 import (
 	"flag"
-	"git.jba.io/go/gorram/certs"
 	"log"
 	"os"
+	"strings"
+
+	"git.jba.io/go/gorram/certs"
 )
 
 func main() {
@@ -20,6 +22,8 @@ func main() {
 
 	flag.Parse()
 
+	generateHosts := strings.Split(*generateHost, ",")
+
 	if *generateCA {
 		certs.GenerateCACert(*sslPath)
 	}
@@ -30,7 +34,7 @@ func main() {
 			log.Fatalln("server.pem already exists. Not overwriting. Manually remove it and cert.key if you need to re-generate them.")
 		}
 		log.Println("Generating", *generateHost, "certs to", *sslPath)
-		certs.SaveServerCert(*generateHost, *sslPath)
+		certs.SaveServerCert(generateHosts, *sslPath)
 	}
 
 	if *generateClient {

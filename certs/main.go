@@ -21,7 +21,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 )
 
@@ -106,7 +105,7 @@ func GenerateCACert(sslPath string) {
 }
 
 // GenerateServerCert generates a server certificate against a given CA cert
-func GenerateServerCert(host, sslPath string) tls.Certificate {
+func GenerateServerCert(hosts []string, sslPath string) tls.Certificate {
 	caCertPath := filepath.Join(sslPath, "cacert.pem")
 	caCertKeyPath := filepath.Join(sslPath, "cacert.key")
 
@@ -145,7 +144,7 @@ func GenerateServerCert(host, sslPath string) tls.Certificate {
 		BasicConstraintsValid: true,
 	}
 
-	hosts := strings.Split(host, ",")
+	//hosts := strings.Split(host, ",")
 	for _, h := range hosts {
 		if ip := net.ParseIP(h); ip != nil {
 			template.IPAddresses = append(template.IPAddresses, ip)
@@ -166,14 +165,14 @@ func GenerateServerCert(host, sslPath string) tls.Certificate {
 }
 
 // SaveServerCert generates and saves a server cert
-func SaveServerCert(host, sslPath string) {
+func SaveServerCert(hosts []string, sslPath string) {
 	//caCertPath := filepath.Join(sslPath, "cacert.pem")
 	//caCertKeyPath := filepath.Join(sslPath, "cacert.key")
 
 	certPath := filepath.Join(sslPath, "server.pem")
 	certKeyPath := filepath.Join(sslPath, "server.key")
 
-	cert := GenerateServerCert(host, sslPath)
+	cert := GenerateServerCert(hosts, sslPath)
 
 	certOut, err := os.Create(certPath)
 	if err != nil {

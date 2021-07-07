@@ -56,11 +56,11 @@ type serverConfig struct {
 		UserKey string `yaml:"user_key,omitempty"`
 		Device  string `yaml:"device,omitempty"`
 	} `yaml:"pushover,omitempty"`
-	ListenAddress    string `yaml:"listen_address,omitempty"`
-	TLSHostname      string `yaml:"tls_host,omitempty"`
-	HeartbeatSeconds int64  `yaml:"heartbeat_seconds,omitempty"`
-	Debug            bool   `yaml:"debug,omitempty"`
-	Domain           string `yaml:"domain,omitempty"`
+	ListenAddress    string   `yaml:"listen_address,omitempty"`
+	TLSHostnames     []string `yaml:"tls_host,omitempty"`
+	HeartbeatSeconds int64    `yaml:"heartbeat_seconds,omitempty"`
+	Debug            bool     `yaml:"debug,omitempty"`
+	Domain           string   `yaml:"domain,omitempty"`
 }
 
 type statHandler struct {
@@ -1008,12 +1008,12 @@ func main() {
 				log.Debugln("CA certificate at cacert.pem does not exist, generating it...")
 				certs.GenerateCACert(*sslPath)
 			}
-			if gs.cfg.TLSHostname == "" {
+			if gs.cfg.TLSHostnames == nil {
 				log.Fatalln("Error: Unable to dynamically generate server cert with blank hostname. Please configure 'TLSHostname' in server config.")
 			}
 			// Generate certificates dynamically:
-			log.Debugln("Generating certificate dynamically for", gs.cfg.TLSHostname)
-			tlsCert = certs.GenerateServerCert(gs.cfg.TLSHostname, *sslPath)
+			log.Debugln("Generating certificate dynamically for", gs.cfg.TLSHostnames)
+			tlsCert = certs.GenerateServerCert(gs.cfg.TLSHostnames, *sslPath)
 		}
 
 		caCert, err := ioutil.ReadFile(caCertPath)
