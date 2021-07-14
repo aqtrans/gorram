@@ -144,6 +144,10 @@ func main() {
 			}),
 			grpc.WithKeepaliveParams(kp),
 		)
+		if err != nil {
+			log.Printf("Error connecting to server: %v", err)
+			return
+		}
 	} else {
 		// If a certificate at $ClientName.pem exists, load it, otherwise generate one dynamically
 		var tlsCert tls.Certificate
@@ -200,10 +204,10 @@ func main() {
 			}),
 			grpc.WithKeepaliveParams(kp),
 		)
-	}
-	if err != nil {
-		log.Printf("Error connecting to server: %v", err)
-		return
+		if err != nil {
+			log.Printf("Error connecting to server: %v", err)
+			return
+		}
 	}
 
 	defer conn.Close()
