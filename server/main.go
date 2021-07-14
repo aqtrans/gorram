@@ -57,7 +57,7 @@ type serverConfig struct {
 		Device  string `yaml:"device,omitempty"`
 	} `yaml:"pushover,omitempty"`
 	ListenAddress    string   `yaml:"listen_address,omitempty"`
-	TLSHostnames     []string `yaml:"tls_host,omitempty"`
+	TLSHostnames     []string `yaml:"tls_hosts,omitempty"`
 	HeartbeatSeconds int64    `yaml:"heartbeat_seconds,omitempty"`
 	Debug            bool     `yaml:"debug,omitempty"`
 	Domain           string   `yaml:"domain,omitempty"`
