@@ -31,6 +31,18 @@ function build_proto()
     protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative proto/gorram.proto
 }
 
+func test_all() {
+    cd client/
+    test_it
+    cd ../server/
+    test_it
+    cd ../certs/
+    test_it
+    cd ../cli/
+    test_it
+    cd ../checks/
+    test_it
+}
 
 while [ "$1" != "" ]; do 
     case $1 in
@@ -59,18 +71,14 @@ while [ "$1" != "" ]; do
             exit
             ;;
         test)
-            build_proto
-            cd client/
-            test_it
-            cd ../server/
-            test_it
+            test_all
             exit
             ;;
 ## Old stuff
         pkg)
             if [ "$(which dch)" != "" ]; then 
                 build_proto
-                test_it
+                test_all
                 GO111MODULE=on go build -buildmode=pie -ldflags "-X main.sha1ver=$(git rev-parse HEAD) -X main.buildTime=$(date +'%Y-%m-%d_%T')" -o gorram-server ./server
                 GO111MODULE=on go build -buildmode=pie -ldflags "-X main.sha1ver=$(git rev-parse HEAD) -X main.buildTime=$(date +'%Y-%m-%d_%T')" -o gorram-client ./client
                 GO111MODULE=on go build -buildmode=pie -o gorram-cli ./cli
@@ -79,7 +87,7 @@ while [ "$1" != "" ]; do
             else
                 echo "dch not found. building inside container."
                 build_proto
-                test_it
+                test_all
                 build_debian
                 build_package
             fi
@@ -88,26 +96,29 @@ while [ "$1" != "" ]; do
         build-debian)
             echo "Building binary inside Debian container..."
             build_proto
-            test_it
+            test_all
             build_debian
             exit
             ;;
         deploy-binary)
             build_proto
-            test_it
+            test_all
             build_debian
             ansible-playbook -i bob.jba.io, deploy.yml
             exit
             ;;
         deploy)
             build_proto
-            test_it
+            test_all
             build_debian
             build_package
             scp gorram-$DEBVERSION.deb bob:
             ssh bob sudo dpkg -i gorram-$DEBVERSION.deb
             scp gorram-$DEBVERSION.deb rick:
-            ssh rick sudo dpkg -i gorram-$DEBVERSION.deb            
+            ssh rick sudo dpkg -i gorram-$DEBVERSION.deb
+            sleep 5
+            ssh bob sudo systemctl status gorram-server gorram-client
+            ssh rick sudo systemctl status gorram-client
             exit
             ;;            
     esac
