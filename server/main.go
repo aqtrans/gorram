@@ -43,7 +43,7 @@ import (
 )
 
 var (
-	errUnknownClient = errors.New("Unknown Client Name - Check ClientName in client.yml")
+	errUnknownClient = errors.New("unknown Client Name - Check ClientName in client.yml")
 	sha1ver          string // git commit to be set when built
 	buildTime        string // date+time to be set when built
 )
@@ -234,7 +234,7 @@ func (s *gorramServer) Ping(ctx context.Context, msg *proto.PingMsg) (*proto.Pin
 //  and the LastPingTime is updated.
 func (s *gorramServer) reviveDeadClient(clientName string) {
 	if s.connectedClients.exists(clientName) {
-		s.alert(clientName, proto.Issue{
+		s.alert(clientName, &proto.Issue{
 			Title:   "Client Revived",
 			Message: fmt.Sprintf("%v is alive again!", clientName),
 		})
@@ -256,12 +256,12 @@ func (s *gorramServer) RecordIssue(stream proto.Reporter_RecordIssueServer) erro
 			return err
 		}
 		// Record issue
-		s.alert(getClientName(stream.Context()), *issue)
+		s.alert(getClientName(stream.Context()), issue)
 
 	}
 }
 
-func (s *gorramServer) loadClientConfig(client string) (proto.Config, error) {
+func (s *gorramServer) loadClientConfig(client string) (*proto.Config, error) {
 	// Attempt to read the config.yml, and then if it has [clientname] in it, unmarshal the config from there
 	clientCfg, isThere := s.clientCfgs.Load(client)
 	if isThere {
@@ -274,11 +274,11 @@ func (s *gorramServer) loadClientConfig(client string) (proto.Config, error) {
 		if !ok {
 			log.Fatalln(cfg, "is not a proto.Config.")
 		}
-		return *cfg, nil
+		return cfg, nil
 	}
 
 	// Default config values:
-	return proto.Config{}, errUnknownClient
+	return &proto.Config{}, errUnknownClient
 	/*
 			gorram.Config{
 				Interval: 60,
@@ -318,7 +318,7 @@ func (s *gorramServer) ConfigSync(ctx context.Context, req *proto.ConfigRequest)
 		cfg.EnabledChecks = enabledChecks.(string)
 	}
 
-	return &cfg, nil
+	return cfg, nil
 }
 
 func (cfg serverConfig) authorize(ctx context.Context) error {
@@ -336,7 +336,7 @@ func (cfg serverConfig) authorize(ctx context.Context) error {
 			givenSecret = md["secret"][0]
 		}
 	}
-	err := errors.New("Access Denied")
+	err := errors.New("access Denied")
 	log.WithFields(log.Fields{
 		"client": clientName,
 		"secret": givenSecret,
@@ -382,7 +382,7 @@ func sendAlert(i int64) bool {
 	return false
 }
 
-func (s *gorramServer) alert(client string, issue proto.Issue) {
+func (s *gorramServer) alert(client string, issue *proto.Issue) {
 
 	// Tie the issue with the given client name here
 	issue.Host = client
@@ -449,12 +449,12 @@ func (s *gorramServer) alert(client string, issue proto.Issue) {
 		}).Debugln("Issue does not exist. Adding to map.", issue.Message)
 
 		a := proto.Alert{
-			Issue:         &issue,
+			Issue:         issue,
 			TimeSubmitted: time.Now().Unix(),
 			TimeLast:      time.Now().Unix(),
 			Occurrences:   1,
 		}
-		s.alertsMap.add(a)
+		s.alertsMap.add(&a)
 	}
 
 	//s.alertsMap.mute(generateMapKey(issue))
@@ -597,7 +597,7 @@ func (s *gorramServer) Delete(ctx context.Context, cn *proto.ClientName) (*proto
 
 func (s *gorramServer) Debug(ctx context.Context, dr *proto.DebugRequest) (*proto.DebugResponse, error) {
 
-	aString := fmt.Sprintf("Connected clients: %v", s.connectedClients.m)
+	aString := fmt.Sprintf("Connected clients: %v", &s.connectedClients.m)
 	return &proto.DebugResponse{
 		Resp: aString,
 	}, nil
@@ -622,7 +622,7 @@ func (s *gorramServer) Hello(ctx context.Context, req *proto.ConfigRequest) (*pr
 	}
 
 	// As this should only be called on client connection, record the client name and address here
-	c := proto.Client{
+	c := &proto.Client{
 		Name:         clientName,
 		Address:      clientAddress,
 		LastPingTime: time.Now().Unix(),
@@ -673,11 +673,11 @@ func (a *alerts) exists(client string, alert gorram.Alert, interval int64) (rese
 
 // MapKey should consist of host+title, allowing message to continue updating
 // This allows disk space and other alerts to change without unmuting
-func generateMapKey(i proto.Issue) string {
+func generateMapKey(i *proto.Issue) string {
 	return base64.RawURLEncoding.EncodeToString([]byte(i.Host + i.Title))
 }
 
-func (a *alerts) add(alert proto.Alert) {
+func (a *alerts) add(alert *proto.Alert) {
 	a.Lock()
 	if len(a.m) > 20 {
 		log.WithFields(log.Fields{
@@ -686,14 +686,14 @@ func (a *alerts) add(alert proto.Alert) {
 			"occurrences": alert.Occurrences,
 		}).Debugln("issues map is greater than 20", len(a.m))
 	}
-	a.m[generateMapKey(*alert.Issue)] = &alert
+	a.m[generateMapKey(alert.Issue)] = alert
 	a.Unlock()
 }
 
 // count increases the number of occurrences and returns it
 //  it should only be called in alert(), ensuring the occurrences always increase
 //  TimeLast is updated as well, to track stale alerts
-func (a *alerts) count(issue proto.Issue) int64 {
+func (a *alerts) count(issue *proto.Issue) int64 {
 	a.Lock()
 	v := a.m[generateMapKey(issue)]
 	v.Occurrences = v.Occurrences + 1
@@ -702,14 +702,14 @@ func (a *alerts) count(issue proto.Issue) int64 {
 	return v.Occurrences
 }
 
-func (a *alerts) exists(issue proto.Issue) bool {
+func (a *alerts) exists(issue *proto.Issue) bool {
 	a.Lock()
 	_, alertExists := a.m[generateMapKey(issue)]
 	a.Unlock()
 	return alertExists
 }
 
-func (a *alerts) get(issue proto.Issue) *proto.Alert {
+func (a *alerts) get(issue *proto.Issue) *proto.Alert {
 	a.Lock()
 	theAlert, alertExists := a.m[generateMapKey(issue)]
 	if alertExists {
@@ -728,7 +728,7 @@ func (a *alerts) mute(issueID string) {
 	a.Unlock()
 }
 
-func (a *alerts) isMuted(issue proto.Issue) bool {
+func (a *alerts) isMuted(issue *proto.Issue) bool {
 	var isIt bool
 	a.Lock()
 	v := a.m[generateMapKey(issue)]
@@ -738,7 +738,7 @@ func (a *alerts) isMuted(issue proto.Issue) bool {
 }
 
 // expire expires issues that have been stale for 1 hour
-func (a *alerts) expire(issue proto.Issue) {
+func (a *alerts) expire(issue *proto.Issue) {
 	a.Lock()
 	issueID := generateMapKey(issue)
 	v, alertExists := a.m[issueID]
@@ -761,9 +761,9 @@ func (a *alerts) expire(issue proto.Issue) {
 	a.Unlock()
 }
 
-func (c *clients) add(client proto.Client) {
+func (c *clients) add(client *proto.Client) {
 	c.Lock()
-	c.m.Clients[client.Name] = &client
+	c.m.Clients[client.Name] = client
 	c.Unlock()
 }
 
@@ -796,7 +796,6 @@ func (c *clients) delete(clientName string) {
 	delete(c.m.Clients, clientName)
 
 	c.Unlock()
-	return
 }
 
 func (c *clients) updatePingTime(clientName string) {
@@ -809,7 +808,6 @@ func (c *clients) updatePingTime(clientName string) {
 		return
 	}
 	c.Unlock()
-	return
 }
 
 func (c *clients) expired(clientName string, pingInterval int64) bool {
@@ -844,7 +842,7 @@ func (s *gorramServer) checkClients(k, v interface{}) bool {
 		}
 		// Check if client is Required and has not connected
 		if clientCfg.Required && !s.connectedClients.exists(clientName) {
-			s.alert(clientName, proto.Issue{
+			s.alert(clientName, &proto.Issue{
 				Title:   "Client Offline",
 				Message: clientName + " has not connected",
 			})
@@ -854,7 +852,7 @@ func (s *gorramServer) checkClients(k, v interface{}) bool {
 		if s.connectedClients.exists(clientName) && s.connectedClients.expired(clientName, clientCfg.Interval) {
 			log.Debugln(clientName, "has expired")
 			// TODO: should add time they've been offline to the alert
-			s.alert(clientName, proto.Issue{
+			s.alert(clientName, &proto.Issue{
 				Title:   "Client dropped offline",
 				Message: clientName + " has dropped offline",
 			})
