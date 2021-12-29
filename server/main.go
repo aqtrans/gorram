@@ -499,24 +499,26 @@ func (s *gorramServer) alert(client string, issue *proto.Issue) {
 	}
 }
 
-func (s *gorramServer) loadConfig(serverConfFile, confPath string) {
+func (s *gorramServer) loadConfig(serverConfFileFullPath, confdFullPath string) {
 	//ext := filepath.Ext(confFile)
 
 	// Load server config, from confPath/server.yml, or serverConfFile
-	var serverConfFilePath string
-	if serverConfFile != "" {
-		serverConfFilePath = serverConfFile
-	} else {
-		serverConfFilePath = filepath.Join(confPath, "server.yml")
-	}
+	/*
+		var serverConfFilePath string
+		if serverConfFile != "" {
+			serverConfFilePath = serverConfFile
+		} else {
+			serverConfFilePath = filepath.Join(confPath, "server.yml")
+		}
+	*/
 
-	serverCfg, err := ioutil.ReadFile(serverConfFilePath)
+	serverCfg, err := ioutil.ReadFile(serverConfFileFullPath)
 	if err != nil {
 		log.Fatalln("Error reading server.yml:", err)
 	}
 
 	// Load client configs from conf.d/*.yml
-	cfgFiles, err := ioutil.ReadDir(filepath.Join(confPath, "conf.d"))
+	cfgFiles, err := ioutil.ReadDir(confdFullPath)
 	if err != nil {
 		log.Fatalln("Error reading configs from conf.d:", err)
 	}
@@ -538,7 +540,7 @@ func (s *gorramServer) loadConfig(serverConfFile, confPath string) {
 			continue
 		}
 
-		fullpath := filepath.Join(confPath, "conf.d", filename)
+		fullpath := filepath.Join(confdFullPath, filename)
 		newBytes, err := ioutil.ReadFile(fullpath)
 		if err != nil {
 			log.WithFields(log.Fields{
@@ -965,6 +967,16 @@ func main() {
 	//alertMethodF := flag.String("alert", "log", "Alert method to use. Right now, log. To come: pushover.")
 	flag.Parse()
 
+	// Setup full paths to server and client config files
+	var serverCfg string
+	if *serverConfFile != "" {
+		serverCfg = *serverConfFile
+	} else {
+		serverCfg = filepath.Join(*confPath, "server.yml")
+	}
+	//serverCfg := filepath.Join(*confPath, "server.yml")
+	clientCfgs := filepath.Join(*confPath, "conf.d")
+
 	if *showVersion {
 		log.Printf("Build date: %s\nGit commit: %s\n", buildTime, sha1ver)
 		os.Exit(0)
@@ -986,7 +998,7 @@ func main() {
 		connectedClients: *new(clients),
 	}
 
-	gs.loadConfig(*serverConfFile, *confPath)
+	gs.loadConfig(serverCfg, clientCfgs)
 
 	if gs.cfg.Debug {
 		log.SetLevel(log.DebugLevel)
@@ -1125,8 +1137,6 @@ func main() {
 	}()
 
 	// Watch confPath/server.yml and confPath/conf.d/ for changes
-	serverCfg := filepath.Join(*confPath, "server.yml")
-	clientCfgs := filepath.Join(*confPath, "conf.d")
 	err = watcher.Add(serverCfg)
 	if err != nil {
 		log.Fatalln("Error watching server.yml:", err)
