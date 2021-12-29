@@ -499,11 +499,18 @@ func (s *gorramServer) alert(client string, issue *proto.Issue) {
 	}
 }
 
-func (s *gorramServer) loadConfig(confPath string) {
+func (s *gorramServer) loadConfig(serverConfFile, confPath string) {
 	//ext := filepath.Ext(confFile)
 
-	// Load server config
-	serverCfg, err := ioutil.ReadFile(filepath.Join(confPath, "server.yml"))
+	// Load server config, from confPath/server.yml, or serverConfFile
+	var serverConfFilePath string
+	if serverConfFile != "" {
+		serverConfFilePath = serverConfFile
+	} else {
+		serverConfFilePath = filepath.Join(confPath, "server.yml")
+	}
+
+	serverCfg, err := ioutil.ReadFile(serverConfFilePath)
 	if err != nil {
 		log.Fatalln("Error reading server.yml:", err)
 	}
@@ -950,6 +957,7 @@ func main() {
 	sslPath := flag.String("ssl-path", "/etc/gorram/", "Path to read/write SSL certs from.")
 	debug := flag.Bool("debug", false, "Toggle debug logging.")
 	showVersion := flag.Bool("version", false, "Print server version")
+	serverConfFile := flag.String("conf-file", "", "Direct path to server.yml, if outside the SSL and client configs.")
 	//serverAddress := flag.String("listen-address", "127.0.0.1:50000", "Address and port to listen on.")
 	//serverCert := flag.String("cert", "cert.pem", "Path to the server certificate.")
 	//serverCertKey := flag.String("key", "cert.key", "Path to the server certificate key.")
@@ -978,7 +986,7 @@ func main() {
 		connectedClients: *new(clients),
 	}
 
-	gs.loadConfig(*confPath)
+	gs.loadConfig(*serverConfFile, *confPath)
 
 	if gs.cfg.Debug {
 		log.SetLevel(log.DebugLevel)
@@ -1100,7 +1108,7 @@ func main() {
 			select {
 			case event := <-watcher.Events:
 				if event.Op&fsnotify.Write == fsnotify.Write {
-					gs.loadConfig(*confPath)
+					gs.loadConfig(*serverConfFile, *confPath)
 				}
 			case err := <-watcher.Errors:
 				if err != nil {
