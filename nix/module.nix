@@ -145,6 +145,25 @@ in {
           description = "Server address, IP and port";
         };
 
+/*
+        clients = mkOption {
+            description = "Gorram clients";
+            type = with types; listOf (submodule {
+              options = {
+                name = mkOption {
+                  type = str;
+                };        
+                foo = mkOption {
+                  type = int;
+                };
+                bar = mkOption {
+                  type = str;
+                };
+              };
+            });
+          }; 
+*/         
+
     };
   };
 
