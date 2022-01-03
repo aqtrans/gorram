@@ -1,7 +1,7 @@
 { stdenv, lib, buildGoModule, git, makeWrapper, substituteAll, grpc, protobuf, pkgs, runCommand }:
 
 buildGoModule rec {
-  name = "gorram";
+  pname = "gorram";
   #version = "0.0.1";
 
   # dynamic version based on git; https://blog.replit.com/nix_dynamic_version
