@@ -17,7 +17,7 @@ let
     pushover.user_key: "${cfg.pushoverUserKey}" 
     pushover.device: "${cfg.pushoverDevice}"    
     listen_address: "${cfg.listenAddress}"
-    tls_host: "${cfg.tlsHostname}"
+    tls_hosts: [${cfg.tlsHostnames}]
     heartbeat_seconds: ${cfg.heartbeatSeconds}
     debug: ${boolToString cfg.debug}
     domain: ${cfg.httpDomain}
@@ -107,10 +107,10 @@ in {
           description = "Device to notify via Pushover";
         };      
 
-        tlsHostname = mkOption {
+        tlsHostnames = mkOption {
           type = types.str;
-          default = "127.0.0.1";
-          description = "What hostname to generate the TLS certificate against";
+          default = ''"127.0.0.1", "localhost"'';
+          description = "What hostnames to generate the TLS certificate against";
         };  
 
         heartbeatSeconds = mkOption {
