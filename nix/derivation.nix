@@ -31,7 +31,7 @@ buildGoModule rec {
     pkgs.protoc-gen-go-grpc
   ];
 
-  ldflags = [ "-X main.sha1ver=${version}" "-X main.buildTime=${builtins.readFile buildDate}" ];
+  ldflags = [ "-X main.sha1ver=${builtins.readFile revision}" "-X main.buildTime=${builtins.readFile buildDate}" ];
 
   vendorSha256 = "0wpzgin13rgr3jlhi1mz54s8k0ifvwq8vgbpfagb7wjn7i2mbcda";
 
