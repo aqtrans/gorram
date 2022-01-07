@@ -2,18 +2,15 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/base64"
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"strings"
 
 	//"log"
-	"net"
+
 	"net/http"
 	"os"
 	"os/signal"
@@ -33,13 +30,6 @@ import (
 
 	"git.jba.io/go/gorram/certs"
 	"git.jba.io/go/gorram/proto"
-
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/keepalive"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/peer"
-	"google.golang.org/grpc/stats"
 )
 
 var (
@@ -63,59 +53,12 @@ type serverConfig struct {
 	Domain           string   `yaml:"domain,omitempty"`
 }
 
-type statHandler struct {
-	list proto.ClientList
-	// TagRPC can attach some information to the given context.
-	// The context used for the rest lifetime of the RPC will be derived from
-	// the returned context.
-	//TagRPC(context.Context, *stats.RPCTagInfo) context.Context
-	// HandleRPC processes the RPC stats.
-	//HandleRPC(context.Context, RPCStats)
-
-	// TagConn can attach some information to the given context.
-	// The returned context will be used for stats handling.
-	// For conn stats handling, the context used in HandleConn for this
-	// connection will be derived from the context returned.
-	// For RPC stats handling,
-	//  - On server side, the context used in HandleRPC for all RPCs on this
-	// connection will be derived from the context returned.
-	//  - On client side, the context is not derived from the context returned.
-	//TagConn(context.Context, *ConnTagInfo) context.Context
-	// HandleConn processes the Conn stats.
-	//HandleConn(context.Context, ConnStats)
-}
-
-func (s *statHandler) TagRPC(ctx context.Context, tagInfo *stats.RPCTagInfo) context.Context {
-	return ctx
-}
-
-func (s *statHandler) HandleRPC(ctx context.Context, rpcStats stats.RPCStats) {
-
-}
-
-func (s *statHandler) TagConn(ctx context.Context, tagInfo *stats.ConnTagInfo) context.Context {
-	log.Infoln("Inbound connection from", tagInfo.RemoteAddr)
-	return ctx
-}
-
-func (s *statHandler) HandleConn(ctx context.Context, connStats stats.ConnStats) {
-	switch connStats.(type) {
-	case *stats.ConnBegin:
-		log.Infoln("Connection has begun")
-	case *stats.ConnEnd:
-		log.Infoln("Connection has ended")
-	}
-
-}
-
 type gorramServer struct {
 	//clientTimers
 	clientCfgs       sync.Map
 	cfg              serverConfig
 	connectedClients clients
 	alertsMap        alerts
-	proto.UnimplementedQuerierServer
-	proto.UnimplementedReporterServer
 	/*
 		pingTimers    map[string]*time.Timer
 		clientList    map[string]chan bool
@@ -133,27 +76,42 @@ type alerts struct {
 	m map[string]*proto.Alert
 }
 
-/*
-type clientTimers struct {
-	tickers sync.Map
-	timers  sync.Map
+func WithClientName(base http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		gc := r.Header.Get("Gorram-Client-ID")
+		gip := r.RemoteAddr
+		ctx = context.WithValue(ctx, "client-name", gc)
+		ctx = context.WithValue(ctx, "client-address", gip)
+		r = r.WithContext(ctx)
+
+		base.ServeHTTP(w, r)
+	})
 }
-*/
+
+func (s *gorramServer) Authorize(base http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		givenSecret := r.Header.Get("Gorram-Secret")
+		clientName := r.Header.Get("Gorram-Client-ID")
+		if givenSecret != s.cfg.SecretKey {
+			log.WithFields(log.Fields{
+				"client": clientName,
+				"secret": givenSecret,
+				"ip":     r.RemoteAddr,
+			}).Infoln("Access denied due to invalid secret.")
+
+			return
+		}
+
+		log.Println(clientName, "connected. Accepted secret key", givenSecret)
+		base.ServeHTTP(w, r)
+	})
+}
 
 func getClientName(ctx context.Context) string {
-	p, pok := peer.FromContext(ctx)
-	if pok {
-		tlsAuth, tok := p.AuthInfo.(credentials.TLSInfo)
-		if tok {
-			if len(tlsAuth.State.PeerCertificates) != 0 {
-				return tlsAuth.State.PeerCertificates[0].Subject.CommonName
-			}
-		}
-	}
-
-	md, ok := metadata.FromIncomingContext(ctx)
-	if ok {
-		return md["client"][0]
+	clientName := ctx.Value("client-name").(string)
+	if clientName != "" {
+		return clientName
 	}
 	return "no-client-name"
 }
@@ -242,23 +200,16 @@ func (s *gorramServer) reviveDeadClient(clientName string) {
 	}
 }
 
-func (s *gorramServer) RecordIssue(stream proto.Reporter_RecordIssueServer) error {
-
-	for {
-		issue, err := stream.Recv()
-		if err == io.EOF {
-
-			return stream.SendAndClose(&proto.Submitted{
-				SuccessfullySubmitted: true,
-			})
-		}
-		if err != nil {
-			return err
-		}
+func (s *gorramServer) RecordIssue(ctx context.Context, iss *proto.Issue) (*proto.Submitted, error) {
+	if iss != nil {
+		log.Println("recording issue from", iss.Host, iss)
 		// Record issue
-		s.alert(getClientName(stream.Context()), issue)
+		s.alert(getClientName(ctx), iss)
 
+		return &proto.Submitted{SuccessfullySubmitted: true}, nil
 	}
+
+	return &proto.Submitted{SuccessfullySubmitted: false}, nil
 }
 
 func (s *gorramServer) loadClientConfig(client string) (*proto.Config, error) {
@@ -321,42 +272,21 @@ func (s *gorramServer) ConfigSync(ctx context.Context, req *proto.ConfigRequest)
 	return cfg, nil
 }
 
-func (cfg serverConfig) authorize(ctx context.Context) error {
-	var clientName string
-	var givenSecret string
-	if md, ok := metadata.FromIncomingContext(ctx); ok {
-		if len(md["secret"]) > 0 && md["secret"][0] == cfg.SecretKey {
-			return nil
-		}
-		// Set client name if applicable
-		if len(md["client"]) > 0 {
-			clientName = md["client"][0]
-		}
-		if len(md["secret"]) > 0 {
-			givenSecret = md["secret"][0]
-		}
+func (s *gorramServer) authorize(ctx context.Context) error {
+	clientName := ctx.Value("user-agent").(string)
+	givenSecret := ctx.Value("user-agent").(string)
+
+	if givenSecret == s.cfg.SecretKey {
+		log.Println(clientName, "connected. Accepted secret key", givenSecret)
+		return nil
 	}
+
 	err := errors.New("access Denied")
 	log.WithFields(log.Fields{
 		"client": clientName,
 		"secret": givenSecret,
 	}).Infoln("Access denied due to invalid secret.")
 	return err
-}
-
-func (cfg serverConfig) unaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-	if err := cfg.authorize(ctx); err != nil {
-		return nil, err
-	}
-
-	return handler(ctx, req)
-}
-
-func (cfg serverConfig) streamInterceptor(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-	if err := cfg.authorize(stream.Context()); err != nil {
-		return err
-	}
-	return handler(srv, stream)
 }
 
 // sendAlert() decides whether to send alerts
@@ -619,16 +549,7 @@ func (s *gorramServer) Hello(ctx context.Context, req *proto.ConfigRequest) (*pr
 	// Check if the client has connected before
 	s.reviveDeadClient(clientName)
 
-	var clientAddress string
-	p, ok := peer.FromContext(ctx)
-	if !ok {
-		log.WithFields(log.Fields{
-			"client": clientName,
-		}).Debugln("ERR: no peer info in context")
-		clientAddress = "N/A"
-	} else {
-		clientAddress = p.Addr.String()
-	}
+	clientAddress := ctx.Value("client-address").(string)
 
 	// As this should only be called on client connection, record the client name and address here
 	c := &proto.Client{
@@ -954,7 +875,7 @@ func main() {
 
 	// Set config via flags
 	confPath := flag.String("conf", "/etc/gorram/", "Path where server.yml and a conf.d directory (for client configs) are stored.")
-	insecure := flag.Bool("insecure", false, "Disable TLS. Allow insecure client connections.")
+	//insecure := flag.Bool("insecure", false, "Disable TLS. Allow insecure client connections.")
 	generateCAcert := flag.Bool("generate-ca", false, "Generate CA certificates, at cacert.pem and cacert.key.")
 	sslPath := flag.String("ssl-path", "/etc/gorram/", "Path to read/write SSL certs from.")
 	debug := flag.Bool("debug", false, "Toggle debug logging.")
@@ -1004,92 +925,63 @@ func main() {
 		log.SetLevel(log.DebugLevel)
 	}
 
-	// TLS stuff
-	var creds credentials.TransportCredentials
+	/*
+		// TLS stuff
+		var creds tls.Config
 
-	if !*insecure {
-		// If a certificate at server.pem exists, load it, otherwise generate one dynamically
-		var tlsCert tls.Certificate
-		caCertPath := filepath.Join(*sslPath, "cacert.pem")
-		serverCertPath := filepath.Join(*sslPath, "server.pem")
-		serverKeyPath := filepath.Join(*sslPath, "server.key")
-		if _, err := os.Stat(serverCertPath); err == nil {
-			// Load static cert at server.pem:
-			log.Debugln("server.pem exists. Loading cert.")
-			tlsCert, err = tls.LoadX509KeyPair(serverCertPath, serverKeyPath)
+		if !*insecure {
+			// If a certificate at server.pem exists, load it, otherwise generate one dynamically
+			var tlsCert tls.Certificate
+			caCertPath := filepath.Join(*sslPath, "cacert.pem")
+			serverCertPath := filepath.Join(*sslPath, "server.pem")
+			serverKeyPath := filepath.Join(*sslPath, "server.key")
+			if _, err := os.Stat(serverCertPath); err == nil {
+				// Load static cert at server.pem:
+				log.Debugln("server.pem exists. Loading cert.")
+				tlsCert, err = tls.LoadX509KeyPair(serverCertPath, serverKeyPath)
+				if err != nil {
+					log.Fatalln("Error reading", serverCertPath, err)
+				}
+			} else {
+				// Check that CA cert required to sign/generate server and client exists, generating if needed:
+				if _, err := os.Stat(caCertPath); err != nil {
+					log.Debugln("CA certificate at cacert.pem does not exist, generating it...")
+					certs.GenerateCACert(*sslPath)
+				}
+				if gs.cfg.TLSHostnames == nil {
+					log.Fatalln("Error: Unable to dynamically generate server cert with blank hostname. Please configure 'TLSHostname' in server config.")
+				}
+				// Generate certificates dynamically:
+				log.Debugln("Generating certificate dynamically for", gs.cfg.TLSHostnames)
+				tlsCert = certs.GenerateServerCert(gs.cfg.TLSHostnames, *sslPath)
+			}
+
+			caCert, err := ioutil.ReadFile(caCertPath)
 			if err != nil {
-				log.Fatalln("Error reading", serverCertPath, err)
+				log.Fatalln("Error reading", caCertPath, err)
 			}
-		} else {
-			// Check that CA cert required to sign/generate server and client exists, generating if needed:
-			if _, err := os.Stat(caCertPath); err != nil {
-				log.Debugln("CA certificate at cacert.pem does not exist, generating it...")
-				certs.GenerateCACert(*sslPath)
+			certPool := x509.NewCertPool()
+			if success := certPool.AppendCertsFromPEM(caCert); !success {
+				log.Fatalln("Cannot append certs from PEM to certpool.")
 			}
-			if gs.cfg.TLSHostnames == nil {
-				log.Fatalln("Error: Unable to dynamically generate server cert with blank hostname. Please configure 'TLSHostname' in server config.")
+
+			creds = tls.Config{
+				ClientAuth:   tls.RequireAndVerifyClientCert,
+				Certificates: []tls.Certificate{tlsCert},
+				ClientCAs:    certPool,
 			}
-			// Generate certificates dynamically:
-			log.Debugln("Generating certificate dynamically for", gs.cfg.TLSHostnames)
-			tlsCert = certs.GenerateServerCert(gs.cfg.TLSHostnames, *sslPath)
-		}
 
-		caCert, err := ioutil.ReadFile(caCertPath)
-		if err != nil {
-			log.Fatalln("Error reading", caCertPath, err)
 		}
-		certPool := x509.NewCertPool()
-		if success := certPool.AppendCertsFromPEM(caCert); !success {
-			log.Fatalln("Cannot append certs from PEM to certpool.")
-		}
-
-		creds = credentials.NewTLS(&tls.Config{
-			ClientAuth:   tls.RequireAndVerifyClientCert,
-			Certificates: []tls.Certificate{tlsCert},
-			ClientCAs:    certPool,
-		})
-
-	}
+	*/
 
 	// Catch Ctrl+C, sigint
 	sigs := make(chan os.Signal, 1)
 	done := make(chan bool, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
-	// Setup the TCP port to listen on
-	lis, err := net.Listen("tcp", gs.cfg.ListenAddress)
-	if err != nil {
-		log.Fatalf("Failed to serve: %v", err)
-	}
-
-	log.Infoln("Listening on", gs.cfg.ListenAddress)
-
-	sh := statHandler{}
-
-	kp := keepalive.ServerParameters{
-		MaxConnectionIdle: 5 * time.Minute,
-		Time:              15 * time.Minute,
-		Timeout:           20 * time.Second,
-	}
-	kpe := keepalive.EnforcementPolicy{
-		MinTime:             10 * time.Second,
-		PermitWithoutStream: true,
-	}
-
-	var server *grpc.Server
-	if *insecure {
-		server = grpc.NewServer(grpc.StatsHandler(&sh), grpc.UnaryInterceptor(gs.cfg.unaryInterceptor), grpc.KeepaliveParams(kp), grpc.KeepaliveEnforcementPolicy(kpe))
-	} else {
-		server = grpc.NewServer(grpc.Creds(creds), grpc.StatsHandler(&sh), grpc.UnaryInterceptor(gs.cfg.unaryInterceptor), grpc.KeepaliveParams(kp), grpc.KeepaliveEnforcementPolicy(kpe))
-	}
-
 	gs.alertsMap.m = make(map[string]*proto.Alert)
 
 	gs.connectedClients.m.Clients = make(map[string]*proto.Client)
-
-	proto.RegisterReporterServer(server, &gs)
-
-	proto.RegisterQuerierServer(server, &gs)
 
 	// Watch for config.yml changes
 	watcher, err := fsnotify.NewWatcher()
@@ -1097,10 +989,16 @@ func main() {
 		log.Fatalln("Error watching config file for changes:", err)
 	}
 
+	server := proto.NewReporterServer(&gs)
+	wrapped := WithClientName(gs.Authorize(server))
+
 	// Start listening, in a goroutine so SIGINTs can be caught below
 	go func() {
-		if err := server.Serve(lis); err != nil {
-			log.Fatalf("Failed to serve: %v", err)
+		err := http.ListenAndServe(gs.cfg.ListenAddress, wrapped)
+		log.Infoln("Listening on", gs.cfg.ListenAddress)
+
+		if err != nil {
+			log.Fatalf("Failed to start Gorram server: %v", err)
 		}
 	}()
 
@@ -1158,5 +1056,4 @@ func main() {
 	log.Infoln("Server exiting...")
 	heartbeatTicker.Stop()
 	watcher.Close()
-	server.Stop()
 }

@@ -2,29 +2,21 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"flag"
 	"io/ioutil"
-	"net"
+	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"runtime"
 	"sync"
 	"syscall"
 	"time"
 
-	"google.golang.org/grpc/keepalive"
-
-	"git.jba.io/go/gorram/certs"
 	"git.jba.io/go/gorram/checks"
 	"git.jba.io/go/gorram/proto"
 
 	log "github.com/sirupsen/logrus"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/metadata"
+	"github.com/twitchtv/twirp"
 	"gopkg.in/yaml.v2"
 )
 
@@ -37,21 +29,6 @@ type clientConfig struct {
 	ClientName    string `yaml:"name,omitempty"`
 	ServerSecret  string `yaml:"secret_key,omitempty"`
 	ServerAddress string `yaml:"server_address,omitempty"`
-}
-
-type secret struct {
-	Secret string
-	TLS    bool
-}
-
-func (s *secret) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
-	return map[string]string{
-		"secret": s.Secret,
-	}, nil
-}
-
-func (s *secret) RequireTransportSecurity() bool {
-	return s.TLS
 }
 
 func loadConfig(confFile string) clientConfig {
@@ -70,6 +47,19 @@ func loadConfig(confFile string) clientConfig {
 	return cfg
 }
 
+// newCtx creates timeout contexts, with the proper stuff in headers
+func newCtx(header http.Header, timeout time.Duration) (context.Context, context.CancelFunc) {
+	// Attach the Twirp headers to a context
+	ctx := context.Background()
+	ctx, err := twirp.WithHTTPRequestHeaders(ctx, header)
+	if err != nil {
+		log.Printf("twirp error setting headers: %s", err)
+		return context.Background(), nil
+	}
+
+	return context.WithTimeout(ctx, timeout)
+}
+
 func main() {
 
 	formatter := new(log.TextFormatter)
@@ -80,10 +70,10 @@ func main() {
 
 	// Set config via flags
 	confFile := flag.String("conf", "client.yml", "Path to the YAML config file.")
-	sslPath := flag.String("ssl-path", "/etc/gorram/", "Path to read/write SSL certs from.")
+	//sslPath := flag.String("ssl-path", "/etc/gorram/", "Path to read/write SSL certs from.")
 	//clientName := flag.String("name", "unnamed", "Name of the client, as seen by the server. Should be unique.")
 	//serverAddress := flag.String("server-address", "127.0.0.1:50000", "Address and port of the server.")
-	insecure := flag.Bool("insecure", false, "Connect to server without TLS.")
+	//insecure := flag.Bool("insecure", false, "Connect to server without TLS.")
 	//serverCert := flag.String("cert", "cert.pem", "Path to the certificate from the server.")
 	//secretKey := flag.String("server-secret", "omg12345", "Secret key of the server.")
 	//interval := flag.Duration("interval", 60*time.Second, "Number of seconds to check for issues on.")
@@ -121,102 +111,16 @@ func main() {
 	*/
 
 	// Set up a connection to the server.
-	var conn *grpc.ClientConn
-	var err error
-	var creds credentials.TransportCredentials
 
-	kp := keepalive.ClientParameters{
-		Time:                60 * time.Second,
-		Timeout:             30 * time.Second,
-		PermitWithoutStream: false,
-	}
+	c := proto.NewReporterProtobufClient(yamlCfg.ServerAddress, &http.Client{})
 
-	dialCtx, dialCancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer dialCancel()
-	if *insecure {
-		conn, err = grpc.DialContext(
-			dialCtx,
-			yamlCfg.ServerAddress,
-			grpc.WithInsecure(),
-			grpc.WithPerRPCCredentials(&secret{
-				Secret: yamlCfg.ServerSecret,
-				TLS:    false,
-			}),
-			grpc.WithKeepaliveParams(kp),
-		)
-		if err != nil {
-			log.Printf("Error connecting to server: %v", err)
-			return
-		}
-	} else {
-		// If a certificate at $ClientName.pem exists, load it, otherwise generate one dynamically
-		var tlsCert tls.Certificate
-		caCertPath := filepath.Join(*sslPath, "cacert.pem")
-		certPath := filepath.Join(*sslPath, yamlCfg.ClientName+".pem")
-		certKeyPath := filepath.Join(*sslPath, yamlCfg.ClientName+".key")
-		if _, err := os.Stat(certPath); err == nil {
-			// Load static cert from $ClientName.pem:
-			log.Debugln(certPath, "exists. Loading cert.")
-			tlsCert, err = tls.LoadX509KeyPair(certPath, certKeyPath)
-			if err != nil {
-				log.Fatalln("Error reading", certPath, err)
-			}
-		} else {
-			// Check that CA cert required to dynamically generate client exists:
-			if _, err := os.Stat(caCertPath); err != nil {
-				log.Fatalln("Error: CA certificate at cacert.pem does not exist. Copy cacert.pem and cacert.key from the server in order to dynamically generate a client certificate.")
-			}
-
-			// Generate certificates dynamically:
-			log.Debugln("Generating certificate dynamically...")
-			tlsCert = certs.GenerateClientCert(yamlCfg.ClientName, *sslPath)
-		}
-
-		var host string
-		host, _, err := net.SplitHostPort(yamlCfg.ServerAddress)
-		if err != nil {
-			log.Warnln("Error parsing ServerAddress from config; Watch out for TLS issues due to ServerName mismatch.", err)
-			host = yamlCfg.ServerAddress
-		}
-
-		caCertRaw, err := ioutil.ReadFile(caCertPath)
-		if err != nil {
-			log.Fatalln("Error reading", caCertPath, err)
-		}
-		certPool := x509.NewCertPool()
-		if success := certPool.AppendCertsFromPEM(caCertRaw); !success {
-			log.Fatalln("Error appending CA cert to certPool")
-		}
-
-		creds = credentials.NewTLS(&tls.Config{
-			ServerName:   host, // NOTE: this is required!
-			Certificates: []tls.Certificate{tlsCert},
-			RootCAs:      certPool,
-		})
-
-		conn, err = grpc.DialContext(
-			dialCtx,
-			yamlCfg.ServerAddress,
-			grpc.WithTransportCredentials(creds),
-			grpc.WithPerRPCCredentials(&secret{
-				Secret: yamlCfg.ServerSecret,
-				TLS:    true,
-			}),
-			grpc.WithKeepaliveParams(kp),
-		)
-		if err != nil {
-			log.Printf("Error connecting to server: %v", err)
-			return
-		}
-	}
-
-	defer conn.Close()
-
-	c := proto.NewReporterClient(conn)
+	// Given some headers ...
+	header := make(http.Header)
+	header.Set("Gorram-Secret", yamlCfg.ServerSecret)
+	header.Set("Gorram-Client-ID", yamlCfg.ClientName)
 
 	// Create RPC context, add client name metadata
-	rpcCtx, rpcCancel := context.WithTimeout(context.Background(), rpcTimeout)
-	rpcCtx = metadata.AppendToOutgoingContext(rpcCtx, "client", yamlCfg.ClientName)
+	rpcCtx, rpcCancel := newCtx(header, rpcTimeout)
 
 	// Hello: Get config from server, and ensure dead tickers are stopped
 	origCfg, err := c.Hello(rpcCtx, &proto.ConfigRequest{
@@ -239,12 +143,10 @@ func main() {
 		for {
 			select {
 			case <-ticker.C:
-				// Create RPC context, add client name metadata
-				rpcCtx, rpcCancel := context.WithTimeout(context.Background(), rpcTimeout)
-				rpcCtx = metadata.AppendToOutgoingContext(rpcCtx, "client", yamlCfg.ClientName)
-				defer rpcCancel()
 
 				cfgMutex.Lock()
+				rpcCtx, rpcCancel := newCtx(header, rpcTimeout)
+				defer rpcCancel()
 				pingResp, err := c.Ping(rpcCtx, &proto.PingMsg{IsAlive: true, CfgLastUpdated: origCfg.LastUpdated})
 				if err != nil {
 					log.Fatalln("Error with c.Ping:", err)
@@ -254,11 +156,9 @@ func main() {
 					// Fetch and set the new config
 					log.Debugln("Configuration out of sync. Fetching new config from server.")
 					var err error
-					// Create RPC context, add client name metadata
-					rpcCtx, rpcCancel := context.WithTimeout(context.Background(), rpcTimeout)
-					rpcCtx = metadata.AppendToOutgoingContext(rpcCtx, "client", yamlCfg.ClientName)
-					defer rpcCancel()
 
+					rpcCtx, rpcCancel := newCtx(header, rpcTimeout)
+					defer rpcCancel()
 					newCfg, err := c.ConfigSync(rpcCtx, &proto.ConfigRequest{
 						ClientName: yamlCfg.ClientName,
 					})
@@ -273,33 +173,24 @@ func main() {
 				cfgMutex.Unlock()
 				//close(cfgChan)
 
-				// Create RPC context, add client name metadata
-				rpcCtx2, rpcCancel2 := context.WithTimeout(context.Background(), rpcTimeout)
-				rpcCtx2 = metadata.AppendToOutgoingContext(rpcCtx2, "client", yamlCfg.ClientName)
-				defer rpcCancel2()
-
 				//cfg2 := <-cfgChan
 
 				// Do checks
 				i := checks.DoChecks(origCfg)
 				// If there are any checks, open a client-side stream and record them
 				if len(i) > 0 {
-					issueStream, err := c.RecordIssue(rpcCtx2)
-					if err != nil {
-						log.Fatalln("Error recording issue:", i, err)
-					}
 
 					for _, issue := range i {
-						if err := issueStream.Send(issue); err != nil {
-							log.Fatalln("Error submitting issue:", err)
+
+						rpcCtx, rpcCancel := newCtx(header, rpcTimeout)
+						defer rpcCancel()
+						problem, err := c.RecordIssue(rpcCtx, issue)
+						if err != nil {
+							log.Fatalln("Error recording issue:", i, err)
 						}
-					}
-					reply, err := issueStream.CloseAndRecv()
-					if err != nil {
-						log.Fatalln("Error closing issueStream:", err)
-					}
-					if !reply.SuccessfullySubmitted {
-						log.Fatalln("Error submitting issue; Check server logs.", reply.SuccessfullySubmitted)
+						if !problem.SuccessfullySubmitted {
+							log.Fatalln("Error submitting issue; Check server logs.", problem.SuccessfullySubmitted)
+						}
 					}
 				}
 				log.Debugln("Number of Goroutines:", runtime.NumGoroutine())
@@ -318,12 +209,7 @@ func main() {
 
 	<-done
 	log.Println("Client exiting...")
-	dialCancel()
 	rpcCancel()
 	ticker.Stop()
-	err = conn.Close()
-	if err != nil {
-		log.Errorln("Error closing connection:", err)
-	}
 
 }

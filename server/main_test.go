@@ -5,15 +5,14 @@ import (
 	"testing"
 
 	gorram "git.jba.io/go/gorram/proto"
-	"google.golang.org/grpc/metadata"
 )
 
 var clientName = "testClient"
 
 func testCtx() context.Context {
-	md := metadata.New(map[string]string{"client": clientName})
 	ctx := context.Background()
-	ctx = metadata.NewIncomingContext(ctx, md)
+	ctx = context.WithValue(ctx, "client-name", clientName)
+	ctx = context.WithValue(ctx, "client-address", "1.2.3.4")
 	return ctx
 }
 
