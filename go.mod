@@ -19,9 +19,10 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/shirou/gopsutil v2.20.4+incompatible
 	github.com/sirupsen/logrus v1.6.0
-	github.com/stretchr/testify v1.5.1 // indirect
+	github.com/stretchr/testify v1.7.0 // indirect
 	github.com/tevjef/go-runtime-metrics v0.0.0-20170326170900-527a54029307
 	github.com/twitchtv/twirp v8.1.1+incompatible
+	golang.org/x/crypto v0.0.0-20211215153901-e495a2d5b3d3 // indirect
 	golang.org/x/sys v0.0.0-20210616094352-59db8d763f22 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	google.golang.org/protobuf v1.27.1

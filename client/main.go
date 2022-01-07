@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"git.jba.io/go/gorram/checks"
+	"git.jba.io/go/gorram/common"
 	"git.jba.io/go/gorram/proto"
 
 	log "github.com/sirupsen/logrus"
@@ -29,6 +30,7 @@ type clientConfig struct {
 	ClientName    string `yaml:"name,omitempty"`
 	ServerSecret  string `yaml:"secret_key,omitempty"`
 	ServerAddress string `yaml:"server_address,omitempty"`
+	PrivateKey    string `yaml:"private_key,omitempty"`
 }
 
 func loadConfig(confFile string) clientConfig {
@@ -114,9 +116,34 @@ func main() {
 
 	c := proto.NewReporterProtobufClient(yamlCfg.ServerAddress, &http.Client{})
 
+	/*
+		pub, priv, err := ed25519.GenerateKey(nil)
+		if err != nil {
+			log.Fatalln("error generating ed25519 keys", err)
+		}
+		log.Println(pub, priv)
+		pubEnc := base64.URLEncoding.EncodeToString(pub)
+		privEnc := base64.URLEncoding.EncodeToString(priv)
+		err = ioutil.WriteFile("homer.pub", []byte(pubEnc), 0644)
+		if err != nil {
+			log.Fatalln("error writing pub key", err)
+		}
+		err = ioutil.WriteFile("homer.key", []byte(privEnc), 0644)
+		if err != nil {
+			log.Fatalln("error writing priv key", err)
+		}
+		os.Exit(0)
+	*/
+
+	privkeyB := common.ParsePrivateKey(yamlCfg.PrivateKey)
+
+	encryptedSecret := common.SignSignature(privkeyB, yamlCfg.ServerSecret)
+
+	log.Println("server secret encrypted with private key:", encryptedSecret)
+
 	// Given some headers ...
 	header := make(http.Header)
-	header.Set("Gorram-Secret", yamlCfg.ServerSecret)
+	header.Set("Gorram-Secret", encryptedSecret)
 	header.Set("Gorram-Client-ID", yamlCfg.ClientName)
 
 	// Create RPC context, add client name metadata

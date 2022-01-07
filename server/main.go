@@ -29,6 +29,7 @@ import (
 	_ "github.com/tevjef/go-runtime-metrics/expvar"
 
 	"git.jba.io/go/gorram/certs"
+	"git.jba.io/go/gorram/common"
 	"git.jba.io/go/gorram/proto"
 )
 
@@ -95,7 +96,28 @@ func (s *gorramServer) Authorize(base http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		givenSecret := r.Header.Get("Gorram-Secret")
 		clientName := r.Header.Get("Gorram-Client-ID")
-		if givenSecret != s.cfg.SecretKey {
+
+		// try to load the client's public key:
+		clientCfg, ok := s.clientCfgs.Load(clientName)
+		if !ok {
+			log.Println("client has no pubkey configured.")
+			return
+		}
+
+		cfg, ok := clientCfg.(*proto.Config)
+		if !ok {
+			log.Fatalln(cfg, "is not a proto.Config.")
+		}
+
+		log.Println("pubkey loaded", clientName, cfg.PublicKey)
+
+		clientPubKeyB := common.ParsePublicKey(cfg.PublicKey)
+
+		// Check that the secret key was properly signed by the client
+		verified := common.VerifySignature(clientPubKeyB, s.cfg.SecretKey, givenSecret)
+		log.Println("secret key from "+clientName+" was:", verified)
+
+		if !verified {
 			log.WithFields(log.Fields{
 				"client": clientName,
 				"secret": givenSecret,
@@ -272,23 +294,6 @@ func (s *gorramServer) ConfigSync(ctx context.Context, req *proto.ConfigRequest)
 	}
 
 	return cfg, nil
-}
-
-func (s *gorramServer) authorize(ctx context.Context) error {
-	clientName := ctx.Value("user-agent").(string)
-	givenSecret := ctx.Value("user-agent").(string)
-
-	if givenSecret == s.cfg.SecretKey {
-		log.Println(clientName, "connected. Accepted secret key", givenSecret)
-		return nil
-	}
-
-	err := errors.New("access Denied")
-	log.WithFields(log.Fields{
-		"client": clientName,
-		"secret": givenSecret,
-	}).Infoln("Access denied due to invalid secret.")
-	return err
 }
 
 // sendAlert() decides whether to send alerts

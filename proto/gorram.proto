@@ -100,7 +100,9 @@ message Config {
     bool required = 9;
 
     Memory memory = 10;
-    Postgres postgres = 11;    
+    Postgres postgres = 11;  
+    // Public key of the client
+    string public_key = 12;
 }
 
 service Querier {
