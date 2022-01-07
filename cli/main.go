@@ -4,34 +4,18 @@ import (
 	"context"
 	"flag"
 	"log"
+	"net/http"
 	"time"
 
 	"git.jba.io/go/gorram/proto"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
+	"github.com/twitchtv/twirp"
 )
-
-type secret struct {
-	Secret string
-	TLS    bool
-}
-
-func (s *secret) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
-	//log.Println(uri, ctx)
-	return map[string]string{
-		"secret": s.Secret,
-	}, nil
-}
-
-func (s *secret) RequireTransportSecurity() bool {
-	return s.TLS
-}
 
 func main() {
 	// Set config via flags
 	serverAddress := flag.String("server-address", "127.0.0.1:50000", "Address and port of the server.")
-	insecure := flag.Bool("insecure", false, "Connect to server without TLS.")
-	serverCert := flag.String("cert", "cert.pem", "Path to the certificate from the server.")
+	//insecure := flag.Bool("insecure", false, "Connect to server without TLS.")
+	//serverCert := flag.String("cert", "cert.pem", "Path to the certificate from the server.")
 	secretKey := flag.String("server-secret", "omg12345", "Secret key of the server.")
 	//interval := flag.Duration("interval", 60*time.Second, "Number of seconds to check for issues on.")
 	list := flag.Bool("list", false, "List connected clients and exit.")
@@ -40,46 +24,20 @@ func main() {
 
 	flag.Parse()
 
+	// Given some headers ...
+	header := make(http.Header)
+	header.Set("Gorram-Secret", *secretKey)
+	header.Set("Gorram-Client-ID", "gorram-cli")
+
+	// Attach the Twirp headers to a context
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	/* Trying to send client-name as early as possible...
-		Doesn't seem to send on the Dial
-	// Metadata
-	md := metadata.New(map[string]string{
-		"client": "client1",
-		"secret": *secretKey,
-	})
-	err := grpc.SetHeader(ctx, md)
-	*/
-
-	// Set up a connection to the server.
-	var conn *grpc.ClientConn
-	var err error
-	var creds credentials.TransportCredentials
-	dialCtx, dialCancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer dialCancel()
-	if *insecure {
-		conn, err = grpc.DialContext(dialCtx, *serverAddress, grpc.WithBlock(), grpc.WithInsecure(), grpc.WithPerRPCCredentials(&secret{
-			Secret: *secretKey,
-			TLS:    false,
-		}))
-	} else {
-		creds, err = credentials.NewClientTLSFromFile(*serverCert, "")
-		if err != nil {
-			log.Fatal("Error parsing TLS cert:", err)
-		}
-		conn, err = grpc.DialContext(dialCtx, *serverAddress, grpc.WithBlock(), grpc.WithTransportCredentials(creds), grpc.WithPerRPCCredentials(&secret{
-			Secret: *secretKey,
-			TLS:    true,
-		}))
-	}
+	ctx, err := twirp.WithHTTPRequestHeaders(ctx, header)
 	if err != nil {
-		log.Printf("Error connecting to server: %v", err)
-		return
+		log.Printf("twirp error setting headers: %s", err)
 	}
 
-	c := proto.NewQuerierClient(conn)
+	c := proto.NewQuerierProtobufClient(*serverAddress, &http.Client{})
 
 	if *list {
 		cl, err := c.List(ctx, &proto.QueryRequest{
@@ -110,8 +68,5 @@ func main() {
 	}
 
 	cancel()
-	err = conn.Close()
-	if err != nil {
-		log.Println("Error closing connection:", err)
-	}
+
 }
