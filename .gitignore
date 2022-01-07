@@ -5,3 +5,4 @@ client/vendor/*
 *.key
 proto/gorram_grpc.pb.go
 proto/gorram.pb.go
+proto/gorram.twirp.go
