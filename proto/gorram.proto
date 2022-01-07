@@ -10,7 +10,7 @@ service Reporter {
     // Ping is a heartbeat check, ran every X seconds to ensure a client is still alive
     // The cfg_last_updated variable sent, and cfg_out_of_sync received also allow syncing the config
     rpc Ping(PingMsg) returns (PingResponse) {}
-    rpc RecordIssue(stream Issue) returns (Submitted) {}
+    rpc RecordIssue(Issue) returns (Submitted) {}
     rpc ConfigSync(ConfigRequest) returns (Config) {}
 }
 
