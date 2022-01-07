@@ -59,6 +59,8 @@ type gorramServer struct {
 	cfg              serverConfig
 	connectedClients clients
 	alertsMap        alerts
+	proto.Reporter
+	proto.Querier
 	/*
 		pingTimers    map[string]*time.Timer
 		clientList    map[string]chan bool
@@ -989,12 +991,17 @@ func main() {
 		log.Fatalln("Error watching config file for changes:", err)
 	}
 
-	server := proto.NewReporterServer(&gs)
-	wrapped := WithClientName(gs.Authorize(server))
+	// Setup servers
+	reportHandler := proto.NewReporterServer(&gs)
+	queryHandler := proto.NewQuerierServer(&gs)
+
+	mux := http.NewServeMux()
+	mux.Handle(reportHandler.PathPrefix(), WithClientName(gs.Authorize(reportHandler)))
+	mux.Handle(queryHandler.PathPrefix(), WithClientName(gs.Authorize(queryHandler)))
 
 	// Start listening, in a goroutine so SIGINTs can be caught below
 	go func() {
-		err := http.ListenAndServe(gs.cfg.ListenAddress, wrapped)
+		err := http.ListenAndServe(gs.cfg.ListenAddress, mux)
 		log.Infoln("Listening on", gs.cfg.ListenAddress)
 
 		if err != nil {
