@@ -17,7 +17,6 @@ let
     pushover.user_key: "${cfg.pushoverUserKey}" 
     pushover.device: "${cfg.pushoverDevice}"    
     listen_address: "${cfg.listenAddress}"
-    tls_hosts: [${cfg.tlsHostnames}]
     heartbeat_seconds: ${cfg.heartbeatSeconds}
     debug: ${boolToString cfg.debug}
     domain: ${cfg.httpDomain}
@@ -64,13 +63,6 @@ in {
           example = "/home/user/.gorram/";
         };
 
-        tlsDir = mkOption {
-          type = types.str;
-          default = "/var/lib/gorram/";
-          description = "where to store the TLS certificates";
-          example = "/home/user/.gorram/";
-        };    
-
         listenAddress = mkOption {
           type = types.str;
           default = "0.0.0.0:50000";
@@ -106,12 +98,6 @@ in {
           default = "";
           description = "Device to notify via Pushover";
         };      
-
-        tlsHostnames = mkOption {
-          type = types.str;
-          default = ''"127.0.0.1", "localhost"'';
-          description = "What hostnames to generate the TLS certificate against";
-        };  
 
         heartbeatSeconds = mkOption {
           type = types.str;
@@ -194,7 +180,7 @@ in {
             ReadWritePaths = ''${serverConfFile} ${cfg.stateDir} ${cfg.tlsDir}'';
             WorkingDirectory = cfg.stateDir;
             ExecStart = ''
-              ${pkgs.gorram}/bin/server -ssl-path ${cfg.tlsDir} -conf ${cfg.stateDir} -conf-file ${serverConfFile}
+              ${pkgs.gorram}/bin/server -conf ${cfg.stateDir} -conf-file ${serverConfFile}
             '';
           };
         };
@@ -208,10 +194,9 @@ in {
             Group = cfg.group;
             Restart = "always";
             ProtectSystem = "strict";
-            ReadWritePaths = ''${clientConfFile} ${cfg.tlsDir}'';
-            WorkingDirectory = cfg.tlsDir;
+            ReadWritePaths = ''${clientConfFile}'';
             ExecStart = ''
-              ${pkgs.gorram}/bin/client -ssl-path ${cfg.tlsDir} -conf ${clientConfFile}
+              ${pkgs.gorram}/bin/client -conf ${clientConfFile}
             '';
           };
         };
