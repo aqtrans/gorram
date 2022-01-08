@@ -10,7 +10,7 @@ function build_debian()
     podman run --rm -v "$PWD":/usr/src/myapp -w /usr/src/myapp golang:buster go build -buildmode=pie -ldflags "-X main.sha1ver=$(git rev-parse HEAD) -X main.buildTime=$(date +'%Y-%m-%d_%T')" -o gorram-server ./server
     podman run --rm -v "$PWD":/usr/src/myapp -w /usr/src/myapp golang:buster go build -buildmode=pie -ldflags "-X main.sha1ver=$(git rev-parse HEAD) -X main.buildTime=$(date +'%Y-%m-%d_%T')" -o gorram-client ./client
     podman run --rm -v "$PWD":/usr/src/myapp -w /usr/src/myapp golang:buster go build -buildmode=pie -o gorram-cli ./cli
-    podman run --rm -v "$PWD":/usr/src/myapp -w /usr/src/myapp golang:buster go build -buildmode=pie -o gorram-certs ./certs/gorram-certs
+    #podman run --rm -v "$PWD":/usr/src/myapp -w /usr/src/myapp golang:buster go build -buildmode=pie -o gorram-certs ./certs/gorram-certs
 }
 
 function test_it() {
@@ -31,7 +31,7 @@ function build_proto()
     protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative proto/gorram.proto
 }
 
-func test_all() {
+function test_all() {
     cd client/
     test_it
     cd ../server/
@@ -63,7 +63,7 @@ while [ "$1" != "" ]; do
             GO111MODULE=on go build -buildmode=pie -ldflags "-X main.sha1ver=$(git rev-parse HEAD) -X main.buildTime=$(date +'%Y-%m-%d_%T')" -o gorram-server ./server
             GO111MODULE=on go build -buildmode=pie -ldflags "-X main.sha1ver=$(git rev-parse HEAD) -X main.buildTime=$(date +'%Y-%m-%d_%T')" -o gorram-client ./client
             GO111MODULE=on go build -buildmode=pie -o gorram-cli ./cli
-            GO111MODULE=on go build -buildmode=pie -o gorram-certs ./certs/gorram-certs
+            #GO111MODULE=on go build -buildmode=pie -o gorram-certs ./certs/gorram-certs
             exit
             ;;
         generate-ca)
@@ -82,7 +82,7 @@ while [ "$1" != "" ]; do
                 GO111MODULE=on go build -buildmode=pie -ldflags "-X main.sha1ver=$(git rev-parse HEAD) -X main.buildTime=$(date +'%Y-%m-%d_%T')" -o gorram-server ./server
                 GO111MODULE=on go build -buildmode=pie -ldflags "-X main.sha1ver=$(git rev-parse HEAD) -X main.buildTime=$(date +'%Y-%m-%d_%T')" -o gorram-client ./client
                 GO111MODULE=on go build -buildmode=pie -o gorram-cli ./cli
-                GO111MODULE=on go build -buildmode=pie -o gorram-certs ./certs/gorram-certs
+                #GO111MODULE=on go build -buildmode=pie -o gorram-certs ./certs/gorram-certs
                 ./build-pkg.sh $DEBVERSION
             else
                 echo "dch not found. building inside container."
