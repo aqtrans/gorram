@@ -127,8 +127,16 @@ func (s *gorramServer) Authorize(base http.Handler) http.Handler {
 			return
 		}
 
-		if !s.connectedClients.exists(clientName) && givenToken == "" {
-			log.Println(clientName, "has not connected before. Allowing through Authorize() to hit Hello()...")
+		// If they have no token, but trying to say Hello(), let them through
+		if givenToken == "" && r.RequestURI == "/twirp/proto.Reporter/Hello" {
+			log.Println(clientName, "has no token, but shared secret matches. Allowing through Authorize()...")
+			base.ServeHTTP(w, r)
+			return
+		}
+
+		clientCfg := s.connectedClients.get(clientName)
+		if clientCfg == nil {
+			log.Println(clientName, "has not connected before?")
 			base.ServeHTTP(w, r)
 			return
 		}
@@ -1018,7 +1026,7 @@ func main() {
 		serverCfg = filepath.Join(*confPath, "server.yml")
 	}
 	//serverCfg := filepath.Join(*confPath, "server.yml")
-	clientCfgs := filepath.Join(*confPath, "conf.d")
+	clientConfd := filepath.Join(*confPath, "conf.d")
 
 	if *showVersion {
 		log.Printf("Build date: %s\nGit commit: %s\n", buildTime, sha1ver)
@@ -1042,7 +1050,7 @@ func main() {
 		brc:              new(branca.Branca),
 	}
 
-	gs.loadConfig(serverCfg, clientCfgs)
+	gs.loadConfig(serverCfg, clientConfd)
 
 	if gs.cfg.Debug {
 		log.SetLevel(log.DebugLevel)
@@ -1153,7 +1161,7 @@ func main() {
 			select {
 			case event := <-watcher.Events:
 				if event.Op&fsnotify.Write == fsnotify.Write {
-					gs.loadConfig(*serverConfFile, *confPath)
+					gs.loadConfig(*serverConfFile, clientConfd)
 				}
 			case err := <-watcher.Errors:
 				if err != nil {
@@ -1174,7 +1182,7 @@ func main() {
 	if err != nil {
 		log.Fatalln("Error watching server.yml:", err)
 	}
-	err = watcher.Add(clientCfgs)
+	err = watcher.Add(clientConfd)
 	if err != nil {
 		log.Fatalln("Error watching conf.d:", err)
 	}
