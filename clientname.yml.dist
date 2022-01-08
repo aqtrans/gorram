@@ -1,23 +1,45 @@
+# Whether the client should always be connected
+## Alerts if the server is online and the client has not immediately connected
 required: true
+
+# How often to perform checks
+interval: 15
+
+# base64-encoded ed25519 public key of the client
+public_key: "rHhXGLBpkSMQcC2kpfjoq3dIwkH9gR0xr-sqICOjEZk="
+
+# Check Deluge torrent client for number of torrents downloading
 deluge:
     url: "http://127.0.0.1:8112/json"
     password: "deluge"
     maxtorrents: 5
+
+# Check various disk usage. Either % used, or GBs free
 diskspace:
     - partition: "/"
       maxusage: 90
     - partition: "/media/games"
       maxusage: 100
+    - partition: "/media/storage"
+      minfreegb: 20
+
+# Check machine's load average
 loadavg:
     maxload: 2
+
+# Grab given URL, alert if status is not 200 and/or body matches
 geturl:
     - url: "http://google.com"
     - url: "https://server.example/health"
       expectedbody: "{\"alive\": true}"
+
+# Check if given processes are running, optionally owned by specified user
 process:
-#    - path: "/usr/lib/firefox/firefox"
-#      user: "nobody"
+    - path: "/usr/lib/firefox/firefox"
+      user: "nobody"
     - path: "deluge"
       user: deluge
+
+# Check memory usage
 memory:
     maxusage: 20
