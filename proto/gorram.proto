@@ -5,8 +5,8 @@ package proto;
 option go_package = "git.jba.io/go/gorram/proto;proto";
 
 service Reporter {
-    // Hello should be called once upon initial connection. It syncs the config and stops any timers
-    rpc Hello(ConfigRequest) returns (Config) {}
+    // Hello should be called once upon initial connection. It authenticates the client and stops any timers
+    rpc Hello(LoginRequest) returns (Token) {}
     // Ping is a heartbeat check, ran every X seconds to ensure a client is still alive
     // The cfg_last_updated variable sent, and cfg_out_of_sync received also allow syncing the config
     rpc Ping(PingMsg) returns (PingResponse) {}
@@ -124,6 +124,15 @@ message Client {
     string name = 1;
     string address = 2;
     int64 last_ping_time = 3;
+    Token token = 4;
+}
+
+message LoginRequest {
+    string login_token = 1;
+}
+
+message Token {
+    string api_token = 1;
 }
 
 message ClientName {
