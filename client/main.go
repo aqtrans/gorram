@@ -72,6 +72,7 @@ func main() {
 
 	// Set config via flags
 	confFile := flag.String("conf", "client.yml", "Path to the YAML config file.")
+	generateKeys := flag.Bool("generate-keys", false, "Generate base64-encoded ed25519 keys and print them to terminal")
 	//sslPath := flag.String("ssl-path", "/etc/gorram/", "Path to read/write SSL certs from.")
 	//clientName := flag.String("name", "unnamed", "Name of the client, as seen by the server. Should be unique.")
 	//serverAddress := flag.String("server-address", "127.0.0.1:50000", "Address and port of the server.")
@@ -90,6 +91,14 @@ func main() {
 
 	if *debug {
 		log.SetLevel(log.DebugLevel)
+	}
+
+	if *generateKeys {
+		pubKey, privKey := common.GenerateKeys()
+		log.Println(`New keys generated. Paste public key into server's $clientname.yml, and private key into client.yml`)
+		log.Println("Private key:", privKey)
+		log.Println("Public key:", pubKey)
+		os.Exit(0)
 	}
 
 	// Set a global RPC timeout, to be used in context.WithTimeout()'s alongside each RPC call
@@ -135,11 +144,12 @@ func main() {
 		os.Exit(0)
 	*/
 
+	/* Sign the shared secret using ed25519 with our private key
+	   The server will use our public key to verify it */
 	privkeyB := common.ParsePrivateKey(yamlCfg.PrivateKey)
-
 	encryptedSecret := common.SignSignature(privkeyB, yamlCfg.ServerSecret)
 
-	log.Println("server secret encrypted with private key:", encryptedSecret)
+	log.Debugln("server secret encrypted with private key:", encryptedSecret)
 
 	// Given some headers ...
 	header := make(http.Header)

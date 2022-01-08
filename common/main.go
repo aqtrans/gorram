@@ -154,3 +154,23 @@ func ParsePrivateKey(privKey string) ed25519.PrivateKey {
 
 	return ed25519.PrivateKey(privKeyDec)
 }
+
+func GenerateKeys() (public, private string) {
+	pub, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		log.Fatalln("error generating ed25519 keys", err)
+	}
+	pubEnc := base64.URLEncoding.EncodeToString(pub)
+	privEnc := base64.URLEncoding.EncodeToString(priv)
+	/*
+		err = ioutil.WriteFile("homer.pub", []byte(pubEnc), 0644)
+		if err != nil {
+			log.Fatalln("error writing pub key", err)
+		}
+		err = ioutil.WriteFile("homer.key", []byte(privEnc), 0644)
+		if err != nil {
+			log.Fatalln("error writing priv key", err)
+		}
+	*/
+	return pubEnc, privEnc
+}

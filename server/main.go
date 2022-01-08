@@ -97,25 +97,35 @@ func (s *gorramServer) Authorize(base http.Handler) http.Handler {
 		givenSecret := r.Header.Get("Gorram-Secret")
 		clientName := r.Header.Get("Gorram-Client-ID")
 
-		// try to load the client's public key:
-		clientCfg, ok := s.clientCfgs.Load(clientName)
-		if !ok {
-			log.Println("client has no pubkey configured.")
+		if clientName == "" {
+			log.WithFields(log.Fields{
+				"secret": givenSecret,
+				"ip":     r.RemoteAddr,
+			}).Debugln("blank client name given")
 			return
 		}
 
-		cfg, ok := clientCfg.(*proto.Config)
-		if !ok {
-			log.Fatalln(cfg, "is not a proto.Config.")
+		// Attempt to load the client's public key from config
+		clientPubKey := s.loadClientPubKey(clientName)
+		if clientPubKey == "" {
+			log.WithFields(log.Fields{
+				"client": clientName,
+				"secret": givenSecret,
+				"ip":     r.RemoteAddr,
+			}).Debugln("client has no public key configured")
+			return
 		}
 
-		log.Println("pubkey loaded", clientName, cfg.PublicKey)
-
-		clientPubKeyB := common.ParsePublicKey(cfg.PublicKey)
+		clientPubKeyB := common.ParsePublicKey(clientPubKey)
 
 		// Check that the secret key was properly signed by the client
 		verified := common.VerifySignature(clientPubKeyB, s.cfg.SecretKey, givenSecret)
-		log.Println("secret key from "+clientName+" was:", verified)
+
+		log.WithFields(log.Fields{
+			"client": clientName,
+			"secret": givenSecret,
+			"ip":     r.RemoteAddr,
+		}).Debugln("public key found and signature verified")
 
 		if !verified {
 			log.WithFields(log.Fields{
@@ -127,7 +137,6 @@ func (s *gorramServer) Authorize(base http.Handler) http.Handler {
 			return
 		}
 
-		log.Println(clientName, "connected. Accepted secret key", givenSecret)
 		base.ServeHTTP(w, r)
 	})
 }
@@ -226,7 +235,7 @@ func (s *gorramServer) reviveDeadClient(clientName string) {
 
 func (s *gorramServer) RecordIssue(ctx context.Context, iss *proto.Issue) (*proto.Submitted, error) {
 	if iss != nil {
-		log.Println("recording issue from", iss.Host, iss)
+		log.Debugln("recording issue from", iss.Host, iss)
 		// Record issue
 		s.alert(getClientName(ctx), iss)
 
@@ -399,7 +408,7 @@ func (s *gorramServer) alert(client string, issue *proto.Issue) {
 	log.Debugln("IssueID:", generateMapKey(issue))
 
 	if s.alertsMap.isMuted(issue) {
-		log.Println("issue is muted. not sending alert")
+		log.Debugln("issue is muted. not sending alert")
 		return
 	}
 
@@ -465,8 +474,6 @@ func (s *gorramServer) loadConfig(serverConfFileFullPath, confdFullPath string) 
 		log.Fatalln("Error unmarshaling server.yml:", err)
 	}
 
-	log.Println("server config:", s.cfg)
-
 	for _, cfg := range cfgFiles {
 		var newCfg proto.Config
 		clientName := strings.TrimSuffix(cfg.Name(), filepath.Ext(cfg.Name()))
@@ -515,7 +522,7 @@ func (s *gorramServer) loadConfig(serverConfFileFullPath, confdFullPath string) 
 
 	// Set a default HeartbeatSeconds if not set
 	if s.cfg.HeartbeatSeconds == 0 {
-		log.Println("HeartbeatSeconds is 0, setting to default of 60.")
+		log.Infoln("HeartbeatSeconds is 0, setting to default of 60.")
 		s.cfg.HeartbeatSeconds = 60
 	}
 
@@ -870,6 +877,25 @@ func (s *gorramServer) listAlertsHandler(w http.ResponseWriter, r *http.Request)
 	</html>`))
 	//w.Write([]byte("Total Alerts:", s.alertsMap))
 	s.alertsMap.Unlock()
+}
+
+func (s *gorramServer) loadClientPubKey(clientName string) string {
+	// try to load the client's public key:
+	clientCfg, ok := s.clientCfgs.Load(clientName)
+	if !ok {
+		log.Debugln("client has no pubkey configured", clientName)
+		return ""
+	}
+
+	cfg, ok := clientCfg.(*proto.Config)
+	if !ok {
+		log.Debugln(cfg, "is not a proto.Config.")
+		return ""
+	}
+
+	log.Debugln("pubkey loaded", clientName, cfg.PublicKey)
+
+	return cfg.PublicKey
 }
 
 func main() {
