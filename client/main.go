@@ -151,22 +151,32 @@ func main() {
 
 	log.Debugln("server secret encrypted with private key:", encryptedSecret)
 
-	// Given some headers ...
 	header := make(http.Header)
-	header.Set("Gorram-Secret", encryptedSecret)
+	//header.Set("Gorram-Secret", encryptedSecret)
 	header.Set("Gorram-Client-ID", yamlCfg.ClientName)
 
 	// Create RPC context, add client name metadata
 	rpcCtx, rpcCancel := newCtx(header, rpcTimeout)
 
-	// Hello: Get config from server, and ensure dead tickers are stopped
-	origCfg, err := c.Hello(rpcCtx, &proto.ConfigRequest{
-		ClientName: yamlCfg.ClientName,
+	// Hello: Get a LoginToken from the server, if our signature is verified by the server
+	apiToken, err := c.Hello(rpcCtx, &proto.LoginRequest{
+		LoginToken: encryptedSecret,
 	})
 	if err != nil {
 		log.Fatalln("Error with c.Hello:", err)
 	}
 	rpcCancel()
+
+	// Add token to the headers and context
+	header.Set("Gorram-Token", apiToken.ApiToken)
+	rpcCtx, rpcCancel = newCtx(header, rpcTimeout)
+
+	origCfg, err := c.ConfigSync(rpcCtx, &proto.ConfigRequest{
+		ClientName: yamlCfg.ClientName,
+	})
+	if err != nil {
+		log.Fatalln("Error with c.ConfigSync:", err)
+	}
 
 	log.Println("Client successfully connected to server.")
 

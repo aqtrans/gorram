@@ -11,8 +11,8 @@ var clientName = "testClient"
 
 func testCtx() context.Context {
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, "client-name", clientName)
-	ctx = context.WithValue(ctx, "client-address", "1.2.3.4")
+	ctx = context.WithValue(ctx, nameCtxKey, clientName)
+	ctx = context.WithValue(ctx, addressCtxKey, "1.2.3.4")
 	return ctx
 }
 

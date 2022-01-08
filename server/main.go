@@ -23,6 +23,7 @@ import (
 	"github.com/gregdel/pushover"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
+	"pkg.re/essentialkaos/branca.v1"
 
 	_ "net/http/pprof"
 
@@ -47,11 +48,11 @@ type serverConfig struct {
 		UserKey string `yaml:"user_key,omitempty"`
 		Device  string `yaml:"device,omitempty"`
 	} `yaml:"pushover,omitempty"`
-	ListenAddress    string   `yaml:"listen_address,omitempty"`
-	TLSHostnames     []string `yaml:"tls_hosts,omitempty"`
-	HeartbeatSeconds int64    `yaml:"heartbeat_seconds,omitempty"`
-	Debug            bool     `yaml:"debug,omitempty"`
-	Domain           string   `yaml:"domain,omitempty"`
+	ListenAddress    string `yaml:"listen_address,omitempty"`
+	HeartbeatSeconds int64  `yaml:"heartbeat_seconds,omitempty"`
+	Debug            bool   `yaml:"debug,omitempty"`
+	Domain           string `yaml:"domain,omitempty"`
+	BrancaKey        string `yaml:"branca_key,omitempty"`
 }
 
 type gorramServer struct {
@@ -62,6 +63,7 @@ type gorramServer struct {
 	alertsMap        alerts
 	proto.Reporter
 	proto.Querier
+	brc *branca.Branca
 	/*
 		pingTimers    map[string]*time.Timer
 		clientList    map[string]chan bool
@@ -79,60 +81,71 @@ type alerts struct {
 	m map[string]*proto.Alert
 }
 
+type jsonClient struct {
+	Name    string `json:"client_name"`
+	Address string `json:"ip_address"`
+	//Token   string `json:"api_token"`
+}
+
+type key int
+
+const (
+	nameCtxKey    key = 1
+	addressCtxKey key = 2
+	tokenCtxKey   key = 3
+)
+
 func WithClientName(base http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
+
 		gc := r.Header.Get("Gorram-Client-ID")
+		gt := r.Header.Get("Gorram-Token")
 		gip := r.RemoteAddr
-		ctx = context.WithValue(ctx, "client-name", gc)
-		ctx = context.WithValue(ctx, "client-address", gip)
+
+		ctx = context.WithValue(ctx, nameCtxKey, gc)
+		ctx = context.WithValue(ctx, addressCtxKey, gip)
+		ctx = context.WithValue(ctx, tokenCtxKey, gt)
 		r = r.WithContext(ctx)
 
 		base.ServeHTTP(w, r)
 	})
 }
 
+// Authorize verifies if the client's Gorram-Token matches what the server generated in Hello()
 func (s *gorramServer) Authorize(base http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		givenSecret := r.Header.Get("Gorram-Secret")
-		clientName := r.Header.Get("Gorram-Client-ID")
+
+		givenToken := getClientToken(r.Context())
+		clientName := getClientName(r.Context())
 
 		if clientName == "" {
 			log.WithFields(log.Fields{
-				"secret": givenSecret,
-				"ip":     r.RemoteAddr,
+				"token": givenToken,
+				"ip":    r.RemoteAddr,
 			}).Debugln("blank client name given")
 			return
 		}
 
-		// Attempt to load the client's public key from config
-		clientPubKey := s.loadClientPubKey(clientName)
-		if clientPubKey == "" {
-			log.WithFields(log.Fields{
-				"client": clientName,
-				"secret": givenSecret,
-				"ip":     r.RemoteAddr,
-			}).Debugln("client has no public key configured")
+		if !s.connectedClients.exists(clientName) && givenToken == "" {
+			log.Println(clientName, "has not connected before. Allowing through Authorize() to hit Hello()...")
+			base.ServeHTTP(w, r)
 			return
 		}
 
-		clientPubKeyB := common.ParsePublicKey(clientPubKey)
+		clientToken := s.connectedClients.get(clientName).Token.ApiToken
 
-		// Check that the secret key was properly signed by the client
-		verified := common.VerifySignature(clientPubKeyB, s.cfg.SecretKey, givenSecret)
+		verified := (clientToken == givenToken)
 
-		log.WithFields(log.Fields{
-			"client": clientName,
-			"secret": givenSecret,
-			"ip":     r.RemoteAddr,
-		}).Debugln("public key found and signature verified")
+		log.Debugln("client Token:", clientToken)
+		log.Debugln("givenToken:", givenToken)
 
 		if !verified {
 			log.WithFields(log.Fields{
 				"client": clientName,
-				"secret": givenSecret,
+				"token":  givenToken,
 				"ip":     r.RemoteAddr,
-			}).Infoln("Access denied due to invalid secret.")
+			}).Infoln("Access denied due to invalid token.")
 
 			return
 		}
@@ -142,11 +155,27 @@ func (s *gorramServer) Authorize(base http.Handler) http.Handler {
 }
 
 func getClientName(ctx context.Context) string {
-	clientName := ctx.Value("client-name").(string)
+	clientName := ctx.Value(nameCtxKey).(string)
 	if clientName != "" {
 		return clientName
 	}
-	return "no-client-name"
+	return ""
+}
+
+func getClientAddress(ctx context.Context) string {
+	clientAddr := ctx.Value(addressCtxKey).(string)
+	if clientAddr != "" {
+		return clientAddr
+	}
+	return ""
+}
+
+func getClientToken(ctx context.Context) string {
+	clientToken := ctx.Value(tokenCtxKey).(string)
+	if clientToken != "" {
+		return clientToken
+	}
+	return ""
 }
 
 // Ping handles the dead-client detection functionality
@@ -556,14 +585,49 @@ func (s *gorramServer) Debug(ctx context.Context, dr *proto.DebugRequest) (*prot
 	}, nil
 }
 
-func (s *gorramServer) Hello(ctx context.Context, req *proto.ConfigRequest) (*proto.Config, error) {
+func (s *gorramServer) Hello(ctx context.Context, req *proto.LoginRequest) (*proto.Token, error) {
 
 	clientName := getClientName(ctx)
+	clientAddress := getClientAddress(ctx)
+
+	// LoginToken should be the shared secret signed with the client's private key
+	givenSecret := req.LoginToken
+
+	// On Hello, verify client's key and generate a session token
+	// Attempt to load the client's public key from config
+	clientPubKey := s.loadClientPubKey(clientName)
+	if clientPubKey == "" {
+		log.WithFields(log.Fields{
+			"client": clientName,
+			"secret": givenSecret,
+			"ip":     clientAddress,
+		}).Debugln("client has no public key configured")
+		return nil, errUnknownClient
+	}
+
+	clientPubKeyB := common.ParsePublicKey(clientPubKey)
+
+	// Check that the secret key was properly signed by the client
+	verified := common.VerifySignature(clientPubKeyB, s.cfg.SecretKey, givenSecret)
+
+	if !verified {
+		log.WithFields(log.Fields{
+			"client": clientName,
+			"secret": givenSecret,
+			"ip":     clientAddress,
+		}).Infoln("Access denied due to invalid secret.")
+
+		return nil, errors.New("access denied due to invalid secret")
+	}
+
+	log.WithFields(log.Fields{
+		"client": clientName,
+		"secret": givenSecret,
+		"ip":     clientAddress,
+	}).Debugln("public key found and signature verified")
 
 	// Check if the client has connected before
 	s.reviveDeadClient(clientName)
-
-	clientAddress := ctx.Value("client-address").(string)
 
 	// As this should only be called on client connection, record the client name and address here
 	c := &proto.Client{
@@ -571,9 +635,16 @@ func (s *gorramServer) Hello(ctx context.Context, req *proto.ConfigRequest) (*pr
 		Address:      clientAddress,
 		LastPingTime: time.Now().Unix(),
 	}
+
+	t := &proto.Token{
+		ApiToken: s.encodeBrancaToken(clientName),
+	}
+
+	c.Token = t
+
 	s.connectedClients.add(c)
 
-	return s.ConfigSync(ctx, req)
+	return t, nil
 }
 
 /*
@@ -898,6 +969,24 @@ func (s *gorramServer) loadClientPubKey(clientName string) string {
 	return cfg.PublicKey
 }
 
+func (s *gorramServer) encodeBrancaToken(clientName string) string {
+	brcToken, err := s.brc.EncodeToString([]byte(clientName))
+	if err != nil {
+		log.Println("error marshaling json", err)
+		return ""
+	}
+	return brcToken
+}
+
+func (s *gorramServer) decodeBrancaToken(brancaToken string) string {
+	brcToken, err := s.brc.DecodeString(brancaToken)
+	if err != nil {
+		log.Println("error decoding token:", err)
+		return ""
+	}
+	return string(brcToken.Payload())
+}
+
 func main() {
 
 	formatter := new(log.TextFormatter)
@@ -950,12 +1039,20 @@ func main() {
 		cfg:              serverConfig{},
 		clientCfgs:       *new(sync.Map),
 		connectedClients: *new(clients),
+		brc:              new(branca.Branca),
 	}
 
 	gs.loadConfig(serverCfg, clientCfgs)
 
 	if gs.cfg.Debug {
 		log.SetLevel(log.DebugLevel)
+	}
+
+	// Setup Branca key to be used for Session keys
+	var err error
+	gs.brc, err = branca.NewBranca([]byte(gs.cfg.BrancaKey))
+	if err != nil {
+		log.Fatalln("error bringing up branca", err)
 	}
 
 	/*
