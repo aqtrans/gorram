@@ -13,13 +13,15 @@ let
   serverConfFile = pkgs.writeText "server.yml" ''  
     secret_key: "${cfg.secretKey}"
     alert_method: "${cfg.alertMethod}" 
-    pushover.app_key: "${cfg.pushoverAppKey}"
-    pushover.user_key: "${cfg.pushoverUserKey}" 
-    pushover.device: "${cfg.pushoverDevice}"    
+    pushover
+      app_key: "${cfg.pushoverAppKey}"
+      user_key: "${cfg.pushoverUserKey}" 
+      #device: "${cfg.pushoverDevice}"    
     listen_address: "${cfg.listenAddress}"
     heartbeat_seconds: ${cfg.heartbeatSeconds}
     debug: ${boolToString cfg.debug}
     domain: ${cfg.httpDomain}
+    brancha_key: "${cfg.brancaKey}"
   '';
 
   #clientCfg = config.services.gorram.client;
@@ -29,6 +31,7 @@ let
     name: "${cfg.clientName}"
     secret_key: "${cfg.secretKey}" 
     server_address: "${cfg.serverAddress}"
+    private_key: "${cfg.clientPrivateKey}"
   '';  
 
 /* TODO: Figure out some way to generate individual conf.d/$client.yml files. Currently needs to be done manually
@@ -74,6 +77,12 @@ in {
           default = "";
           description = "Secret key shared between clients and servers";
         };
+
+        brancaKey = mkOption {
+          type = types.str;
+          default = "";
+          description = "A 32 character string used to generate session tokens.";
+        };        
 
         alertMethod = mkOption {
           type = types.str;
@@ -131,6 +140,12 @@ in {
           description = "Server address, IP and port";
         };
 
+        clientPrivateKey = mkOption {
+          type = types.str;
+          default = "";
+          description = "The client's base64-encoded private key";
+        };        
+
 /*
         clients = mkOption {
             description = "Gorram clients";
@@ -177,7 +192,7 @@ in {
             Group = cfg.group;
             Restart = "always";
             ProtectSystem = "strict";
-            ReadWritePaths = ''${serverConfFile} ${cfg.stateDir} ${cfg.tlsDir}'';
+            ReadWritePaths = ''${serverConfFile} ${cfg.stateDir}'';
             WorkingDirectory = cfg.stateDir;
             ExecStart = ''
               ${pkgs.gorram}/bin/server -conf ${cfg.stateDir} -conf-file ${serverConfFile}
