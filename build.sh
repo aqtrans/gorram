@@ -4,12 +4,14 @@ set -euo pipefail
 
 DEBVERSION=1.0.$(date +'%s')-$(git rev-parse --short HEAD)
 APPNAME=gorram
+GITREV=$(git rev-parse HEAD)
+BUILDTIME=$(date +'%Y-%m-%d_%T')
 
 function build_debian()
 {
-    podman run --rm -v "$PWD":/usr/src/myapp -w /usr/src/myapp golang:buster go build -buildmode=pie -ldflags "-X main.sha1ver=$(git rev-parse HEAD) -X main.buildTime=$(date +'%Y-%m-%d_%T')" -o gorram-server ./server
-    podman run --rm -v "$PWD":/usr/src/myapp -w /usr/src/myapp golang:buster go build -buildmode=pie -ldflags "-X main.sha1ver=$(git rev-parse HEAD) -X main.buildTime=$(date +'%Y-%m-%d_%T')" -o gorram-client ./client
-    podman run --rm -v "$PWD":/usr/src/myapp -w /usr/src/myapp golang:buster go build -buildmode=pie -o gorram-cli ./cli
+    podman run --rm -v "$PWD":/usr/src/myapp -w /usr/src/myapp golang:bullseye go build -buildmode=pie -ldflags "-X main.sha1ver=$(git rev-parse HEAD) -X main.buildTime=$(date +'%Y-%m-%d_%T')" -o gorram-server ./server
+    podman run --rm -v "$PWD":/usr/src/myapp -w /usr/src/myapp golang:bullseye go build -buildmode=pie -ldflags "-X main.sha1ver=$(git rev-parse HEAD) -X main.buildTime=$(date +'%Y-%m-%d_%T')" -o gorram-client ./client
+    podman run --rm -v "$PWD":/usr/src/myapp -w /usr/src/myapp golang:bullseye go build -buildmode=pie -o gorram-cli ./cli
     #podman run --rm -v "$PWD":/usr/src/myapp -w /usr/src/myapp golang:buster go build -buildmode=pie -o gorram-certs ./certs/gorram-certs
 }
 
@@ -21,14 +23,14 @@ function test_it() {
 
 # Build Debian package inside a container
 function build_package() {
-    podman run --rm -v "$PWD":/usr/src/myapp -w /usr/src/myapp debian:buster ./build-pkg.sh $DEBVERSION
+    podman run --rm -v "$PWD":/usr/src/myapp -w /usr/src/myapp debian:bullseye ./build-pkg.sh $DEBVERSION
 }
 
 function build_proto()
 {
-    go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.26
-    go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.1
-    protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative proto/gorram.proto
+    go install github.com/twitchtv/twirp/protoc-gen-twirp
+    go install google.golang.org/protobuf/cmd/protoc-gen-go
+    go generate
 }
 
 function test_all() {
@@ -42,6 +44,7 @@ function test_all() {
     test_it
     cd ../checks/
     test_it
+    cd ../
 }
 
 while [ "$1" != "" ]; do 
