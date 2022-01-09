@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/rsa"
 	"encoding/base64"
 	"errors"
 	"flag"
@@ -22,6 +23,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/gregdel/pushover"
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/protobuf/proto"
 	"gopkg.in/yaml.v2"
 	"pkg.re/essentialkaos/branca.v1"
 
@@ -31,7 +33,7 @@ import (
 
 	"git.jba.io/go/gorram/certs"
 	"git.jba.io/go/gorram/common"
-	"git.jba.io/go/gorram/proto"
+	pb "git.jba.io/go/gorram/proto"
 )
 
 var (
@@ -61,8 +63,8 @@ type gorramServer struct {
 	cfg              serverConfig
 	connectedClients clients
 	alertsMap        alerts
-	proto.Reporter
-	proto.Querier
+	pb.Reporter
+	pb.Querier
 	brc *branca.Branca
 	/*
 		pingTimers    map[string]*time.Timer
@@ -73,12 +75,12 @@ type gorramServer struct {
 
 type clients struct {
 	sync.Mutex
-	m proto.ClientList
+	m pb.ClientList
 }
 
 type alerts struct {
 	sync.Mutex
-	m map[string]*proto.Alert
+	m map[string]*pb.Alert
 }
 
 type jsonClient struct {
@@ -128,7 +130,7 @@ func (s *gorramServer) Authorize(base http.Handler) http.Handler {
 		}
 
 		// If they have no token, but trying to say Hello(), let them through
-		if givenToken == "" && r.RequestURI == "/twirp/proto.Reporter/Hello" {
+		if givenToken == "" && r.RequestURI == "/twirp/pb.Reporter/Hello" {
 			log.Println(clientName, "has no token, but shared secret matches. Allowing through Authorize()...")
 			base.ServeHTTP(w, r)
 			return
@@ -190,7 +192,7 @@ func getClientToken(ctx context.Context) string {
 //   It works by spawning a Timer and Ticker for each client
 //   - The timer is reset on every successful ping
 //   - The ticker triggers the dead-client alerts, once the above timer has expired
-func (s *gorramServer) Ping(ctx context.Context, msg *proto.PingMsg) (*proto.PingResponse, error) {
+func (s *gorramServer) Ping(ctx context.Context, msg *pb.PingMsg) (*pb.PingResponse, error) {
 	/*
 		// Variables to eventually change into config values, fetched from the client's configured interval
 		// deadClienttime is the time to wait between alerting after a client has been declared dead
@@ -204,7 +206,7 @@ func (s *gorramServer) Ping(ctx context.Context, msg *proto.PingMsg) (*proto.Pin
 	s.connectedClients.updatePingTime(client)
 
 	// Compare the config last updated time and the last updated received in the ping message
-	var cfgOutOfDate proto.PingResponse
+	var cfgOutOfDate pb.PingResponse
 	clientCfg, err := s.loadClientConfig(client)
 	if err != nil {
 		return nil, err
@@ -262,7 +264,7 @@ func (s *gorramServer) Ping(ctx context.Context, msg *proto.PingMsg) (*proto.Pin
 //  and the LastPingTime is updated.
 func (s *gorramServer) reviveDeadClient(clientName string) {
 	if s.connectedClients.exists(clientName) {
-		s.alert(clientName, &proto.Issue{
+		s.alert(clientName, &pb.Issue{
 			Title:   "Client Revived",
 			Message: fmt.Sprintf("%v is alive again!", clientName),
 		})
@@ -270,36 +272,36 @@ func (s *gorramServer) reviveDeadClient(clientName string) {
 	}
 }
 
-func (s *gorramServer) RecordIssue(ctx context.Context, iss *proto.Issue) (*proto.Submitted, error) {
+func (s *gorramServer) RecordIssue(ctx context.Context, iss *pb.Issue) (*pb.Submitted, error) {
 	if iss != nil {
 		log.Debugln("recording issue from", iss.Host, iss)
 		// Record issue
 		s.alert(getClientName(ctx), iss)
 
-		return &proto.Submitted{SuccessfullySubmitted: true}, nil
+		return &pb.Submitted{SuccessfullySubmitted: true}, nil
 	}
 
-	return &proto.Submitted{SuccessfullySubmitted: false}, nil
+	return &pb.Submitted{SuccessfullySubmitted: false}, nil
 }
 
-func (s *gorramServer) loadClientConfig(client string) (*proto.Config, error) {
+func (s *gorramServer) loadClientConfig(client string) (*pb.Config, error) {
 	// Attempt to read the config.yml, and then if it has [clientname] in it, unmarshal the config from there
 	clientCfg, isThere := s.clientCfgs.Load(client)
 	if isThere {
 		/*
 			if clientCfg == nil {
-				return proto.Config{}, errUnknownClient
+				return pb.Config{}, errUnknownClient
 			}
 		*/
-		cfg, ok := clientCfg.(*proto.Config)
+		cfg, ok := clientCfg.(*pb.Config)
 		if !ok {
-			log.Fatalln(cfg, "is not a proto.Config.")
+			log.Fatalln(cfg, "is not a pb.Config.")
 		}
 		return cfg, nil
 	}
 
 	// Default config values:
-	return &proto.Config{}, errUnknownClient
+	return &pb.Config{}, errUnknownClient
 	/*
 			gorram.Config{
 				Interval: 60,
@@ -317,7 +319,7 @@ func (s *gorramServer) loadClientConfig(client string) (*proto.Config, error) {
 	*/
 }
 
-func (s *gorramServer) ConfigSync(ctx context.Context, req *proto.ConfigRequest) (*proto.Config, error) {
+func (s *gorramServer) ConfigSync(ctx context.Context, req *pb.ConfigRequest) (*pb.EncryptedConfig, error) {
 
 	clientName := getClientName(ctx)
 
@@ -339,7 +341,21 @@ func (s *gorramServer) ConfigSync(ctx context.Context, req *proto.ConfigRequest)
 		cfg.EnabledChecks = enabledChecks.(string)
 	}
 
-	return cfg, nil
+	cfgB, err := proto.Marshal(cfg)
+	if err != nil {
+		log.Println("error marshaling cfg", err)
+		return nil, err
+	}
+
+	clientPubKey := s.loadClientPubKey(clientName)
+	encryptedB := common.Encrypt(clientPubKey, cfgB)
+	log.Println("encrypted cfg!!")
+
+	eb := &pb.EncryptedConfig{
+		EncryptedBytes: encryptedB,
+	}
+
+	return eb, nil
 }
 
 // sendAlert() decides whether to send alerts
@@ -365,7 +381,7 @@ func sendAlert(i int64) bool {
 	return false
 }
 
-func (s *gorramServer) alert(client string, issue *proto.Issue) {
+func (s *gorramServer) alert(client string, issue *pb.Issue) {
 
 	// Tie the issue with the given client name here
 	issue.Host = client
@@ -431,7 +447,7 @@ func (s *gorramServer) alert(client string, issue *proto.Issue) {
 			"check":  issue.Title,
 		}).Debugln("Issue does not exist. Adding to map.", issue.Message)
 
-		a := proto.Alert{
+		a := pb.Alert{
 			Issue:         issue,
 			TimeSubmitted: time.Now().Unix(),
 			TimeLast:      time.Now().Unix(),
@@ -512,7 +528,7 @@ func (s *gorramServer) loadConfig(serverConfFileFullPath, confdFullPath string) 
 	}
 
 	for _, cfg := range cfgFiles {
-		var newCfg proto.Config
+		var newCfg pb.Config
 		clientName := strings.TrimSuffix(cfg.Name(), filepath.Ext(cfg.Name()))
 		filename := cfg.Name()
 
@@ -565,12 +581,12 @@ func (s *gorramServer) loadConfig(serverConfFileFullPath, confdFullPath string) 
 
 }
 
-func (s *gorramServer) List(ctx context.Context, qr *proto.QueryRequest) (*proto.ClientList, error) {
+func (s *gorramServer) List(ctx context.Context, qr *pb.QueryRequest) (*pb.ClientList, error) {
 
 	return &s.connectedClients.m, nil
 }
 
-func (s *gorramServer) Delete(ctx context.Context, cn *proto.ClientName) (*proto.ClientList, error) {
+func (s *gorramServer) Delete(ctx context.Context, cn *pb.ClientName) (*pb.ClientList, error) {
 	clientName := cn.GetName()
 	// Stop and delete clientName's ticker, and delete it from the ClientList
 	// TODO: Delete timer too?
@@ -585,15 +601,15 @@ func (s *gorramServer) Delete(ctx context.Context, cn *proto.ClientName) (*proto
 	return &s.connectedClients.m, nil
 }
 
-func (s *gorramServer) Debug(ctx context.Context, dr *proto.DebugRequest) (*proto.DebugResponse, error) {
+func (s *gorramServer) Debug(ctx context.Context, dr *pb.DebugRequest) (*pb.DebugResponse, error) {
 
 	aString := fmt.Sprintf("Connected clients: %v", &s.connectedClients.m)
-	return &proto.DebugResponse{
+	return &pb.DebugResponse{
 		Resp: aString,
 	}, nil
 }
 
-func (s *gorramServer) Hello(ctx context.Context, req *proto.LoginRequest) (*proto.Token, error) {
+func (s *gorramServer) Hello(ctx context.Context, req *pb.LoginRequest) (*pb.Token, error) {
 
 	clientName := getClientName(ctx)
 	clientAddress := getClientAddress(ctx)
@@ -604,19 +620,18 @@ func (s *gorramServer) Hello(ctx context.Context, req *proto.LoginRequest) (*pro
 	// On Hello, verify client's key and generate a session token
 	// Attempt to load the client's public key from config
 	clientPubKey := s.loadClientPubKey(clientName)
-	if clientPubKey == "" {
+	if clientPubKey == nil {
 		log.WithFields(log.Fields{
 			"client": clientName,
 			"secret": givenSecret,
 			"ip":     clientAddress,
-		}).Debugln("client has no public key configured")
+		}).Infoln("client has no public key")
+
 		return nil, errUnknownClient
 	}
 
-	clientPubKeyB := common.ParsePublicKey(clientPubKey)
-
 	// Check that the secret key was properly signed by the client
-	verified := common.VerifySignature(clientPubKeyB, s.cfg.SecretKey, givenSecret)
+	verified := common.VerifySignature(*clientPubKey, s.cfg.SecretKey, givenSecret)
 
 	if !verified {
 		log.WithFields(log.Fields{
@@ -638,13 +653,13 @@ func (s *gorramServer) Hello(ctx context.Context, req *proto.LoginRequest) (*pro
 	s.reviveDeadClient(clientName)
 
 	// As this should only be called on client connection, record the client name and address here
-	c := &proto.Client{
+	c := &pb.Client{
 		Name:         clientName,
 		Address:      clientAddress,
 		LastPingTime: time.Now().Unix(),
 	}
 
-	t := &proto.Token{
+	t := &pb.Token{
 		ApiToken: s.encodeBrancaToken(clientName),
 	}
 
@@ -696,11 +711,11 @@ func (a *alerts) exists(client string, alert gorram.Alert, interval int64) (rese
 
 // MapKey should consist of host+title, allowing message to continue updating
 // This allows disk space and other alerts to change without unmuting
-func generateMapKey(i *proto.Issue) string {
+func generateMapKey(i *pb.Issue) string {
 	return base64.RawURLEncoding.EncodeToString([]byte(i.Host + i.Title))
 }
 
-func (a *alerts) add(alert *proto.Alert) {
+func (a *alerts) add(alert *pb.Alert) {
 	a.Lock()
 	if len(a.m) > 20 {
 		log.WithFields(log.Fields{
@@ -716,7 +731,7 @@ func (a *alerts) add(alert *proto.Alert) {
 // count increases the number of occurrences and returns it
 //  it should only be called in alert(), ensuring the occurrences always increase
 //  TimeLast is updated as well, to track stale alerts
-func (a *alerts) count(issue *proto.Issue) int64 {
+func (a *alerts) count(issue *pb.Issue) int64 {
 	a.Lock()
 	v := a.m[generateMapKey(issue)]
 	v.Occurrences = v.Occurrences + 1
@@ -725,14 +740,14 @@ func (a *alerts) count(issue *proto.Issue) int64 {
 	return v.Occurrences
 }
 
-func (a *alerts) exists(issue *proto.Issue) bool {
+func (a *alerts) exists(issue *pb.Issue) bool {
 	a.Lock()
 	_, alertExists := a.m[generateMapKey(issue)]
 	a.Unlock()
 	return alertExists
 }
 
-func (a *alerts) get(issue *proto.Issue) *proto.Alert {
+func (a *alerts) get(issue *pb.Issue) *pb.Alert {
 	a.Lock()
 	theAlert, alertExists := a.m[generateMapKey(issue)]
 	if alertExists {
@@ -751,7 +766,7 @@ func (a *alerts) mute(issueID string) {
 	a.Unlock()
 }
 
-func (a *alerts) isMuted(issue *proto.Issue) bool {
+func (a *alerts) isMuted(issue *pb.Issue) bool {
 	var isIt bool
 	a.Lock()
 	v := a.m[generateMapKey(issue)]
@@ -761,7 +776,7 @@ func (a *alerts) isMuted(issue *proto.Issue) bool {
 }
 
 // expire expires issues that have been stale for 1 hour
-func (a *alerts) expire(issue *proto.Issue) {
+func (a *alerts) expire(issue *pb.Issue) {
 	a.Lock()
 	issueID := generateMapKey(issue)
 	v, alertExists := a.m[issueID]
@@ -784,7 +799,7 @@ func (a *alerts) expire(issue *proto.Issue) {
 	a.Unlock()
 }
 
-func (c *clients) add(client *proto.Client) {
+func (c *clients) add(client *pb.Client) {
 	c.Lock()
 	c.m.Clients[client.Name] = client
 	c.Unlock()
@@ -797,7 +812,7 @@ func (c *clients) exists(clientName string) bool {
 	return clientExists
 }
 
-func (c *clients) get(clientName string) *proto.Client {
+func (c *clients) get(clientName string) *pb.Client {
 	c.Lock()
 	theClient, clientExists := c.m.Clients[clientName]
 	if clientExists {
@@ -865,7 +880,7 @@ func (s *gorramServer) checkClients(k, v interface{}) bool {
 		}
 		// Check if client is Required and has not connected
 		if clientCfg.Required && !s.connectedClients.exists(clientName) {
-			s.alert(clientName, &proto.Issue{
+			s.alert(clientName, &pb.Issue{
 				Title:   "Client Offline",
 				Message: clientName + " has not connected",
 			})
@@ -875,7 +890,7 @@ func (s *gorramServer) checkClients(k, v interface{}) bool {
 		if s.connectedClients.exists(clientName) && s.connectedClients.expired(clientName, clientCfg.Interval) {
 			log.Debugln(clientName, "has expired")
 			// TODO: should add time they've been offline to the alert
-			s.alert(clientName, &proto.Issue{
+			s.alert(clientName, &pb.Issue{
 				Title:   "Client dropped offline",
 				Message: clientName + " has dropped offline",
 			})
@@ -958,23 +973,32 @@ func (s *gorramServer) listAlertsHandler(w http.ResponseWriter, r *http.Request)
 	s.alertsMap.Unlock()
 }
 
-func (s *gorramServer) loadClientPubKey(clientName string) string {
+func (s *gorramServer) loadClientPubKey(clientName string) *rsa.PublicKey {
 	// try to load the client's public key:
 	clientCfg, ok := s.clientCfgs.Load(clientName)
 	if !ok {
 		log.Debugln("client has no pubkey configured", clientName)
-		return ""
+		return nil
 	}
 
-	cfg, ok := clientCfg.(*proto.Config)
+	cfg, ok := clientCfg.(*pb.Config)
 	if !ok {
-		log.Debugln(cfg, "is not a proto.Config.")
-		return ""
+		log.Debugln(cfg, "is not a pb.Config.")
+		return nil
+	}
+
+	if cfg.PublicKey == "" {
+		log.WithFields(log.Fields{
+			"client": clientName,
+		}).Debugln("client has no public key configured")
+		return nil
 	}
 
 	log.Debugln("pubkey loaded", clientName, cfg.PublicKey)
 
-	return cfg.PublicKey
+	clientPubKeyB := common.ParsePublicKey(cfg.PublicKey)
+
+	return clientPubKeyB
 }
 
 func (s *gorramServer) encodeBrancaToken(clientName string) string {
@@ -1117,9 +1141,9 @@ func main() {
 	done := make(chan bool, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
-	gs.alertsMap.m = make(map[string]*proto.Alert)
+	gs.alertsMap.m = make(map[string]*pb.Alert)
 
-	gs.connectedClients.m.Clients = make(map[string]*proto.Client)
+	gs.connectedClients.m.Clients = make(map[string]*pb.Client)
 
 	// Watch for config.yml changes
 	watcher, err := fsnotify.NewWatcher()
@@ -1128,8 +1152,8 @@ func main() {
 	}
 
 	// Setup servers
-	reportHandler := proto.NewReporterServer(&gs)
-	queryHandler := proto.NewQuerierServer(&gs)
+	reportHandler := pb.NewReporterServer(&gs)
+	queryHandler := pb.NewQuerierServer(&gs)
 
 	mux := http.NewServeMux()
 	mux.Handle(reportHandler.PathPrefix(), WithClientName(gs.Authorize(reportHandler)))
