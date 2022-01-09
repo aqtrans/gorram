@@ -13,7 +13,7 @@ let
   serverConfFile = pkgs.writeText "server.yml" ''  
     secret_key: "${cfg.secretKey}"
     alert_method: "${cfg.alertMethod}" 
-    pushover
+    pushover:
       app_key: "${cfg.pushoverAppKey}"
       user_key: "${cfg.pushoverUserKey}" 
       #device: "${cfg.pushoverDevice}"    
@@ -21,7 +21,7 @@ let
     heartbeat_seconds: ${cfg.heartbeatSeconds}
     debug: ${boolToString cfg.debug}
     domain: ${cfg.httpDomain}
-    brancha_key: "${cfg.brancaKey}"
+    branca_key: "${cfg.brancaKey}"
   '';
 
   #clientCfg = config.services.gorram.client;

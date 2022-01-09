@@ -1,4 +1,4 @@
-{ stdenv, lib, buildGoModule, git, makeWrapper, substituteAll, grpc, protobuf, pkgs, runCommandLocal }:
+{ stdenv, lib, buildGoModule, git, makeWrapper, substituteAll, protobuf, pkgs, runCommandLocal }:
 
 buildGoModule rec {
   pname = "gorram";
@@ -17,23 +17,21 @@ buildGoModule rec {
 
   nativeBuildInputs = [ 
     makeWrapper 
-    grpc 
     protobuf 
     pkgs.protoc-gen-go
-    pkgs.protoc-gen-go-grpc
+    pkgs.protoc-gen-twirp
   ];
 
   buildInputs = [ 
     git 
-    grpc 
     protobuf 
     pkgs.protoc-gen-go
-    pkgs.protoc-gen-go-grpc
+    pkgs.protoc-gen-twirp
   ];
 
   ldflags = [ "-X main.sha1ver=${builtins.readFile revision}" "-X main.buildTime=${builtins.readFile buildDate}" ];
 
-  vendorSha256 = "0wpzgin13rgr3jlhi1mz54s8k0ifvwq8vgbpfagb7wjn7i2mbcda";
+  vendorSha256 = "1818z9yhknvla32cyllky7ds5kbjx6ydipp1y6y5ndsv5fjs6wf0";
 
   runVend = false;
 
@@ -43,7 +41,7 @@ buildGoModule rec {
 
   
   preBuild = ''
-    protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative proto/gorram.proto
+    protoc --go_out=. --go_opt=paths=source_relative --twirp_out=. --twirp_opt=paths=source_relative proto/gorram.proto
   '';
   
 
