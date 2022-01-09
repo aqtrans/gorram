@@ -1,13 +1,9 @@
 package common
 
 import (
-	"crypto"
-	"crypto/rand"
-	"crypto/rsa"
+	"crypto/ed25519"
 	"crypto/sha256"
-	"crypto/x509"
 	"encoding/base64"
-	"encoding/pem"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -42,7 +38,7 @@ func (g *Gorram) Hello(clientName string, resp *string) error {
 	return nil
 }
 
-func VerifySignature(pubKey rsa.PublicKey, message, signature string) bool {
+func VerifySignature(pubKey ed25519.PublicKey, message, signature string) bool {
 	msgHash := sha256.New()
 	_, err := msgHash.Write([]byte(message))
 	if err != nil {
@@ -57,17 +53,12 @@ func VerifySignature(pubKey rsa.PublicKey, message, signature string) bool {
 		return false
 	}
 
-	// VerifyPSS returns err if verification fails
-	err = rsa.VerifyPSS(&pubKey, crypto.SHA256, msgHashSum, decodedSig, nil)
-	if err != nil {
-		log.Println("error verifying signature:", err)
-		return false
-	}
+	omg := ed25519.Verify(pubKey, msgHashSum, decodedSig)
 
-	return true
+	return omg
 }
 
-func SignSignature(privKey rsa.PrivateKey, message string) string {
+func SignSignature(privKey ed25519.PrivateKey, message string) string {
 	/*
 		block, _ := pem.Decode(rawPrivKey)
 		if block == nil {
@@ -103,18 +94,14 @@ func SignSignature(privKey rsa.PrivateKey, message string) string {
 	}
 	msgHashSum := msgHash.Sum(nil)
 
-	signature, err := rsa.SignPSS(rand.Reader, &privKey, crypto.SHA256, msgHashSum, nil)
-	if err != nil {
-		log.Println("error signing message", err)
-		return ""
-	}
+	signature := ed25519.Sign(privKey, msgHashSum)
 
 	encodedSig := base64.URLEncoding.EncodeToString(signature)
 
 	return encodedSig
 }
 
-func LoadPublicKey(name string) *rsa.PublicKey {
+func LoadPublicKey(name string) ed25519.PublicKey {
 	pubKey, err := ioutil.ReadFile(name)
 	if err != nil {
 		panic(fmt.Sprintf("failed to load key %s: %v", name, err))
@@ -126,37 +113,27 @@ func LoadPublicKey(name string) *rsa.PublicKey {
 		return nil
 	}
 
-	pubKeyParsed, err := x509.ParsePKCS1PublicKey(pubKeyDec)
-	if err != nil {
-		log.Println("error parsing pubkey", err)
-		return nil
-	}
-
-	return pubKeyParsed
+	return ed25519.PublicKey(pubKeyDec)
 }
 
-func LoadPrivateKey(name string) *rsa.PrivateKey {
+func LoadPrivateKey(name string) ed25519.PrivateKey {
 	privKey, err := ioutil.ReadFile(name)
 	if err != nil {
 		panic(fmt.Sprintf("failed to load key %s: %v", name, err))
 	}
 
+	log.Println(name, string(privKey))
+
 	privKeyDec, err := base64.URLEncoding.DecodeString(string(privKey))
 	if err != nil {
-		log.Println("error decoding private key", err)
+		log.Println("error decoding pubkey", err)
 		return nil
 	}
 
-	privKeyParsed, err := x509.ParsePKCS1PrivateKey(privKeyDec)
-	if err != nil {
-		log.Println("error parsing private key", err)
-		return nil
-	}
-
-	return privKeyParsed
+	return ed25519.PrivateKey(privKeyDec)
 }
 
-func ParsePublicKey(pubKey string) *rsa.PublicKey {
+func ParsePublicKey(pubKey string) ed25519.PublicKey {
 
 	pubKeyDec, err := base64.URLEncoding.DecodeString(pubKey)
 	if err != nil {
@@ -164,62 +141,27 @@ func ParsePublicKey(pubKey string) *rsa.PublicKey {
 		return nil
 	}
 
-	pemBlock, _ := pem.Decode(pubKeyDec)
-
-	pubKeyParsed, err := x509.ParsePKCS1PublicKey(pemBlock.Bytes)
-	if err != nil {
-		log.Println("error parsing pubkey", err)
-		return nil
-	}
-
-	return pubKeyParsed
+	return ed25519.PublicKey(pubKeyDec)
 }
 
-func ParsePrivateKey(privKey string) *rsa.PrivateKey {
+func ParsePrivateKey(privKey string) ed25519.PrivateKey {
 
-	privKeyDecoded, err := base64.URLEncoding.DecodeString(privKey)
+	privKeyDec, err := base64.URLEncoding.DecodeString(privKey)
 	if err != nil {
-		log.Println("error decoding private key from base64", err)
+		log.Println("error decoding pubkey", err)
 		return nil
 	}
 
-	pemBlock, _ := pem.Decode(privKeyDecoded)
-
-	privKeyParsed, err := x509.ParsePKCS1PrivateKey(pemBlock.Bytes)
-	if err != nil {
-		log.Println("error parsing private key", err)
-		return nil
-	}
-
-	return privKeyParsed
+	return ed25519.PrivateKey(privKeyDec)
 }
 
 func GenerateKeys() (public, private string) {
-	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	pub, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {
-		log.Fatalln("error generating RSA keys", err)
+		log.Fatalln("error generating ed25519 keys", err)
 	}
-
-	privPem := pem.EncodeToMemory(&pem.Block{
-		Type:  "RSA PRIVATE KEY",
-		Bytes: x509.MarshalPKCS1PrivateKey(priv),
-	})
-	if privPem == nil {
-		log.Println("private key unable to be encoded")
-		return
-	}
-
-	pubPem := pem.EncodeToMemory(&pem.Block{
-		Type:  "RSA PUBLIC KEY",
-		Bytes: x509.MarshalPKCS1PublicKey(&priv.PublicKey),
-	})
-	if pubPem == nil {
-		log.Println("public key unable to be encoded")
-		return
-	}
-
-	pubEnc := base64.URLEncoding.EncodeToString(pubPem)
-	privEnc := base64.URLEncoding.EncodeToString(privPem)
+	pubEnc := base64.URLEncoding.EncodeToString(pub)
+	privEnc := base64.URLEncoding.EncodeToString(priv)
 	/*
 		err = ioutil.WriteFile("homer.pub", []byte(pubEnc), 0644)
 		if err != nil {
@@ -231,22 +173,4 @@ func GenerateKeys() (public, private string) {
 		}
 	*/
 	return pubEnc, privEnc
-}
-
-func Encrypt(pubKey *rsa.PublicKey, messageBytes []byte) []byte {
-	encryptedBytes, err := rsa.EncryptOAEP(sha256.New(), rand.Reader, pubKey, messageBytes, nil)
-	if err != nil {
-		log.Println("error encrypting message", err)
-		return nil
-	}
-	return encryptedBytes
-}
-
-func Decrypt(privKey *rsa.PrivateKey, encryptedBytes []byte) []byte {
-	decryptedBytes, err := privKey.Decrypt(nil, encryptedBytes, &rsa.OAEPOptions{Hash: crypto.SHA256})
-	if err != nil {
-		log.Println("error decrypting message", err)
-		return nil
-	}
-	return decryptedBytes
 }

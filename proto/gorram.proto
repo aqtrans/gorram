@@ -11,7 +11,7 @@ service Reporter {
     // The cfg_last_updated variable sent, and cfg_out_of_sync received also allow syncing the config
     rpc Ping(PingMsg) returns (PingResponse) {}
     rpc RecordIssue(Issue) returns (Submitted) {}
-    rpc ConfigSync(ConfigRequest) returns (EncryptedConfig) {}
+    rpc ConfigSync(ConfigRequest) returns (Config) {}
 }
 
 message PingMsg {
@@ -145,8 +145,4 @@ message DebugRequest {
 
 message DebugResponse {
     string resp = 1;
-}
-
-message EncryptedConfig {
-    bytes encrypted_bytes = 1;
 }

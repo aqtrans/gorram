@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/rsa"
 	"flag"
 	"io/ioutil"
 	"net/http"
@@ -15,8 +14,7 @@ import (
 
 	"git.jba.io/go/gorram/checks"
 	"git.jba.io/go/gorram/common"
-	pb "git.jba.io/go/gorram/proto"
-	"google.golang.org/protobuf/proto"
+	"git.jba.io/go/gorram/proto"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/twitchtv/twirp"
@@ -62,16 +60,6 @@ func newCtx(header http.Header, timeout time.Duration) (context.Context, context
 	}
 
 	return context.WithTimeout(ctx, timeout)
-}
-
-func decryptCfg(privKey *rsa.PrivateKey, encryptedConfig *pb.EncryptedConfig) *pb.Config {
-	decryptedBytes := common.Decrypt(privKey, encryptedConfig.EncryptedBytes)
-	origCfg := &pb.Config{}
-	err := proto.Unmarshal(decryptedBytes, origCfg)
-	if err != nil {
-		log.Fatalln("unable to unmarshal config:", err)
-	}
-	return origCfg
 }
 
 func main() {
@@ -135,7 +123,7 @@ func main() {
 
 	// Set up a connection to the server.
 
-	c := pb.NewReporterProtobufClient(yamlCfg.ServerAddress, &http.Client{})
+	c := proto.NewReporterProtobufClient(yamlCfg.ServerAddress, &http.Client{})
 
 	/*
 		pub, priv, err := ed25519.GenerateKey(nil)
@@ -156,11 +144,10 @@ func main() {
 		os.Exit(0)
 	*/
 
-	/* Sign the shared secret using RSA with our private key
+	/* Sign the shared secret using ed25519 with our private key
 	   The server will use our public key to verify it */
-	privKey := common.ParsePrivateKey(yamlCfg.PrivateKey)
-
-	encryptedSecret := common.SignSignature(*privKey, yamlCfg.ServerSecret)
+	privkeyB := common.ParsePrivateKey(yamlCfg.PrivateKey)
+	encryptedSecret := common.SignSignature(privkeyB, yamlCfg.ServerSecret)
 
 	log.Debugln("server secret encrypted with private key:", encryptedSecret)
 
@@ -172,7 +159,7 @@ func main() {
 	rpcCtx, rpcCancel := newCtx(header, rpcTimeout)
 
 	// Hello: Get a LoginToken from the server, if our signature is verified by the server
-	apiToken, err := c.Hello(rpcCtx, &pb.LoginRequest{
+	apiToken, err := c.Hello(rpcCtx, &proto.LoginRequest{
 		LoginToken: encryptedSecret,
 	})
 	if err != nil {
@@ -184,15 +171,12 @@ func main() {
 	header.Set("Gorram-Token", apiToken.ApiToken)
 	rpcCtx, rpcCancel = newCtx(header, rpcTimeout)
 
-	// Grab config and try to decrypt it
-	encryptedConfig, err := c.ConfigSync(rpcCtx, &pb.ConfigRequest{
+	origCfg, err := c.ConfigSync(rpcCtx, &proto.ConfigRequest{
 		ClientName: yamlCfg.ClientName,
 	})
 	if err != nil {
 		log.Fatalln("Error with c.ConfigSync:", err)
 	}
-
-	origCfg := decryptCfg(privKey, encryptedConfig)
 
 	log.Println("Client successfully connected to server.")
 
@@ -210,7 +194,7 @@ func main() {
 				cfgMutex.Lock()
 				rpcCtx, rpcCancel := newCtx(header, rpcTimeout)
 				defer rpcCancel()
-				pingResp, err := c.Ping(rpcCtx, &pb.PingMsg{IsAlive: true, CfgLastUpdated: origCfg.LastUpdated})
+				pingResp, err := c.Ping(rpcCtx, &proto.PingMsg{IsAlive: true, CfgLastUpdated: origCfg.LastUpdated})
 				if err != nil {
 					log.Fatalln("Error with c.Ping:", err)
 				}
@@ -222,13 +206,12 @@ func main() {
 
 					rpcCtx, rpcCancel := newCtx(header, rpcTimeout)
 					defer rpcCancel()
-					newCfgEncryted, err := c.ConfigSync(rpcCtx, &pb.ConfigRequest{
+					newCfg, err := c.ConfigSync(rpcCtx, &proto.ConfigRequest{
 						ClientName: yamlCfg.ClientName,
 					})
 					if err != nil {
 						log.Fatalln("Error with c.ConfigSync:", err)
 					}
-					newCfg := decryptCfg(privKey, newCfgEncryted)
 					// Set cfg to newCfg
 					origCfg = newCfg
 				}
