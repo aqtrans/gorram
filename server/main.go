@@ -527,7 +527,7 @@ func (s *gorramServer) loadConfig(serverConfFileFullPath, confdFullPath string) 
 		log.Fatalln("Error reading configs from conf.d:", err)
 	}
 
-	err = yaml.Unmarshal(serverCfg, &s.cfg)
+	err = yaml.UnmarshalWithOptions(serverCfg, &s.cfg, yaml.Strict())
 	if err != nil {
 		log.Fatalln("Error unmarshaling server.yml:", err)
 	}
@@ -559,7 +559,7 @@ func (s *gorramServer) loadConfig(serverConfFileFullPath, confdFullPath string) 
 				"client": clientName,
 			}).Fatalln("Error reading client config", err)
 		}
-		err = yaml.Unmarshal(newBytes, &newCfg)
+		err = yaml.UnmarshalWithOptions(newBytes, &newCfg, yaml.Strict())
 		if err != nil {
 			log.WithFields(log.Fields{
 				"config": fullpath,

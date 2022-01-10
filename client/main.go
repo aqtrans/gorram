@@ -42,7 +42,7 @@ func loadConfig(confFile string) clientConfig {
 		log.Fatalln("Error reading confFile:", err)
 	}
 
-	err = yaml.Unmarshal(cfgBytes, &cfg)
+	err = yaml.UnmarshalWithOptions(cfgBytes, &cfg, yaml.Strict())
 	if err != nil {
 		log.Fatalln("Error unmarshaling confFile:", err)
 	}
