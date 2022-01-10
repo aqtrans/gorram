@@ -26,6 +26,8 @@ require (
 require (
 	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d // indirect
 	github.com/fatih/color v1.13.0 // indirect
+	github.com/gdm85/go-libdeluge v0.5.6 // indirect
+	github.com/gdm85/go-rencode v0.1.8 // indirect
 	github.com/go-ole/go-ole v1.2.4 // indirect
 	github.com/konsorten/go-windows-terminal-sequences v1.0.3 // indirect
 	github.com/kr/pretty v0.3.0 // indirect

@@ -55,9 +55,11 @@ message ConfigRequest {
 
 message Config {
     message Deluge {
-        string url = 1;
-        string password = 2;
-        int64 max_torrents = 3;
+        string hostname = 1;
+        uint64 port = 2;
+        string username = 3; 
+        string password = 4;
+        int64 max_torrents = 5;
     }
     message LoadAvg {
         double max_load = 1;

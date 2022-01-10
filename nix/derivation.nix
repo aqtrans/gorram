@@ -31,7 +31,7 @@ buildGoModule rec {
 
   ldflags = [ "-X main.sha1ver=${builtins.readFile revision}" "-X main.buildTime=${builtins.readFile buildDate}" ];
 
-  vendorSha256 = "1719grg7kfw13jmpjdk3fc8bsvhybg0m2hfjdb0gapy7b0jqd3yv";
+  vendorSha256 = "08h7r7lk72b8c6bx227v5s015dlb0zfr63k9g63x3zz2abjlg8i8";
 
   runVend = false;
 
