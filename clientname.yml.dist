@@ -17,21 +17,21 @@ deluge:
 # Check various disk usage. Either % used, or GBs free
 diskspace:
     - partition: "/"
-      maxusage: 90
+      max_usage: 90
     - partition: "/media/games"
-      maxusage: 100
+      max_usage: 100
     - partition: "/media/storage"
-      minfreegb: 20
+      min_free_gb: 20
 
 # Check machine's load average
 loadavg:
-    maxload: 2
+    max_load: 2
 
 # Grab given URL, alert if status is not 200 and/or body matches
-geturl:
+get_url:
     - url: "http://google.com"
     - url: "https://server.example/health"
-      expectedbody: "{\"alive\": true}"
+      expected_body: "{\"alive\": true}"
 
 # Check if given processes are running, optionally owned by specified user
 process:
@@ -42,4 +42,4 @@ process:
 
 # Check memory usage
 memory:
-    maxusage: 20
+    max_usage: 20
