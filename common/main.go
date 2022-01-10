@@ -1,10 +1,14 @@
 package common
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/ed25519"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"sync"
@@ -155,13 +159,29 @@ func ParsePrivateKey(privKey string) ed25519.PrivateKey {
 	return ed25519.PrivateKey(privKeyDec)
 }
 
-func GenerateKeys() (public, private string) {
+// Generate ed25519 keypair
+func GenerateKeys() (string, string) {
 	pub, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		log.Fatalln("error generating ed25519 keys", err)
 	}
+
 	pubEnc := base64.URLEncoding.EncodeToString(pub)
 	privEnc := base64.URLEncoding.EncodeToString(priv)
+
+	/* For generating AES keys if need be:
+
+	const chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	aesBytes := make([]byte, 32)
+	if _, err := rand.Read(aesBytes); err != nil {
+		log.Fatalln("error reading random bytes")
+	}
+	for i, b := range aesBytes {
+		aesBytes[i] = chars[b%byte(len(chars))]
+	}
+
+	aesKey := string(aesBytes)
+	*/
 	/*
 		err = ioutil.WriteFile("homer.pub", []byte(pubEnc), 0644)
 		if err != nil {
@@ -173,4 +193,65 @@ func GenerateKeys() (public, private string) {
 		}
 	*/
 	return pubEnc, privEnc
+}
+
+// Encrypt with AES using shared secret
+func Encrypt(sharedSecretKey string, messageBytes []byte) []byte {
+	log.Println(sharedSecretKey)
+	sharedSecretKeyDec := []byte(sharedSecretKey)
+	/*
+		sharedSecretKeyDec, err := base64.URLEncoding.DecodeString(sharedSecretKey)
+		if err != nil {
+			log.Println("error decoding private key from base64", err)
+			return nil
+		}
+	*/
+	block, err := aes.NewCipher(sharedSecretKeyDec)
+	if err != nil {
+		log.Println("error creating AES cipher", err)
+		return nil
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		log.Println("error creating GCM", err)
+		return nil
+	}
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
+		log.Println("error creating nonce", err)
+		return nil
+	}
+	return gcm.Seal(nonce, nonce, messageBytes, nil)
+}
+
+// Decrypt with AES using shared secret
+func Decrypt(sharedSecretKey string, encryptedBytes []byte) []byte {
+	sharedSecretKeyDec := []byte(sharedSecretKey)
+	/*
+		sharedSecretKeyDec, err := base64.URLEncoding.DecodeString(sharedSecretKey)
+		if err != nil {
+			log.Println("error decoding private key from base64", err)
+			return nil
+		}
+	*/
+	block, err := aes.NewCipher(sharedSecretKeyDec)
+	if err != nil {
+		log.Println("error creating AES cipher", err)
+		return nil
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		log.Println("error creating GCM", err)
+		return nil
+	}
+	nonceSize := gcm.NonceSize()
+	nonce, encryptedBytes := encryptedBytes[:nonceSize], encryptedBytes[nonceSize:]
+
+	decrypted, err := gcm.Open(nil, nonce, encryptedBytes, nil)
+	if err != nil {
+		log.Println("error decrypting", err)
+		return nil
+	}
+
+	return decrypted
 }

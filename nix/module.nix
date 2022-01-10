@@ -11,7 +11,7 @@ let
   pkgDesc = "A simple Gorram monitoring system. Inspired by Telegraf, using the same system monitoring library.";
 
   serverConfFile = pkgs.writeText "server.yml" ''  
-    secret_key: "${cfg.secretKey}"
+    shared_secret: "${cfg.secretKey}"
     alert_method: "${cfg.alertMethod}" 
     pushover:
       app_key: "${cfg.pushoverAppKey}"
@@ -29,7 +29,7 @@ let
 
   clientConfFile = pkgs.writeText "client.yml" ''  
     name: "${cfg.clientName}"
-    secret_key: "${cfg.secretKey}" 
+    shared_secret: "${cfg.secretKey}" 
     server_address: "${cfg.serverAddress}"
     private_key: "${cfg.clientPrivateKey}"
   '';  

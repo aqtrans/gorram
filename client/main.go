@@ -14,7 +14,8 @@ import (
 
 	"git.jba.io/go/gorram/checks"
 	"git.jba.io/go/gorram/common"
-	"git.jba.io/go/gorram/proto"
+	pb "git.jba.io/go/gorram/proto"
+	"google.golang.org/protobuf/proto"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/twitchtv/twirp"
@@ -28,7 +29,7 @@ var (
 
 type clientConfig struct {
 	ClientName    string `yaml:"name,omitempty"`
-	ServerSecret  string `yaml:"secret_key,omitempty"`
+	SharedSecret  string `yaml:"shared_secret,omitempty"`
 	ServerAddress string `yaml:"server_address,omitempty"`
 	PrivateKey    string `yaml:"private_key,omitempty"`
 }
@@ -46,6 +47,15 @@ func loadConfig(confFile string) clientConfig {
 		log.Fatalln("Error unmarshaling confFile:", err)
 	}
 
+	// Check for required AES key
+	if cfg.SharedSecret == "" {
+		log.Fatalln("SharedSecret is required. Must be at least 32 characters.")
+	}
+
+	if len(cfg.SharedSecret) < 32 {
+		log.Fatalln("SharedSecret must be at least 32 characters.")
+	}
+
 	return cfg
 }
 
@@ -60,6 +70,16 @@ func newCtx(header http.Header, timeout time.Duration) (context.Context, context
 	}
 
 	return context.WithTimeout(ctx, timeout)
+}
+
+func decryptCfg(sharedSecret string, encryptedConfig *pb.EncryptedConfig) *pb.Config {
+	decryptedBytes := common.Decrypt(sharedSecret, encryptedConfig.Bytes)
+	origCfg := &pb.Config{}
+	err := proto.Unmarshal(decryptedBytes, origCfg)
+	if err != nil {
+		log.Fatalln("unable to unmarshal config:", err)
+	}
+	return origCfg
 }
 
 func main() {
@@ -98,6 +118,7 @@ func main() {
 		log.Println(`New keys generated. Paste public key into server's $clientname.yml, and private key into client.yml`)
 		log.Println("Private key:", privKey)
 		log.Println("Public key:", pubKey)
+		//log.Println("AES shared secret:", aesKey)
 		os.Exit(0)
 	}
 
@@ -123,7 +144,7 @@ func main() {
 
 	// Set up a connection to the server.
 
-	c := proto.NewReporterProtobufClient(yamlCfg.ServerAddress, &http.Client{})
+	c := pb.NewReporterProtobufClient(yamlCfg.ServerAddress, &http.Client{})
 
 	/*
 		pub, priv, err := ed25519.GenerateKey(nil)
@@ -147,7 +168,7 @@ func main() {
 	/* Sign the shared secret using ed25519 with our private key
 	   The server will use our public key to verify it */
 	privkeyB := common.ParsePrivateKey(yamlCfg.PrivateKey)
-	encryptedSecret := common.SignSignature(privkeyB, yamlCfg.ServerSecret)
+	encryptedSecret := common.SignSignature(privkeyB, yamlCfg.SharedSecret)
 
 	log.Debugln("server secret encrypted with private key:", encryptedSecret)
 
@@ -159,7 +180,7 @@ func main() {
 	rpcCtx, rpcCancel := newCtx(header, rpcTimeout)
 
 	// Hello: Get a LoginToken from the server, if our signature is verified by the server
-	apiToken, err := c.Hello(rpcCtx, &proto.LoginRequest{
+	apiToken, err := c.Hello(rpcCtx, &pb.LoginRequest{
 		LoginToken: encryptedSecret,
 	})
 	if err != nil {
@@ -171,12 +192,14 @@ func main() {
 	header.Set("Gorram-Token", apiToken.ApiToken)
 	rpcCtx, rpcCancel = newCtx(header, rpcTimeout)
 
-	origCfg, err := c.ConfigSync(rpcCtx, &proto.ConfigRequest{
+	encryptedBytes, err := c.ConfigSync(rpcCtx, &pb.ConfigRequest{
 		ClientName: yamlCfg.ClientName,
 	})
 	if err != nil {
 		log.Fatalln("Error with c.ConfigSync:", err)
 	}
+
+	origCfg := decryptCfg(yamlCfg.SharedSecret, encryptedBytes)
 
 	log.Println("Client successfully connected to server.")
 
@@ -194,7 +217,7 @@ func main() {
 				cfgMutex.Lock()
 				rpcCtx, rpcCancel := newCtx(header, rpcTimeout)
 				defer rpcCancel()
-				pingResp, err := c.Ping(rpcCtx, &proto.PingMsg{IsAlive: true, CfgLastUpdated: origCfg.LastUpdated})
+				pingResp, err := c.Ping(rpcCtx, &pb.PingMsg{IsAlive: true, CfgLastUpdated: origCfg.LastUpdated})
 				if err != nil {
 					log.Fatalln("Error with c.Ping:", err)
 				}
@@ -206,12 +229,13 @@ func main() {
 
 					rpcCtx, rpcCancel := newCtx(header, rpcTimeout)
 					defer rpcCancel()
-					newCfg, err := c.ConfigSync(rpcCtx, &proto.ConfigRequest{
+					newCfgEnc, err := c.ConfigSync(rpcCtx, &pb.ConfigRequest{
 						ClientName: yamlCfg.ClientName,
 					})
 					if err != nil {
 						log.Fatalln("Error with c.ConfigSync:", err)
 					}
+					newCfg := decryptCfg(yamlCfg.SharedSecret, newCfgEnc)
 					// Set cfg to newCfg
 					origCfg = newCfg
 				}
