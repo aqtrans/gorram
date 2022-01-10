@@ -17,9 +17,9 @@ import (
 	pb "git.jba.io/go/gorram/proto"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/goccy/go-yaml"
 	log "github.com/sirupsen/logrus"
 	"github.com/twitchtv/twirp"
-	"gopkg.in/yaml.v2"
 )
 
 var (

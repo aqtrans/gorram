@@ -20,11 +20,11 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/goccy/go-yaml"
 	"github.com/gregdel/pushover"
 	log "github.com/sirupsen/logrus"
 	"github.com/twitchtv/twirp"
 	"google.golang.org/protobuf/proto"
-	"gopkg.in/yaml.v2"
 	"pkg.re/essentialkaos/branca.v1"
 
 	_ "net/http/pprof"
@@ -38,7 +38,7 @@ import (
 
 var (
 	errUnknownClient = errors.New("unknown Client Name - Check ClientName in client.yml")
-	errAccessDenied  = errors.New("Access denied. ")
+	errAccessDenied  = errors.New("access denied")
 	sha1ver          string // git commit to be set when built
 	buildTime        string // date+time to be set when built
 )
@@ -161,7 +161,7 @@ func (s *gorramServer) Authorize(base http.Handler) http.Handler {
 				"ip":     r.RemoteAddr,
 			}).Infoln("Access denied due to invalid token.")
 
-			twirp.WriteError(w, errUnknownClient)
+			twirp.WriteError(w, errAccessDenied)
 
 			return
 		}
