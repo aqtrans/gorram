@@ -140,6 +140,13 @@ func (s *gorramServer) Authorize(base http.Handler) http.Handler {
 			return
 		}
 
+		// If client is re-connecting, let them through to grab another token
+		if givenToken == "" && s.connectedClients.exists(clientName) {
+			log.Println(clientName, "is reconnecting! Allowing through Authorize()...")
+			base.ServeHTTP(w, r)
+			return
+		}
+
 		clientCfg := s.connectedClients.get(clientName)
 		if clientCfg == nil {
 			log.Println(clientName, "has not connected before?")
@@ -147,7 +154,7 @@ func (s *gorramServer) Authorize(base http.Handler) http.Handler {
 			return
 		}
 
-		clientToken := s.connectedClients.get(clientName).Token.ApiToken
+		clientToken := clientCfg.Token.ApiToken
 
 		verified := (clientToken == givenToken)
 
