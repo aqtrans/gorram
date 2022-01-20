@@ -54,6 +54,21 @@ func TestReviveDeadClient(t *testing.T) {
 
 }
 
+func TestAlerts(t *testing.T) {
+	iss := gorram.Issue{
+		Host:    "omg",
+		Title:   "title",
+		Message: "omg",
+	}
+	s := &gorramServer{}
+	s.alertsMap.m = make(map[string]*gorram.Alert)
+
+	s.cfg.AlertMethod = "log"
+	for i := 1; i < 100; i++ {
+		s.alert("omg", &iss)
+	}
+}
+
 /*
 // TestConfig tests that all supported config formats are equal
 func TestConfig(t *testing.T) {
