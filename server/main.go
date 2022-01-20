@@ -54,7 +54,7 @@ type serverConfig struct {
 	HeartbeatSeconds int64  `yaml:"heartbeat_seconds,omitempty"`
 	Debug            bool   `yaml:"debug,omitempty"`
 	Domain           string `yaml:"domain,omitempty"`
-	BrancaKey        string `yaml:"branca_key,omitempty"`
+	AlertManagerURL  string `yaml:"alertmanager_url,omitempty"`
 }
 
 type gorramServer struct {
@@ -429,6 +429,12 @@ func (s *gorramServer) alert(client string, issue *pb.Issue) {
 	// Tie the issue with the given client name here
 	issue.Host = client
 
+	// If using alertmanager, submit and exit
+	if s.cfg.AlertMethod == "alertmanager" {
+		s.addToAlertManager(issue)
+		return
+	}
+
 	// Expire alerts stale for longer than 1 hour:
 	s.alertsMap.expire(issue)
 
@@ -457,32 +463,6 @@ func (s *gorramServer) alert(client string, issue *pb.Issue) {
 			}).Debugln("Skipping alert...", issue.Message)
 			return
 		}
-
-		/*
-			if occurrences < 5 {
-				log.WithFields(log.Fields{
-					"client":      client,
-					"check":       issue.Title,
-					"occurrences": occurrences,
-				}).Debugln("Less than 5 occurrences. Continuing alerts.", issue.Message)
-			} else if (occurrences % 10) == 0 {
-				log.WithFields(log.Fields{
-					"client":      client,
-					"check":       issue.Title,
-					"occurrences": occurrences,
-				}).Debugln("Sending alert as it meets occurrences count.", issue.Message)
-				s.alertsMap.Lock()
-				issue.Message = issue.Message + " | Occurrences: " + strconv.FormatInt(occurrences, 10) + "| First occurred:" + time.Unix(s.alertsMap.m[generateMapKey(issue)].TimeSubmitted, 0).String()
-				s.alertsMap.Unlock()
-			} else {
-				log.WithFields(log.Fields{
-					"client":      client,
-					"check":       issue.Title,
-					"occurrences": occurrences,
-				}).Debugln("Skipping alert...", issue.Message)
-				return
-			}
-		*/
 
 	} else {
 		log.WithFields(log.Fields{
