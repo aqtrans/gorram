@@ -21,7 +21,6 @@ let
     heartbeat_seconds: ${cfg.heartbeatSeconds}
     debug: ${boolToString cfg.debug}
     domain: ${cfg.httpDomain}
-    branca_key: "${cfg.brancaKey}"
   '';
 
   #clientCfg = config.services.gorram.client;
@@ -76,18 +75,12 @@ in {
           type = types.str;
           default = "";
           description = "Secret key shared between clients and servers";
-        };
-
-        brancaKey = mkOption {
-          type = types.str;
-          default = "";
-          description = "A 32 character string used to generate session tokens.";
-        };        
+        };     
 
         alertMethod = mkOption {
           type = types.str;
           default = "log";
-          description = "How to alert. Currently either 'pushover' or 'log'";
+          description = "How to alert. Currently either 'alertmanager', 'pushover' or 'log'";
         };      
 
         pushoverAppKey = mkOption {
