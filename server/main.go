@@ -25,7 +25,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/twitchtv/twirp"
 	"google.golang.org/protobuf/proto"
-	"pkg.re/essentialkaos/branca.v1"
 
 	_ "net/http/pprof"
 
@@ -66,12 +65,6 @@ type gorramServer struct {
 	alertsMap        alerts
 	pb.Reporter
 	pb.Querier
-	brc *branca.Branca
-	/*
-		pingTimers    map[string]*time.Timer
-		clientList    map[string]chan bool
-		clientTickers map[string]*time.Ticker
-	*/
 }
 
 type clients struct {
@@ -96,6 +89,7 @@ const (
 	nameCtxKey    key = 1
 	addressCtxKey key = 2
 	tokenCtxKey   key = 3
+	secretCtxKey  key = 4
 )
 
 func WithClientName(base http.Handler) http.Handler {
@@ -104,11 +98,13 @@ func WithClientName(base http.Handler) http.Handler {
 
 		gc := r.Header.Get("Gorram-Client-ID")
 		gt := r.Header.Get("Gorram-Token")
+		gs := r.Header.Get("Gorram-Secret")
 		gip := r.RemoteAddr
 
 		ctx = context.WithValue(ctx, nameCtxKey, gc)
 		ctx = context.WithValue(ctx, addressCtxKey, gip)
 		ctx = context.WithValue(ctx, tokenCtxKey, gt)
+		ctx = context.WithValue(ctx, secretCtxKey, gs)
 		r = r.WithContext(ctx)
 
 		base.ServeHTTP(w, r)
@@ -119,61 +115,89 @@ func WithClientName(base http.Handler) http.Handler {
 func (s *gorramServer) Authorize(base http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-		givenToken := getClientToken(r.Context())
+		givenSecret := getClientSecret(r.Context())
 		clientName := getClientName(r.Context())
 
 		if clientName == "" {
 			log.WithFields(log.Fields{
-				"token": givenToken,
-				"ip":    r.RemoteAddr,
+				"secret": givenSecret,
+				"ip":     r.RemoteAddr,
 			}).Debugln("blank client name given")
 
 			twirp.WriteError(w, errUnknownClient)
-
 			return
 		}
 
-		// If they have no token, but trying to say Hello(), let them through
-		if givenToken == "" && r.RequestURI == "/twirp/pb.Reporter/Hello" {
-			log.Println(clientName, "has no token, but shared secret matches. Allowing through Authorize()...")
-			base.ServeHTTP(w, r)
-			return
-		}
-
-		// If client is re-connecting, let them through to grab another token
-		if givenToken == "" && s.connectedClients.exists(clientName) {
-			log.Println(clientName, "is reconnecting! Allowing through Authorize()...")
-			base.ServeHTTP(w, r)
-			return
-		}
-
-		clientCfg := s.connectedClients.get(clientName)
-		if clientCfg == nil {
-			log.Println(clientName, "has not connected before?")
-			base.ServeHTTP(w, r)
-			return
-		}
-
-		clientToken := clientCfg.Token.ApiToken
-
-		verified := (clientToken == givenToken)
-
-		log.Debugln("client Token:", clientToken)
-		log.Debugln("givenToken:", givenToken)
-
-		if !verified {
+		if givenSecret == "" {
 			log.WithFields(log.Fields{
-				"client": clientName,
-				"token":  givenToken,
-				"ip":     r.RemoteAddr,
-			}).Infoln("Access denied due to invalid token.")
+				"token": givenSecret,
+				"ip":    r.RemoteAddr,
+			}).Debugln("blank shared secret given")
 
-			twirp.WriteError(w, errAccessDenied)
-
+			twirp.WriteError(w, errors.New("invalid shared secret"))
 			return
 		}
 
-		base.ServeHTTP(w, r)
+		// Allow if their signed secret can be verified
+		if s.verifySharedSecret(givenSecret, clientName) {
+			log.Println("secret verified!")
+			base.ServeHTTP(w, r)
+			return
+		}
+
+		log.WithFields(log.Fields{
+			"client": clientName,
+			"secret": givenSecret,
+			"ip":     r.RemoteAddr,
+		}).Infoln("Access denied due to invalid secret.")
+
+		twirp.WriteError(w, errAccessDenied)
+
+		/*
+			// If they have no token, but trying to say Hello(), let them through
+			if givenToken == "" && r.RequestURI == "/twirp/pb.Reporter/Hello" {
+				log.Println(clientName, "has no token, but shared secret matches. Allowing through Authorize()...")
+				base.ServeHTTP(w, r)
+				return
+			}
+
+			// If client is re-connecting, let them through to grab another token
+			if givenToken == "" && s.connectedClients.exists(clientName) {
+				log.Println(clientName, "is reconnecting! Allowing through Authorize()...")
+				base.ServeHTTP(w, r)
+				return
+			}
+
+			clientCfg := s.connectedClients.get(clientName)
+			if clientCfg == nil {
+				log.Println(clientName, "has not connected before?")
+				base.ServeHTTP(w, r)
+				return
+			}
+
+			clientToken := clientCfg.Token.ApiToken
+
+			verified := (clientToken == givenToken)
+
+			log.Debugln("client Token:", clientToken)
+			log.Debugln("givenToken:", givenToken)
+
+
+			if !verified {
+				log.WithFields(log.Fields{
+					"client": clientName,
+					"token":  givenToken,
+					"ip":     r.RemoteAddr,
+				}).Infoln("Access denied due to invalid token.")
+
+				twirp.WriteError(w, errAccessDenied)
+
+				return
+			}
+
+			base.ServeHTTP(w, r)
+
+		*/
 	})
 }
 
@@ -197,6 +221,14 @@ func getClientToken(ctx context.Context) string {
 	clientToken := ctx.Value(tokenCtxKey).(string)
 	if clientToken != "" {
 		return clientToken
+	}
+	return ""
+}
+
+func getClientSecret(ctx context.Context) string {
+	clientSecret := ctx.Value(secretCtxKey).(string)
+	if clientSecret != "" {
+		return clientSecret
 	}
 	return ""
 }
@@ -336,10 +368,6 @@ func (s *gorramServer) ConfigSync(ctx context.Context, req *pb.ConfigRequest) (*
 
 	clientName := getClientName(ctx)
 
-	log.WithFields(log.Fields{
-		"client": clientName,
-	}).Debugln("Client has synced config.")
-
 	// Check if the client was dead, and reset it's ticker
 	//s.reviveDeadClient(clientName)
 
@@ -361,11 +389,14 @@ func (s *gorramServer) ConfigSync(ctx context.Context, req *pb.ConfigRequest) (*
 		return nil, err
 	}
 	encryptedB := common.Encrypt(s.cfg.SharedSecret, cfgBytes)
-	log.Println("encrypted cfg!!")
 
 	eb := &pb.EncryptedConfig{
 		Bytes: encryptedB,
 	}
+
+	log.WithFields(log.Fields{
+		"client": clientName,
+	}).Debugln("Client has synced config.")
 
 	return eb, nil
 }
@@ -630,46 +661,48 @@ func (s *gorramServer) Debug(ctx context.Context, dr *pb.DebugRequest) (*pb.Debu
 	}, nil
 }
 
-func (s *gorramServer) Hello(ctx context.Context, req *pb.LoginRequest) (*pb.Token, error) {
+func (s *gorramServer) Hello(ctx context.Context, req *pb.LoginRequest) (*pb.LoginResponse, error) {
 
 	clientName := getClientName(ctx)
 	clientAddress := getClientAddress(ctx)
 
-	// LoginToken should be the shared secret signed with the client's private key
-	givenSecret := req.LoginToken
+	/*
+		// LoginToken should be the shared secret signed with the client's private key
+		givenSecret := req.LoginToken
 
-	// On Hello, verify client's key and generate a session token
-	// Attempt to load the client's public key from config
-	clientPubKey := s.loadClientPubKey(clientName)
-	if clientPubKey == "" {
+		// On Hello, verify client's key and generate a session token
+		// Attempt to load the client's public key from config
+		clientPubKey := s.loadClientPubKey(clientName)
+		if clientPubKey == "" {
+			log.WithFields(log.Fields{
+				"client": clientName,
+				"secret": givenSecret,
+				"ip":     clientAddress,
+			}).Debugln("client has no public key configured")
+			return nil, errUnknownClient
+		}
+
+		clientPubKeyB := common.ParsePublicKey(clientPubKey)
+
+		// Check that the secret key was properly signed by the client
+		verified := common.VerifySignature(clientPubKeyB, s.cfg.SharedSecret, givenSecret)
+
+		if !verified {
+			log.WithFields(log.Fields{
+				"client": clientName,
+				"secret": givenSecret,
+				"ip":     clientAddress,
+			}).Infoln("Access denied due to invalid secret.")
+
+			return nil, errors.New("access denied due to invalid secret")
+		}
+
 		log.WithFields(log.Fields{
 			"client": clientName,
 			"secret": givenSecret,
 			"ip":     clientAddress,
-		}).Debugln("client has no public key configured")
-		return nil, errUnknownClient
-	}
-
-	clientPubKeyB := common.ParsePublicKey(clientPubKey)
-
-	// Check that the secret key was properly signed by the client
-	verified := common.VerifySignature(clientPubKeyB, s.cfg.SharedSecret, givenSecret)
-
-	if !verified {
-		log.WithFields(log.Fields{
-			"client": clientName,
-			"secret": givenSecret,
-			"ip":     clientAddress,
-		}).Infoln("Access denied due to invalid secret.")
-
-		return nil, errors.New("access denied due to invalid secret")
-	}
-
-	log.WithFields(log.Fields{
-		"client": clientName,
-		"secret": givenSecret,
-		"ip":     clientAddress,
-	}).Debugln("public key found and signature verified")
+		}).Debugln("public key found and signature verified")
+	*/
 
 	// Check if the client has connected before
 	s.reviveDeadClient(clientName)
@@ -681,15 +714,16 @@ func (s *gorramServer) Hello(ctx context.Context, req *pb.LoginRequest) (*pb.Tok
 		LastPingTime: time.Now().Unix(),
 	}
 
-	t := &pb.Token{
-		ApiToken: s.encodeBrancaToken(clientName),
-	}
+	/*
+		t := &pb.Token{
+			ApiToken: s.encodeBrancaToken(clientName),
+		}
 
-	c.Token = t
-
+		c.Token = t
+	*/
 	s.connectedClients.add(c)
 
-	return t, nil
+	return &pb.LoginResponse{LoggedIn: true}, nil
 }
 
 /*
@@ -1014,22 +1048,39 @@ func (s *gorramServer) loadClientPubKey(clientName string) string {
 	return cfg.PublicKey
 }
 
-func (s *gorramServer) encodeBrancaToken(clientName string) string {
-	brcToken, err := s.brc.EncodeToString([]byte(clientName))
-	if err != nil {
-		log.Println("error marshaling json", err)
-		return ""
-	}
-	return brcToken
-}
+func (s *gorramServer) verifySharedSecret(givenSecret, clientName string) bool {
 
-func (s *gorramServer) decodeBrancaToken(brancaToken string) string {
-	brcToken, err := s.brc.DecodeString(brancaToken)
-	if err != nil {
-		log.Println("error decoding token:", err)
-		return ""
+	// Verify client's key and generate a session token
+	// Attempt to load the client's public key from config
+	clientPubKey := s.loadClientPubKey(clientName)
+	if clientPubKey == "" {
+		log.WithFields(log.Fields{
+			"client": clientName,
+			"secret": givenSecret,
+		}).Debugln("client has no public key configured")
+		return false
 	}
-	return string(brcToken.Payload())
+
+	clientPubKeyB := common.ParsePublicKey(clientPubKey)
+
+	// Check that the secret key was properly signed by the client
+	verified := common.VerifySignature(clientPubKeyB, s.cfg.SharedSecret, givenSecret)
+
+	if !verified {
+		log.WithFields(log.Fields{
+			"client": clientName,
+			"secret": givenSecret,
+		}).Infoln("Access denied due to invalid secret.")
+
+		return false
+	}
+
+	log.WithFields(log.Fields{
+		"client": clientName,
+		"secret": givenSecret,
+	}).Debugln("public key found and signature verified")
+
+	return verified
 }
 
 func main() {
@@ -1084,20 +1135,12 @@ func main() {
 		cfg:              serverConfig{},
 		clientCfgs:       *new(sync.Map),
 		connectedClients: *new(clients),
-		brc:              new(branca.Branca),
 	}
 
 	gs.loadConfig(serverCfg, clientConfd)
 
 	if gs.cfg.Debug {
 		log.SetLevel(log.DebugLevel)
-	}
-
-	// Setup Branca key to be used for Session keys
-	var err error
-	gs.brc, err = branca.NewBranca([]byte(gs.cfg.BrancaKey))
-	if err != nil {
-		log.Fatalln("error bringing up branca", err)
 	}
 
 	/*

@@ -197,7 +197,6 @@ func GenerateKeys() (string, string) {
 
 // Encrypt with AES using shared secret
 func Encrypt(sharedSecretKey string, messageBytes []byte) []byte {
-	log.Println(sharedSecretKey)
 	sharedSecretKeyDec := []byte(sharedSecretKey)
 	/*
 		sharedSecretKeyDec, err := base64.URLEncoding.DecodeString(sharedSecretKey)

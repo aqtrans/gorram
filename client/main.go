@@ -173,23 +173,28 @@ func main() {
 	log.Debugln("server secret encrypted with private key:", encryptedSecret)
 
 	header := make(http.Header)
-	//header.Set("Gorram-Secret", encryptedSecret)
+	// Add client name and encrypted secret to headers
+	header.Set("Gorram-Secret", encryptedSecret)
 	header.Set("Gorram-Client-ID", yamlCfg.ClientName)
 
 	// Create RPC context, add client name metadata
 	rpcCtx, rpcCancel := newCtx(header, rpcTimeout)
 
 	// Hello: Get a LoginToken from the server, if our signature is verified by the server
-	apiToken, err := c.Hello(rpcCtx, &pb.LoginRequest{
-		LoginToken: encryptedSecret,
+	isLoggedIn, err := c.Hello(rpcCtx, &pb.LoginRequest{
+		LoginTime: time.Now().Unix(),
 	})
 	if err != nil {
 		log.Fatalln("Error with c.Hello:", err)
 	}
 	rpcCancel()
 
+	if !isLoggedIn.LoggedIn {
+		log.Fatalln("unable to login to the server!")
+	}
+
 	// Add token to the headers and context
-	header.Set("Gorram-Token", apiToken.ApiToken)
+	//header.Set("Gorram-Token", apiToken.ApiToken)
 	rpcCtx, rpcCancel = newCtx(header, rpcTimeout)
 
 	encryptedBytes, err := c.ConfigSync(rpcCtx, &pb.ConfigRequest{
