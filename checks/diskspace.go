@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	pb "git.jba.io/go/gorram/proto"
-	"github.com/shirou/gopsutil/disk"
+	"github.com/shirou/gopsutil/v3/disk"
 )
 
 type diskSpace struct {
