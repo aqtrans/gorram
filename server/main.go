@@ -234,9 +234,10 @@ func getClientSecret(ctx context.Context) string {
 }
 
 // Ping handles the dead-client detection functionality
-//   It works by spawning a Timer and Ticker for each client
-//   - The timer is reset on every successful ping
-//   - The ticker triggers the dead-client alerts, once the above timer has expired
+//
+//	It works by spawning a Timer and Ticker for each client
+//	- The timer is reset on every successful ping
+//	- The ticker triggers the dead-client alerts, once the above timer has expired
 func (s *gorramServer) Ping(ctx context.Context, msg *pb.PingMsg) (*pb.PingResponse, error) {
 	/*
 		// Variables to eventually change into config values, fetched from the client's configured interval
@@ -305,8 +306,9 @@ func (s *gorramServer) Ping(ctx context.Context, msg *pb.PingMsg) (*pb.PingRespo
 }
 
 // reviveDeadClient checks if the client ever connected and
-//  never cleanly disconnected. If so, an alert is sent,
-//  and the LastPingTime is updated.
+//
+//	never cleanly disconnected. If so, an alert is sent,
+//	and the LastPingTime is updated.
 func (s *gorramServer) reviveDeadClient(clientName string) {
 	if s.connectedClients.exists(clientName) {
 		s.alert(clientName, &pb.Issue{
@@ -402,11 +404,11 @@ func (s *gorramServer) ConfigSync(ctx context.Context, req *pb.ConfigRequest) (*
 }
 
 // sendAlert() decides whether to send alerts
-//// Uses a very basic cooloff method:
-//// - always under 5
-//// - less than 50 and divisible by 10
-//// - greater than 50 and divisible by 50
-//// - greater than 500 and divisible by 100
+// // Uses a very basic cooloff method:
+// // - always under 5
+// // - less than 50 and divisible by 10
+// // - greater than 50 and divisible by 50
+// // - greater than 500 and divisible by 100
 func sendAlert(i int64) bool {
 	if i < 5 {
 		return true
@@ -765,8 +767,9 @@ func (a *alerts) add(alert *pb.Alert) {
 }
 
 // count increases the number of occurrences and returns it
-//  it should only be called in alert(), ensuring the occurrences always increase
-//  TimeLast is updated as well, to track stale alerts
+//
+//	it should only be called in alert(), ensuring the occurrences always increase
+//	TimeLast is updated as well, to track stale alerts
 func (a *alerts) count(issue *pb.Issue) int64 {
 	a.Lock()
 	v := a.m[generateMapKey(issue)]
@@ -1221,7 +1224,7 @@ func main() {
 			select {
 			case event := <-watcher.Events:
 				if event.Op&fsnotify.Write == fsnotify.Write {
-					gs.loadConfig(*serverConfFile, clientConfd)
+					gs.loadConfig(serverCfg, clientConfd)
 				}
 			case err := <-watcher.Errors:
 				if err != nil {
