@@ -24,11 +24,11 @@ tasks:
       go build -ldflags "-X main.sha1ver=$(git rev-parse HEAD) -X main.buildTime=$(date +'%Y-%m-%d_%T')" -o gorram-client ./client
       go build -ldflags "-X main.sha1ver=$(git rev-parse HEAD) -X main.buildTime=$(date +'%Y-%m-%d_%T')" -o gorram-server ./server
       go build -o gorram-cli ./cli
-#  - deploy: |
-#      cd gorram
-#      scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no gorram-server deploy@morty.squanch.space:/tmp/gorram-server
-#      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no deploy@morty.squanch.space "doas /bin/mv /tmp/esg /usr/local/bin/gorram-server"
-#      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no deploy@morty.squanch.space "doas /usr/sbin/rcctl restart gorram-server"
-#      scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no gorram-client deploy@morty.squanch.space:/tmp/gorram-client
-#      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no deploy@morty.squanch.space "doas /bin/mv /tmp/gorram-client /usr/local/bin/gorram-client"
-#      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no deploy@morty.squanch.space "doas /usr/sbin/rcctl restart gorram-client"
+  - deploy: |
+      cd gorram
+      scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no gorram-server deploy@morty.squanch.space:/tmp/gorram-server
+      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no deploy@morty.squanch.space "doas /bin/mv /tmp/esg /usr/local/bin/gorram-server"
+      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no deploy@morty.squanch.space "doas /usr/sbin/rcctl restart gorram-server"
+      scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no gorram-client deploy@morty.squanch.space:/tmp/gorram-client
+      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no deploy@morty.squanch.space "doas /bin/mv /tmp/gorram-client /usr/local/bin/gorram-client"
+      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no deploy@morty.squanch.space "doas /usr/sbin/rcctl restart gorram-client"
