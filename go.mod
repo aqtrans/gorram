@@ -21,8 +21,8 @@ require (
 	github.com/shirou/gopsutil v2.20.4+incompatible
 	github.com/sirupsen/logrus v1.6.0
 	github.com/tevjef/go-runtime-metrics v0.0.0-20170326170900-527a54029307
-	github.com/twitchtv/twirp v8.1.2+incompatible
-	google.golang.org/protobuf v1.28.1
+	github.com/twitchtv/twirp v8.1.3+incompatible
+	google.golang.org/protobuf v1.31.0
 )
 
 require (
