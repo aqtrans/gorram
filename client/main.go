@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"io/ioutil"
 	"net/http"
@@ -20,6 +21,8 @@ import (
 	"github.com/goccy/go-yaml"
 	log "github.com/sirupsen/logrus"
 	"github.com/twitchtv/twirp"
+
+	_ "net/http/pprof"
 )
 
 var (
@@ -130,6 +133,14 @@ func main() {
 	done := make(chan bool, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
+	go func() {
+		sig := <-sigs
+		log.Warnln("Signal caught", sig)
+		done <- true
+		log.Println("Client exiting...")
+		os.Exit(1)
+	}()
+
 	yamlCfg := loadConfig(*confFile)
 
 	/* Trying to send client-name as early as possible...
@@ -180,18 +191,54 @@ func main() {
 	// Create RPC context, add client name metadata
 	rpcCtx, rpcCancel := newCtx(header, rpcTimeout)
 
-	// Hello: Get a LoginToken from the server, if our signature is verified by the server
-	isLoggedIn, err := c.Hello(rpcCtx, &pb.LoginRequest{
-		LoginTime: time.Now().Unix(),
-	})
-	if err != nil {
-		log.Fatalln("Error with c.Hello:", err)
-	}
-	rpcCancel()
+	retryConnection := true
 
-	if !isLoggedIn.LoggedIn {
-		log.Fatalln("unable to login to the server!")
+	for retryConnection {
+		// Hello: Get a LoginToken from the server, if our signature is verified by the server
+		isLoggedIn, err := c.Hello(rpcCtx, &pb.LoginRequest{
+			LoginTime: time.Now().Unix(),
+		})
+
+		if err != nil {
+			if twerr, ok := err.(twirp.Error); ok {
+				if twerr.Code() == twirp.Internal {
+					if transportErr := errors.Unwrap(twerr); transportErr != nil {
+						// transportErr could be something like an HTTP connection error
+						//log.Println(transportErr.Error())
+						/*
+							var netError *net.OpError
+							if errors.As(err, &netError) {
+								if netError.Op == "dial" {
+									log.Println("Unknown host")
+								} else if netError.Op == "read" {
+									log.Println("Connection refused")
+								}
+							}
+						*/
+
+						var sysErr syscall.Errno
+						if errors.As(err, &sysErr) {
+							if sysErr == syscall.ECONNREFUSED {
+								log.Println("Connection refused")
+								retryConnection = true
+							}
+						}
+
+					}
+				}
+			}
+			log.Println("Error with c.Hello:", err)
+			time.Sleep(10 * time.Second)
+		}
+
+		if isLoggedIn != nil && isLoggedIn.LoggedIn {
+			log.Println("logged in to the server!")
+			retryConnection = false
+		}
+
 	}
+
+	rpcCancel()
 
 	// Add token to the headers and context
 	//header.Set("Gorram-Token", apiToken.ApiToken)
@@ -219,56 +266,68 @@ func main() {
 			select {
 			case <-ticker.C:
 
-				cfgMutex.Lock()
-				rpcCtx, rpcCancel := newCtx(header, rpcTimeout)
-				defer rpcCancel()
-				pingResp, err := c.Ping(rpcCtx, &pb.PingMsg{IsAlive: true, CfgLastUpdated: origCfg.LastUpdated})
-				if err != nil {
-					log.Fatalln("Error with c.Ping:", err)
-				}
-				// This variable should be true if the config is out of sync
-				if pingResp.CfgOutOfSync {
-					// Fetch and set the new config
-					log.Debugln("Configuration out of sync. Fetching new config from server.")
-					var err error
+				cfgChan := make(chan *pb.Config)
 
+				go func() {
+					cfgMutex.Lock()
 					rpcCtx, rpcCancel := newCtx(header, rpcTimeout)
 					defer rpcCancel()
-					newCfgEnc, err := c.ConfigSync(rpcCtx, &pb.ConfigRequest{
-						ClientName: yamlCfg.ClientName,
-					})
+					pingResp, err := c.Ping(rpcCtx, &pb.PingMsg{IsAlive: true, CfgLastUpdated: origCfg.LastUpdated})
 					if err != nil {
-						log.Fatalln("Error with c.ConfigSync:", err)
+						log.Fatalln("Error with c.Ping:", err)
 					}
-					newCfg := decryptCfg(yamlCfg.SharedSecret, newCfgEnc)
-					// Set cfg to newCfg
-					origCfg = newCfg
-				}
-				// Send config, either the new or old, through the channel
-				//cfgChan <- origCfg
-				cfgMutex.Unlock()
-				//close(cfgChan)
-
-				//cfg2 := <-cfgChan
-
-				// Do checks
-				i := checks.DoChecks(origCfg)
-				// If there are any checks, open a client-side stream and record them
-				if len(i) > 0 {
-
-					for _, issue := range i {
+					// This variable should be true if the config is out of sync
+					if pingResp.CfgOutOfSync {
+						// Fetch and set the new config
+						log.Debugln("Configuration out of sync. Fetching new config from server.")
+						var err error
 
 						rpcCtx, rpcCancel := newCtx(header, rpcTimeout)
 						defer rpcCancel()
-						problem, err := c.RecordIssue(rpcCtx, issue)
+						newCfgEnc, err := c.ConfigSync(rpcCtx, &pb.ConfigRequest{
+							ClientName: yamlCfg.ClientName,
+						})
 						if err != nil {
-							log.Fatalln("Error recording issue:", i, err)
+							log.Fatalln("Error with c.ConfigSync:", err)
 						}
-						if !problem.SuccessfullySubmitted {
-							log.Fatalln("Error submitting issue; Check server logs.", problem.SuccessfullySubmitted)
+						newCfg := decryptCfg(yamlCfg.SharedSecret, newCfgEnc)
+						// Set cfg to newCfg
+						origCfg = newCfg
+					}
+					// Send config, either the new or old, through the channel
+					//cfgChan <- origCfg
+					cfgMutex.Unlock()
+					//close(cfgChan)
+
+					cfgChan <- origCfg
+
+					//cfg2 := <-cfgChan
+				}()
+
+				go func() {
+
+					origCfg = <-cfgChan
+
+					// Do checks
+					i := checks.DoChecks(origCfg)
+					// If there are any checks, open a client-side stream and record them
+					if len(i) > 0 {
+
+						for _, issue := range i {
+
+							rpcCtx, rpcCancel := newCtx(header, rpcTimeout)
+							defer rpcCancel()
+							problem, err := c.RecordIssue(rpcCtx, issue)
+							if err != nil {
+								log.Fatalln("Error recording issue:", i, err)
+							}
+							if !problem.SuccessfullySubmitted {
+								log.Fatalln("Error submitting issue; Check server logs.", problem.SuccessfullySubmitted)
+							}
 						}
 					}
-				}
+				}()
+
 				log.Debugln("Number of Goroutines:", runtime.NumGoroutine())
 			case <-done:
 				ticker.Stop()
@@ -277,10 +336,11 @@ func main() {
 		}
 	}()
 
+	// Expose expvars and pprof on http://127.0.0.1:50002
 	go func() {
-		sig := <-sigs
-		log.Warnln("Signal caught", sig)
-		done <- true
+		if err := http.ListenAndServe("127.0.0.1:50002", nil); err != nil {
+			log.Fatalf("Failed to serve: %v", err)
+		}
 	}()
 
 	<-done
