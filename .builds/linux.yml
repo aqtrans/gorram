@@ -53,8 +53,8 @@ tasks:
       sudo /bin/bash ./build-pkg.sh $(git rev-parse HEAD)
       cp ./gorram-$(git rev-parse HEAD).deb ./gorram.deb
   - deploy: |
-      scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ./gorram/gorram-$(git rev-parse HEAD).deb $remote:gorram.deb
-      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $remote "sudo dpkg -i gorram.deb"
+      scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -P 42424 ./gorram/gorram.deb $remote:gorram.deb
+      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -P 42424 $remote "sudo dpkg -i gorram.deb"
   - mirror-to-github: |
       cd ${project}
       ssh-keyscan -H github.com > $HOME/.ssh/known_hosts
