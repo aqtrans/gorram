@@ -6,29 +6,34 @@ secrets:
   - 1efbd7f2-d0b5-4cfc-8a0c-f1c12da95d4e
 sources:
   - ssh://git@git.squanch.space/~aqtrans/gorram
+environment:
+  project: gorram
+  remote: deploy@starbuck.squanch.space
 tasks:
   - setup: |
-      cd gorram
+      cd ${project}
+      export GOBIN=$PWD/bin
+      export PATH=$GOBIN:$PATH
       go get -d
       go install github.com/twitchtv/twirp/protoc-gen-twirp
       go install google.golang.org/protobuf/cmd/protoc-gen-go
       go generate
   - test: |
-      cd gorram
+      cd ${project}
       go test
       go test -race
       go test -cover
       go test -bench=.
   - build: |
-      cd gorram
+      cd ${project}
       go build -ldflags "-X main.sha1ver=$(git rev-parse HEAD) -X main.buildTime=$(date +'%Y-%m-%d_%T')" -o gorram-client ./client
       go build -ldflags "-X main.sha1ver=$(git rev-parse HEAD) -X main.buildTime=$(date +'%Y-%m-%d_%T')" -o gorram-server ./server
       go build -o gorram-cli ./cli
   - deploy: |
-      cd gorram
-      scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no gorram-server deploy@morty.squanch.space:/tmp/gorram-server
-      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no deploy@morty.squanch.space "doas /bin/mv /tmp/esg /usr/local/bin/gorram-server"
-      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no deploy@morty.squanch.space "doas /usr/sbin/rcctl restart gorram-server"
-      scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no gorram-client deploy@morty.squanch.space:/tmp/gorram-client
-      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no deploy@morty.squanch.space "doas /bin/mv /tmp/gorram-client /usr/local/bin/gorram-client"
-      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no deploy@morty.squanch.space "doas /usr/sbin/rcctl restart gorram-client"
+      cd ${project}
+      scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no gorram-server $remote:/tmp/gorram-server
+      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $remote "doas /bin/mv /tmp/gorram-server /usr/local/bin/gorram-server"
+      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $remote "doas /usr/sbin/rcctl restart gorram_server"
+      scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no gorram-client $remote:/tmp/gorram-client
+      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $remote "doas /bin/mv /tmp/gorram-client /usr/local/bin/gorram-client"
+      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $remote "doas /usr/sbin/rcctl restart gorram_client"

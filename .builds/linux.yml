@@ -8,17 +8,20 @@ secrets:
   - 1efbd7f2-d0b5-4cfc-8a0c-f1c12da95d4e
 sources:
   - ssh://git@git.squanch.space/~aqtrans/gorram
+environment:
+  project: gorram
+  remote: deploy@rick.jba.io
 artifacts:
   - gorram/gorram.deb
 tasks:
   - setupgo: |
-      wget https://go.dev/dl/go1.21.0.linux-amd64.tar.gz
+      wget https://go.dev/dl/go1.21.3.linux-amd64.tar.gz
       sudo rm -rf /usr/local/go
-      sudo tar -C /usr/local -xzf go1.21.0.linux-amd64.tar.gz
+      sudo tar -C /usr/local -xzf go1.21.3.linux-amd64.tar.gz
       export PATH=$PATH:/usr/local/go/bin
   - setup: |
       export PATH=$PATH:/usr/local/go/bin
-      cd gorram
+      cd ${project}
       export GOBIN=$PWD/bin
       export PATH=$GOBIN:$PATH
       go get -d
@@ -27,7 +30,7 @@ tasks:
       go generate
   - test: |
       export PATH=$PATH:/usr/local/go/bin
-      cd gorram
+      cd ${project}
       export GOBIN=$PWD/bin
       export PATH=$GOBIN:$PATH
       go test
@@ -36,7 +39,7 @@ tasks:
       go test -bench=.
   - build: |
       export PATH=$PATH:/usr/local/go/bin
-      cd gorram
+      cd ${project}
       export GOBIN=$PWD/bin
       export PATH=$GOBIN:$PATH
       go build -ldflags "-X main.sha1ver=$(git rev-parse HEAD) -X main.buildTime=$(date +'%Y-%m-%d_%T')" -o gorram-client ./client
@@ -44,11 +47,17 @@ tasks:
       go build -o gorram-cli ./cli
   - buikdpkg: |
       export PATH=$PATH:/usr/local/go/bin
-      cd gorram
+      cd ${project}
       export GOBIN=$PWD/bin
       export PATH=$GOBIN:$PATH
       sudo /bin/bash ./build-pkg.sh $(git rev-parse HEAD)
       cp ./gorram-$(git rev-parse HEAD).deb ./gorram.deb
   - deploy: |
-      scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ./gorram/gorram-$(git rev-parse HEAD).deb  deploy@rick.squanch.space:gorram.deb
-      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no deploy@rick.squanch.space "sudo dpkg -i gorram.deb"
+      scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ./gorram/gorram-$(git rev-parse HEAD).deb $remote:gorram.deb
+      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $remote "sudo dpkg -i gorram.deb"
+  - mirror-to-github: |
+      cd ${project}
+      ssh-keyscan -H github.com > $HOME/.ssh/known_hosts
+      echo -e "Host github.com\n    IdentityFile ~/.ssh/id_rsa\n    IdentitiesOnly yes\n    BatchMode yes\n" >> ~/.ssh/config
+      git remote add github git@github.com:aqtrans/gorram.git
+      git push --prune github +refs/remotes/origin/*:refs/heads/* +refs/tags/*:refs/tags/* main
