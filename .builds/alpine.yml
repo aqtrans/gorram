@@ -1,0 +1,50 @@
+image: alpine/3.17
+packages:
+  - git
+  - wget
+  - protobuf-c-compiler
+secrets:
+  - 1efbd7f2-d0b5-4cfc-8a0c-f1c12da95d4e
+sources:
+  - ssh://git@git.squanch.space/~aqtrans/gorram
+environment:
+  project: gorram
+  remote: deploy@git.squanch.space
+tasks:
+  - setupgo: |
+      wget https://go.dev/dl/go1.21.3.linux-amd64.tar.gz
+      sudo rm -rf /usr/local/go
+      sudo tar -C /usr/local -xzf go1.21.3.linux-amd64.tar.gz
+      export PATH=$PATH:/usr/local/go/bin
+  - setup: |
+      export PATH=$PATH:/usr/local/go/bin
+      cd ${project}
+      export GOBIN=$PWD/bin
+      export PATH=$GOBIN:$PATH
+      go get -d
+      go install github.com/twitchtv/twirp/protoc-gen-twirp
+      go install google.golang.org/protobuf/cmd/protoc-gen-go
+      go generate
+  - test: |
+      export PATH=$PATH:/usr/local/go/bin
+      cd ${project}
+      export GOBIN=$PWD/bin
+      export PATH=$GOBIN:$PATH
+      go test
+      go test -race
+      go test -cover
+      go test -bench=.
+  - build: |
+      export PATH=$PATH:/usr/local/go/bin
+      cd ${project}
+      export GOBIN=$PWD/bin
+      export PATH=$GOBIN:$PATH
+      go build -ldflags "-X main.sha1ver=$(git rev-parse HEAD) -X main.buildTime=$(date +'%Y-%m-%d_%T')" -o gorram-client ./client
+      go build -ldflags "-X main.sha1ver=$(git rev-parse HEAD) -X main.buildTime=$(date +'%Y-%m-%d_%T')" -o gorram-server ./server
+      go build -o gorram-cli ./cli
+  - deploy: |
+      cd ${project}
+      scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no gorram-client $remote:/tmp/gorram-client
+      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $remote "sudo /bin/mv /tmp/gorram-client /usr/local/bin/gorram-client"
+      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $remote "sudo /sbin/rc-service gorram-client restart"
+      
