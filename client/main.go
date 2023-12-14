@@ -85,6 +85,57 @@ func decryptCfg(sharedSecret string, encryptedConfig *pb.EncryptedConfig) *pb.Co
 	return origCfg
 }
 
+func unwrapTwirpError(serverAddress string, err error) pb.Reporter {
+	var reporter pb.Reporter
+	disconnected := true
+	var connectErr error
+
+	for disconnected {
+
+		if err != nil {
+			if twerr, ok := err.(twirp.Error); ok {
+				if twerr.Code() == twirp.Internal {
+					if transportErr := errors.Unwrap(twerr); transportErr != nil {
+						// transportErr could be something like an HTTP connection error
+						//log.Println(transportErr.Error())
+						/*
+							var netError *net.OpError
+							if errors.As(err, &netError) {
+								if netError.Op == "dial" {
+									log.Println("Unknown host")
+								} else if netError.Op == "read" {
+									log.Println("Connection refused")
+								}
+							}
+						*/
+
+						var sysErr syscall.Errno
+						if errors.As(err, &sysErr) {
+							if sysErr == syscall.ECONNREFUSED {
+								log.Println("Connection refused; setting up new pb.Reporter")
+								reporter = pb.NewReporterProtobufClient(serverAddress, &http.Client{})
+								_, connectErr = reporter.Ping(context.Background(), &pb.PingMsg{IsAlive: true})
+								if connectErr != nil {
+									disconnected = true
+									time.Sleep(10 * time.Second)
+								} else {
+									disconnected = false
+								}
+							}
+						}
+
+					}
+				}
+			} else {
+				log.Println("Non-Twirp error:", err)
+			}
+		}
+	}
+
+	return reporter
+
+}
+
 func main() {
 
 	formatter := new(log.TextFormatter)
@@ -191,30 +242,20 @@ func main() {
 	// Create RPC context, add client name metadata
 	rpcCtx, rpcCancel := newCtx(header, rpcTimeout)
 
-	retryConnection := true
+	isLoggedIn, err := c.Hello(rpcCtx, &pb.LoginRequest{
+		LoginTime: time.Now().Unix(),
+	})
+	if err != nil {
+		c = unwrapTwirpError(yamlCfg.ServerAddress, err)
+	}
 
-	for retryConnection {
-		// Hello: Get a LoginToken from the server, if our signature is verified by the server
-		isLoggedIn, err := c.Hello(rpcCtx, &pb.LoginRequest{
-			LoginTime: time.Now().Unix(),
-		})
-
+	/*
 		if err != nil {
 			if twerr, ok := err.(twirp.Error); ok {
 				if twerr.Code() == twirp.Internal {
 					if transportErr := errors.Unwrap(twerr); transportErr != nil {
 						// transportErr could be something like an HTTP connection error
 						//log.Println(transportErr.Error())
-						/*
-							var netError *net.OpError
-							if errors.As(err, &netError) {
-								if netError.Op == "dial" {
-									log.Println("Unknown host")
-								} else if netError.Op == "read" {
-									log.Println("Connection refused")
-								}
-							}
-						*/
 
 						var sysErr syscall.Errno
 						if errors.As(err, &sysErr) {
@@ -228,16 +269,16 @@ func main() {
 				}
 			}
 			log.Println("Error with c.Hello:", err)
+			retryConnection = true
 			time.Sleep(10 * time.Second)
+			rpcCancel()
+			return
 		}
+	*/
 
-		if isLoggedIn != nil && isLoggedIn.LoggedIn {
-			log.Println("logged in to the server!")
-			retryConnection = false
-		}
-
+	if isLoggedIn != nil && isLoggedIn.LoggedIn {
+		log.Println("logged in to the server!")
 	}
-
 	rpcCancel()
 
 	// Add token to the headers and context
@@ -248,7 +289,8 @@ func main() {
 		ClientName: yamlCfg.ClientName,
 	})
 	if err != nil {
-		log.Fatalln("Error with c.ConfigSync:", err)
+		log.Println("Error with c.ConfigSync:", err)
+		c = unwrapTwirpError(yamlCfg.ServerAddress, err)
 	}
 
 	origCfg := decryptCfg(yamlCfg.SharedSecret, encryptedBytes)
@@ -274,7 +316,8 @@ func main() {
 					defer rpcCancel()
 					pingResp, err := c.Ping(rpcCtx, &pb.PingMsg{IsAlive: true, CfgLastUpdated: origCfg.LastUpdated})
 					if err != nil {
-						log.Fatalln("Error with c.Ping:", err)
+						log.Println("Error with c.Ping:", err)
+						c = unwrapTwirpError(yamlCfg.ServerAddress, err)
 					}
 					// This variable should be true if the config is out of sync
 					if pingResp.CfgOutOfSync {
@@ -288,7 +331,8 @@ func main() {
 							ClientName: yamlCfg.ClientName,
 						})
 						if err != nil {
-							log.Fatalln("Error with c.ConfigSync:", err)
+							log.Println("Error with c.ConfigSync:", err)
+							c = unwrapTwirpError(yamlCfg.ServerAddress, err)
 						}
 						newCfg := decryptCfg(yamlCfg.SharedSecret, newCfgEnc)
 						// Set cfg to newCfg
@@ -319,10 +363,12 @@ func main() {
 							defer rpcCancel()
 							problem, err := c.RecordIssue(rpcCtx, issue)
 							if err != nil {
-								log.Fatalln("Error recording issue:", i, err)
+								log.Println("Error recording issue:", i, err)
+								c = unwrapTwirpError(yamlCfg.ServerAddress, err)
 							}
 							if !problem.SuccessfullySubmitted {
-								log.Fatalln("Error submitting issue; Check server logs.", problem.SuccessfullySubmitted)
+								log.Println("Error submitting issue; Check server logs.", problem.SuccessfullySubmitted)
+								c = unwrapTwirpError(yamlCfg.ServerAddress, err)
 							}
 						}
 					}
