@@ -2,6 +2,8 @@ image: openbsd/7.4
 packages:
   - go
   - git
+  - protobuf
+  - protobuf-c
 secrets:
   - 9ef6e07e-cae5-4ec0-b799-8898de1f742b
 sources:
