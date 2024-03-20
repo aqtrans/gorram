@@ -36,6 +36,7 @@ type clientConfig struct {
 	SharedSecret  string `yaml:"shared_secret,omitempty"`
 	ServerAddress string `yaml:"server_address,omitempty"`
 	PrivateKey    string `yaml:"private_key,omitempty"`
+	InsecureSSL   bool   `yaml:"insecure_ssl,omitempty"`
 }
 
 func loadConfig(confFile string) clientConfig {
@@ -198,8 +199,12 @@ func main() {
 
 	// Set up a connection to the server.
 
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	tr := &http.Transport{}
+	// Skip Cert verification if cert is self-signed
+	if yamlCfg.InsecureSSL {
+		tr = &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
 	}
 
 	c := pb.NewReporterProtobufClient(yamlCfg.ServerAddress, &http.Client{Transport: tr})
