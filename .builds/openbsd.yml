@@ -3,7 +3,7 @@ packages:
   - go
   - git
 secrets:
-  - 1efbd7f2-d0b5-4cfc-8a0c-f1c12da95d4e
+  - 9ef6e07e-cae5-4ec0-b799-8898de1f742b
 sources:
   - ssh://git@git.sr.ht/~aqtrans/gorram
 environment:

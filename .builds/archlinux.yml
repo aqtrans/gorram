@@ -2,11 +2,12 @@ image: archlinux
 packages:
   - git
   - wget
+  - protobuf
   - protobuf-compiler
   - protoc-gen-go
   - go
 secrets:
-  - 1efbd7f2-d0b5-4cfc-8a0c-f1c12da95d4e
+  - 9ef6e07e-cae5-4ec0-b799-8898de1f742b
 sources:
   - ssh://git@git.sr.ht/~aqtrans/gorram
 environment:
@@ -43,9 +44,12 @@ tasks:
 
       sshopts="ssh -o StrictHostKeyChecking=no"
       cd ${project}
-      scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no gorram-server B:/tmp/gorram-server
-      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no B "sudo /usr/bin/mv /tmp/gorram-server /usr/bin/gorram-server"
-      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no B "sudo /usr/bin/systemctl restart gorram-server"
+      
+      # Don't deploy server here
+      #scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no gorram-server B:/tmp/gorram-server
+      #ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no B "sudo /usr/bin/mv /tmp/gorram-server /usr/bin/gorram-server"
+      #ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no B "sudo /usr/bin/systemctl restart gorram-server"
+
       scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no gorram-client B:/tmp/gorram-client
       ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no B "sudo /usr/bin/mv /tmp/gorram-client /usr/bin/gorram-client"
       ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no B "sudo /usr/bin/systemctl restart gorram-client"
