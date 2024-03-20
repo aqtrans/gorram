@@ -42,9 +42,9 @@ tasks:
       go build -ldflags "-X main.sha1ver=$(git rev-parse HEAD) -X main.buildTime=$(date +'%Y-%m-%d_%T')" -o gorram-client ./client
       go build -ldflags "-X main.sha1ver=$(git rev-parse HEAD) -X main.buildTime=$(date +'%Y-%m-%d_%T')" -o gorram-server ./server
       go build -o gorram-cli ./cli
-  - deploy: |
-      cd ${project}
-      scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no gorram-client $remote:/tmp/gorram-client
-      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $remote "sudo /bin/mv /tmp/gorram-client /usr/local/bin/gorram-client"
-      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $remote "sudo /sbin/rc-service gorram-client restart"
+#  - deploy: |
+#      cd ${project}
+#      scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no gorram-client $remote:/tmp/gorram-client
+#      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $remote "sudo /bin/mv /tmp/gorram-client /usr/local/bin/gorram-client"
+#      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $remote "sudo /sbin/rc-service gorram-client restart"
       
