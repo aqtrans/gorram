@@ -1,14 +1,14 @@
-image: openbsd/7.3
+image: openbsd/7.4
 packages:
   - go
   - git
 secrets:
   - 1efbd7f2-d0b5-4cfc-8a0c-f1c12da95d4e
 sources:
-  - ssh://git@git.squanch.space/~aqtrans/gorram
+  - ssh://git@git.sr.ht/~aqtrans/gorram
 environment:
   project: gorram
-  remote: deploy@starbuck.squanch.space
+  remote: deploy@squanch.space
 tasks:
   - setup: |
       cd ${project}
