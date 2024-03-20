@@ -51,11 +51,13 @@ while [ "$1" != "" ]; do
     case $1 in
         run-server)
             build_proto
-            go run -race server/main.go -ssl-path "./" -debug -conf "./server.yml" $@
+            cd ./server
+            go run -race . -ssl-path "./" -debug -conf-file "../server.yml.dist" $@
             ;;
         run-client)
             build_proto
-            go run -race client/main.go -ssl-path "./" -debug -conf "./client.yml" $@
+            cd ./client
+            go run -race . -ssl-path "./" -debug -conf "./client.yml.dist" $@
             ;;            
         proto)
             build_proto
