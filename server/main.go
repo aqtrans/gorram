@@ -324,7 +324,7 @@ func (s *gorramServer) reviveDeadClient(clientName string) {
 
 func (s *gorramServer) RecordIssue(ctx context.Context, iss *pb.Issue) (*pb.Submitted, error) {
 	if iss != nil {
-		log.Debugln("recording issue from", iss.Host, iss)
+		log.Debugln("recording issue from", getClientName(ctx), iss)
 		// Record issue
 		s.alert(getClientName(ctx), iss)
 
