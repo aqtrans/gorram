@@ -5,12 +5,11 @@ packages:
   - protobuf-compiler
   - protoc-gen-go
 secrets:
-  - 1efbd7f2-d0b5-4cfc-8a0c-f1c12da95d4e
+  - 9ef6e07e-cae5-4ec0-b799-8898de1f742b
 sources:
-  - ssh://git@git.squanch.space/~aqtrans/gorram
+  - ssh://git@git.sr.ht/~aqtrans/gorram
 environment:
   project: gorram
-  remote: deploy@rick.jba.io
 artifacts:
   - gorram/gorram.deb
 tasks:
@@ -53,11 +52,9 @@ tasks:
       sudo /bin/bash ./build-pkg.sh $(git rev-parse HEAD)
       cp ./gorram-$(git rev-parse HEAD).deb ./gorram.deb
   - deploy: |
-      scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -P 42424 ./gorram/gorram.deb $remote:gorram.deb
-      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -P 42424 $remote "sudo dpkg -i gorram.deb"
-  - mirror-to-github: |
-      cd ${project}
-      ssh-keyscan -H github.com > $HOME/.ssh/known_hosts
-      echo -e "Host github.com\n    IdentityFile ~/.ssh/id_rsa\n    IdentitiesOnly yes\n    BatchMode yes\n" >> ~/.ssh/config
-      git remote add github git@github.com:aqtrans/gorram.git
-      git push --prune github +refs/remotes/origin/*:refs/heads/* +refs/tags/*:refs/tags/* main
+      echo -e "Host B\n         StrictHostKeyChecking no\n    UserKnownHostsFile=/dev/null\n    hostname dev.squanch.space\n    User deploy\n" >> ~/.ssh/config
+      echo -e "Host D\n         StrictHostKeyChecking no\n    UserKnownHostsFile=/dev/null\n    hostname rick.lan\n     ProxyJump B\n" >> ~/.ssh/config
+
+      sshopts="ssh -o StrictHostKeyChecking=no"
+      scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ./gorram/gorram.deb deploy@D:gorram.deb
+      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no deploy@D "sudo dpkg -i gorram.deb"
