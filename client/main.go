@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"flag"
 	"io/ioutil"
@@ -197,7 +198,11 @@ func main() {
 
 	// Set up a connection to the server.
 
-	c := pb.NewReporterProtobufClient(yamlCfg.ServerAddress, &http.Client{})
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+
+	c := pb.NewReporterProtobufClient(yamlCfg.ServerAddress, &http.Client{Transport: tr})
 
 	/*
 		pub, priv, err := ed25519.GenerateKey(nil)

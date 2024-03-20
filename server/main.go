@@ -1079,6 +1079,8 @@ func main() {
 	//insecure := flag.Bool("insecure", false, "Disable TLS. Allow insecure client connections.")
 	generateCAcert := flag.Bool("generate-ca", false, "Generate CA certificates, at cacert.pem and cacert.key.")
 	sslPath := flag.String("ssl-path", "/etc/gorram/", "Path to read/write SSL certs from.")
+	sslCert := flag.String("ssl-cert-path", "/etc/gorram/server.pem", "Path to read exact SSL cert from (for LetsEncrypt, etc).")
+	sslCertKey := flag.String("ssl-cert-path", "/etc/gorram/server.key", "Path to read exact SSL key from (for LetsEncrypt, etc).")
 	debug := flag.Bool("debug", false, "Toggle debug logging.")
 	showVersion := flag.Bool("version", false, "Print server version")
 	serverConfFile := flag.String("conf-file", "", "Direct path to server.yml, if outside the SSL and client configs.")
@@ -1200,7 +1202,8 @@ func main() {
 
 	// Start listening, in a goroutine so SIGINTs can be caught below
 	go func() {
-		err := http.ListenAndServe(gs.cfg.ListenAddress, mux)
+		//err := http.ListenAndServe(gs.cfg.ListenAddress, mux)
+		err := http.ListenAndServeTLS(gs.cfg.ListenAddress, *sslCert, *sslCertKey, mux)
 		log.Infoln("Listening on", gs.cfg.ListenAddress)
 
 		if err != nil {
