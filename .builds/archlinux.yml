@@ -1,0 +1,51 @@
+image: archlinux
+packages:
+  - git
+  - wget
+  - protobuf-compiler
+  - protoc-gen-go
+  - go
+secrets:
+  - 1efbd7f2-d0b5-4cfc-8a0c-f1c12da95d4e
+sources:
+  - ssh://git@git.sr.ht/~aqtrans/gorram
+environment:
+  project: gorram
+tasks:
+  - setup: |
+      export PATH=$PATH:/usr/local/go/bin
+      cd ${project}
+      export GOBIN=$PWD/bin
+      export PATH=$GOBIN:$PATH
+      go get -d
+      go install github.com/twitchtv/twirp/protoc-gen-twirp
+      go install google.golang.org/protobuf/cmd/protoc-gen-go
+      go generate
+  - test: |
+      export PATH=$PATH:/usr/local/go/bin
+      cd ${project}
+      export GOBIN=$PWD/bin
+      export PATH=$GOBIN:$PATH
+      go test
+      go test -race
+      go test -cover
+      go test -bench=.
+  - build: |
+      export PATH=$PATH:/usr/local/go/bin
+      cd ${project}
+      export GOBIN=$PWD/bin
+      export PATH=$GOBIN:$PATH
+      go build -ldflags "-X main.sha1ver=$(git rev-parse HEAD) -X main.buildTime=$(date +'%Y-%m-%d_%T')" -o gorram-client ./client
+      go build -ldflags "-X main.sha1ver=$(git rev-parse HEAD) -X main.buildTime=$(date +'%Y-%m-%d_%T')" -o gorram-server ./server
+      go build -o gorram-cli ./cli
+  - deploy: |
+      echo -e "Host B\n         StrictHostKeyChecking no\n    UserKnownHostsFile=/dev/null\n    hostname dev.squanch.space\n    User deploy\n" >> ~/.ssh/config
+
+      sshopts="ssh -o StrictHostKeyChecking=no"
+      cd ${project}
+      scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no gorram-server B:/tmp/gorram-server
+      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no B "sudo /usr/bin/mv /tmp/gorram-server /usr/bin/gorram-server"
+      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no B "sudo /usr/bin/systemctl restart gorram-server"
+      scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no gorram-client B:/tmp/gorram-client
+      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no B "sudo /usr/bin/mv /tmp/gorram-client /usr/bin/gorram-client"
+      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no B "sudo /usr/bin/systemctl restart gorram-client"
