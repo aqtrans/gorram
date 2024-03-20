@@ -87,48 +87,39 @@ func decryptCfg(sharedSecret string, encryptedConfig *pb.EncryptedConfig) *pb.Co
 
 func unwrapTwirpError(serverAddress string, err error) pb.Reporter {
 	var reporter pb.Reporter
-	disconnected := true
 	var connectErr error
 
-	for disconnected {
-
-		if err != nil {
-			if twerr, ok := err.(twirp.Error); ok {
-				if twerr.Code() == twirp.Internal {
-					if transportErr := errors.Unwrap(twerr); transportErr != nil {
-						// transportErr could be something like an HTTP connection error
-						//log.Println(transportErr.Error())
-						/*
-							var netError *net.OpError
-							if errors.As(err, &netError) {
-								if netError.Op == "dial" {
-									log.Println("Unknown host")
-								} else if netError.Op == "read" {
-									log.Println("Connection refused")
-								}
-							}
-						*/
-
-						var sysErr syscall.Errno
-						if errors.As(err, &sysErr) {
-							if sysErr == syscall.ECONNREFUSED {
-								log.Println("Connection refused; setting up new pb.Reporter")
-								reporter = pb.NewReporterProtobufClient(serverAddress, &http.Client{})
-								_, connectErr = reporter.Ping(context.Background(), &pb.PingMsg{IsAlive: true})
-								if connectErr != nil {
-									disconnected = true
-									time.Sleep(10 * time.Second)
-								} else {
-									disconnected = false
-								}
+	if err != nil {
+		if twerr, ok := err.(twirp.Error); ok {
+			if twerr.Code() == twirp.Internal {
+				if transportErr := errors.Unwrap(twerr); transportErr != nil {
+					// transportErr could be something like an HTTP connection error
+					//log.Println(transportErr.Error())
+					/*
+						var netError *net.OpError
+						if errors.As(err, &netError) {
+							if netError.Op == "dial" {
+								log.Println("Unknown host")
+							} else if netError.Op == "read" {
+								log.Println("Connection refused")
 							}
 						}
+					*/
 
+					var sysErr syscall.Errno
+					if errors.As(err, &sysErr) {
+						if sysErr == syscall.ECONNREFUSED {
+							log.Println("Connection refused; setting up new pb.Reporter")
+							reporter = pb.NewReporterProtobufClient(serverAddress, &http.Client{})
+							_, connectErr = reporter.Ping(context.Background(), &pb.PingMsg{IsAlive: true})
+							log.Println("Error pinging server:", connectErr.Error())
+						}
 					}
+
 				}
-			} else {
-				log.Println("Non-Twirp error:", err)
 			}
+		} else {
+			log.Println("Non-Twirp error:", err)
 		}
 	}
 
