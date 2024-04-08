@@ -50,6 +50,12 @@ type serverConfig struct {
 		UserKey string `yaml:"user_key,omitempty"`
 		Device  string `yaml:"device,omitempty"`
 	} `yaml:"pushover,omitempty"`
+	Matrix struct {
+		Homeserver string `yaml:"homeserver,omitempty"`
+		Username   string `yaml:"username,omitempty"`
+		Password   string `yaml:"password,omitempty"`
+		SqliteDB   string `yaml:"mautrix.db,omitempty"`
+	} `yaml:"matrix,omitempty"`
 	ListenAddress    string `yaml:"listen_address,omitempty"`
 	HeartbeatSeconds int64  `yaml:"heartbeat_seconds,omitempty"`
 	Debug            bool   `yaml:"debug,omitempty"`
@@ -523,6 +529,12 @@ func (s *gorramServer) alert(client string, issue *pb.Issue) {
 			log.Errorln("Pushover returned error(s):", response.Errors.Error())
 			return
 		}
+	case "matrix":
+		log.WithFields(log.Fields{
+			"client": client,
+			"check":  issue.Title,
+		}).Warnln("[ALERT] ", issue.Message)
+		s.sendToMatrix(issue)
 	}
 }
 
