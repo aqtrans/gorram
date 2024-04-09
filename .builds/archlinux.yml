@@ -6,6 +6,7 @@ packages:
   - protobuf-compiler
   - protoc-gen-go
   - go
+  - libolm
 secrets:
   - 9ef6e07e-cae5-4ec0-b799-8898de1f742b
 sources:

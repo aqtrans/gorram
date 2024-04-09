@@ -4,6 +4,8 @@ packages:
   - wget
   - protobuf-compiler
   - protoc-gen-go
+  - libolm3
+  - libolm-dev
 secrets:
   - 9ef6e07e-cae5-4ec0-b799-8898de1f742b
 sources:

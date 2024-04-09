@@ -4,6 +4,7 @@ packages:
   - git
   - protobuf
   - protobuf-c
+  - olm
 secrets:
   - 9ef6e07e-cae5-4ec0-b799-8898de1f742b
 sources:
@@ -12,6 +13,8 @@ environment:
   project: gorram
   remote: deploy@squanch.space
 tasks:
+  - setup-olm: |
+      doas cp -r /usr/local/include/olm /usr/include/
   - setup: |
       cd ${project}
       export GOBIN=$PWD/bin
