@@ -54,7 +54,7 @@ type serverConfig struct {
 		Homeserver string `yaml:"homeserver,omitempty"`
 		Username   string `yaml:"username,omitempty"`
 		Password   string `yaml:"password,omitempty"`
-		SqliteDB   string `yaml:"mautrix.db,omitempty"`
+		SqliteDB   string `yaml:"mautrixdb,omitempty"`
 	} `yaml:"matrix,omitempty"`
 	ListenAddress    string `yaml:"listen_address,omitempty"`
 	HeartbeatSeconds int64  `yaml:"heartbeat_seconds,omitempty"`
@@ -533,7 +533,7 @@ func (s *gorramServer) alert(client string, issue *pb.Issue) {
 		log.WithFields(log.Fields{
 			"client": client,
 			"check":  issue.Title,
-		}).Warnln("[ALERT] ", issue.Message)
+		}).Warnln("[MATRIX ALERT] ", issue.Message)
 		s.sendToMatrix(issue)
 	}
 }

@@ -12,7 +12,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"sync"
 	"time"
 
@@ -32,12 +31,12 @@ func (s *gorramServer) sendToMatrix(issue *pb.Issue) error {
 	var homeserver = &s.cfg.Matrix.Homeserver
 	var username = &s.cfg.Matrix.Username
 	var password = &s.cfg.Matrix.Password
+	//var database = &s.cfg.Matrix.SqliteDB
 	var database = &s.cfg.Matrix.SqliteDB
 	var debug = &s.cfg.Debug
 
 	if *username == "" || *password == "" || *homeserver == "" {
-		_, _ = fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
-		return errors.New("Matrix config is missing.")
+		return errors.New("matrix config is missing")
 	}
 
 	client, err := mautrix.NewClient(*homeserver, "", "")
@@ -91,9 +90,9 @@ func (s *gorramServer) sendToMatrix(issue *pb.Issue) error {
 		}
 	})
 
-	cryptoHelper, err := cryptohelper.NewCryptoHelper(client, []byte("meow"), *database)
+	cryptoHelper, err := cryptohelper.NewCryptoHelper(client, []byte("meow"), database)
 	if err != nil {
-		return err
+		return errors.New("Error opening sqlitedb: " + err.Error())
 	}
 
 	// You can also store the user/device IDs and access token and put them in the client beforehand instead of using LoginAs.
@@ -130,36 +129,35 @@ func (s *gorramServer) sendToMatrix(issue *pb.Issue) error {
 
 	line := issue.Host + " - " + issue.Title + "\n" + issue.Message
 
-	for {
-		if lastRoomID == "" {
-			log.Error().Msg("Wait for an incoming message before sending messages")
-			continue
-		}
+	for lastRoomID == "" {
+		log.Println("Waiting for room invite")
 
-		// Try to silence alerts
-		syncer.OnEventType(event.EventReaction, func(ctx context.Context, evt *event.Event) {
-			lastRoomID = evt.RoomID
-			rl.SetPrompt(fmt.Sprintf("%s> ", lastRoomID))
-			eventID := evt.Content.AsReaction().RelatesTo.EventID
-			log.Info().
-				Str("sender", evt.Sender.String()).
-				Str("type", evt.Type.String()).
-				Str("id", evt.ID.String()).
-				Str("body", evt.Content.AsMessage().Body).
-				Msg("Received message")
-			_, err := client.SendText(context.TODO(), lastRoomID, "Silencing alert #"+eventID.String())
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to send event")
-			}
+	}
 
-		})
-		resp, err := client.SendText(context.TODO(), lastRoomID, line)
+	// Try to silence alerts
+	syncer.OnEventType(event.EventReaction, func(ctx context.Context, evt *event.Event) {
+		lastRoomID = evt.RoomID
+		rl.SetPrompt(fmt.Sprintf("%s> ", lastRoomID))
+		eventID := evt.Content.AsReaction().RelatesTo.EventID
+		log.Info().
+			Str("sender", evt.Sender.String()).
+			Str("type", evt.Type.String()).
+			Str("id", evt.ID.String()).
+			Str("body", evt.Content.AsMessage().Body).
+			Msg("Received message")
+		_, err := client.SendText(context.TODO(), lastRoomID, "Silencing alert #"+eventID.String())
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to send event")
-		} else {
-			log.Info().Str("event_id", resp.EventID.String()).Msg("Event sent")
 		}
+
+	})
+	resp, err := client.SendText(context.TODO(), lastRoomID, line)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to send event")
+	} else {
+		log.Info().Str("event_id", resp.EventID.String()).Msg("Event sent")
 	}
+
 	cancelSync()
 	syncStopWait.Wait()
 	err = cryptoHelper.Close()
