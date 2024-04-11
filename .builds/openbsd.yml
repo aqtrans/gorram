@@ -11,7 +11,11 @@ sources:
   - ssh://git@git.sr.ht/~aqtrans/gorram
 environment:
   project: gorram
-  remote: deploy@squanch.space
+  remote: deploy@barry.squanch.space
+triggers:
+  - action: email
+    condition: failure
+    to: Jordan Anderson <jordan@jba.io>
 tasks:
   - setup-olm: |
       doas cp -r /usr/local/include/olm /usr/include/
@@ -34,6 +38,9 @@ tasks:
       go build -ldflags "-X main.sha1ver=$(git rev-parse HEAD) -X main.buildTime=$(date +'%Y-%m-%d_%T')" -o gorram-client ./client
       go build -ldflags "-X main.sha1ver=$(git rev-parse HEAD) -X main.buildTime=$(date +'%Y-%m-%d_%T')" -o gorram-server ./server
       go build -o gorram-cli ./cli
+      if [ "$(git rev-parse origin/master)" != "$(git rev-parse HEAD)" ]; then \
+        complete-build; \
+      fi
   - deploy: |
       cd ${project}
       scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no gorram-server $remote:/tmp/gorram-server

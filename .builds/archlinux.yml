@@ -13,6 +13,10 @@ sources:
   - ssh://git@git.sr.ht/~aqtrans/gorram
 environment:
   project: gorram
+triggers:
+  - action: email
+    condition: failure
+    to: Jordan Anderson <jordan@jba.io>
 tasks:
   - setup: |
       export PATH=$PATH:/usr/local/go/bin
@@ -40,6 +44,9 @@ tasks:
       go build -ldflags "-X main.sha1ver=$(git rev-parse HEAD) -X main.buildTime=$(date +'%Y-%m-%d_%T')" -o gorram-client ./client
       go build -ldflags "-X main.sha1ver=$(git rev-parse HEAD) -X main.buildTime=$(date +'%Y-%m-%d_%T')" -o gorram-server ./server
       go build -o gorram-cli ./cli
+      if [ "$(git rev-parse origin/master)" != "$(git rev-parse HEAD)" ]; then \
+        complete-build; \
+      fi
   - deploy: |
       echo -e "Host B\n         StrictHostKeyChecking no\n    UserKnownHostsFile=/dev/null\n    hostname dev.squanch.space\n    User deploy\n" >> ~/.ssh/config
 
