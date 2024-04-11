@@ -335,7 +335,7 @@ func main() {
 	*/
 
 	if isLoggedIn != nil && isLoggedIn.LoggedIn {
-		log.Fatalln("logged in to the server!")
+		log.Println("successfully logged in to the server!")
 	}
 	rpcCancel()
 
