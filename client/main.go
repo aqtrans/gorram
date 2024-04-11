@@ -87,9 +87,7 @@ func decryptCfg(sharedSecret string, encryptedConfig *pb.EncryptedConfig) *pb.Co
 	return origCfg
 }
 
-func unwrapTwirpError(cfg clientConfig, err error) pb.Reporter {
-	var reporter pb.Reporter
-	var connectErr error
+func unwrapTwirpError(err error) error {
 
 	if err != nil {
 		if twerr, ok := err.(twirp.Error); ok {
@@ -112,6 +110,10 @@ func unwrapTwirpError(cfg clientConfig, err error) pb.Reporter {
 					if errors.As(err, &sysErr) {
 						if sysErr == syscall.ECONNREFUSED {
 							log.Println("Connection refused; setting up new pb.Reporter")
+							return errors.New("Connection refused by server")
+							/* Re-creating a pb.Reporter doesn't properly send the headers;
+							// Causing errors on the server-end
+							log.Println("Connection refused; setting up new pb.Reporter")
 
 							privkeyB := common.ParsePrivateKey(cfg.PrivateKey)
 							encryptedSecret := common.SignSignature(privkeyB, cfg.SharedSecret)
@@ -132,6 +134,7 @@ func unwrapTwirpError(cfg clientConfig, err error) pb.Reporter {
 							if connectErr != nil {
 								log.Println("Error pinging server:", connectErr.Error())
 							}
+							*/
 						}
 					}
 
@@ -139,10 +142,11 @@ func unwrapTwirpError(cfg clientConfig, err error) pb.Reporter {
 			}
 		} else {
 			log.Println("Non-Twirp error:", err)
+			return errors.New("Non-Twirp error:" + err.Error())
 		}
 	}
 
-	return reporter
+	return err
 
 }
 
@@ -282,10 +286,9 @@ func main() {
 	if err != nil {
 
 		// Attempt retries
-		log.Println("Error logging into server; retrying...")
+		log.Println("Error logging into server; retrying...", unwrapTwirpError(err))
 
 		for failures := 0; failures < 101; failures++ {
-			c = unwrapTwirpError(yamlCfg, err)
 
 			isLoggedIn, err = c.Hello(rpcCtx, &pb.LoginRequest{
 				LoginTime: time.Now().Unix(),
@@ -298,7 +301,7 @@ func main() {
 				break
 			}
 			if failures == 100 {
-				log.Fatalln(("Error connecting to server"))
+				log.Fatalln("Error connecting to server", unwrapTwirpError(err))
 			}
 		}
 
@@ -332,7 +335,7 @@ func main() {
 	*/
 
 	if isLoggedIn != nil && isLoggedIn.LoggedIn {
-		log.Println("logged in to the server!")
+		log.Fatalln("logged in to the server!")
 	}
 	rpcCancel()
 
@@ -344,29 +347,7 @@ func main() {
 		ClientName: yamlCfg.ClientName,
 	})
 	if err != nil {
-		log.Println("Error with c.ConfigSync:", err)
-		c = unwrapTwirpError(yamlCfg, err)
-
-		// Attempt retries
-		log.Println("Error logging into server; retrying...")
-
-		for failures := 0; failures < 101; failures++ {
-			c = unwrapTwirpError(yamlCfg, err)
-
-			encryptedBytes, err = c.ConfigSync(rpcCtx, &pb.ConfigRequest{
-				ClientName: yamlCfg.ClientName,
-			})
-			if err != nil {
-				log.Println("Retrying again in 10 seconds. Failed connections:", failures)
-				time.Sleep(10 * time.Second)
-			}
-			if err == nil {
-				break
-			}
-			if failures == 100 {
-				log.Fatalln(("Error connecting to server"))
-			}
-		}
+		log.Fatalln("Error with c.ConfigSync:", unwrapTwirpError(err))
 	}
 
 	origCfg := decryptCfg(yamlCfg.SharedSecret, encryptedBytes)
@@ -392,27 +373,7 @@ func main() {
 					defer rpcCancel()
 					pingResp, err := c.Ping(rpcCtx, &pb.PingMsg{IsAlive: true, CfgLastUpdated: origCfg.LastUpdated})
 					if err != nil {
-						log.Println("Error with c.Ping:", err)
-						c = unwrapTwirpError(yamlCfg, err)
-
-						// Attempt retries
-						log.Println("Error logging into server; retrying...")
-
-						for failures := 0; failures < 101; failures++ {
-							c = unwrapTwirpError(yamlCfg, err)
-
-							pingResp, err = c.Ping(rpcCtx, &pb.PingMsg{IsAlive: true, CfgLastUpdated: origCfg.LastUpdated})
-							if err != nil {
-								log.Println("Retrying again in 10 seconds. Failed connections:", failures)
-								time.Sleep(10 * time.Second)
-							}
-							if err == nil {
-								break
-							}
-							if failures == 100 {
-								log.Fatalln(("Error connecting to server"))
-							}
-						}
+						log.Fatalln("Error with c.Ping:", unwrapTwirpError(err))
 					}
 					// This variable should be true if the config is out of sync
 					if pingResp.CfgOutOfSync {
@@ -426,8 +387,7 @@ func main() {
 							ClientName: yamlCfg.ClientName,
 						})
 						if err != nil {
-							log.Println("Error with c.ConfigSync:", err)
-							c = unwrapTwirpError(yamlCfg, err)
+							log.Fatalln("Error with c.ConfigSync:", unwrapTwirpError(err))
 						}
 						newCfg := decryptCfg(yamlCfg.SharedSecret, newCfgEnc)
 						// Set cfg to newCfg
@@ -458,12 +418,10 @@ func main() {
 							defer rpcCancel()
 							problem, err := c.RecordIssue(rpcCtx, issue)
 							if err != nil {
-								log.Println("Error recording issue:", i, err)
-								c = unwrapTwirpError(yamlCfg, err)
+								log.Fatalln("Error recording issue:", i, unwrapTwirpError(err))
 							}
 							if !problem.SuccessfullySubmitted {
-								log.Println("Error submitting issue; Check server logs.", problem.SuccessfullySubmitted)
-								c = unwrapTwirpError(yamlCfg, err)
+								log.Fatalln("Error submitting issue; Check server logs.", problem.SuccessfullySubmitted, unwrapTwirpError(err))
 							}
 						}
 					}
