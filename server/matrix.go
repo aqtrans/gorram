@@ -74,7 +74,7 @@ func (s *gorramServer) setupMatrixClient() {
 		}
 	})
 
-	cryptoHelper, err := cryptohelper.NewCryptoHelper(client, []byte("meow"), database)
+	cryptoHelper, err := cryptohelper.NewCryptoHelper(client, []byte("meow"), *database)
 	if err != nil {
 		log.Fatal().Msg("error opening sqlitedb: " + err.Error())
 	}
