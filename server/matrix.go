@@ -16,6 +16,7 @@ import (
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto/cryptohelper"
 	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/format"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -40,15 +41,21 @@ func (s *gorramServer) setupMatrixClient() {
 	var lastRoomID id.RoomID
 
 	syncer := client.Syncer.(*mautrix.DefaultSyncer)
-	syncer.OnEventType(event.EventMessage, func(ctx context.Context, evt *event.Event) {
-		lastRoomID = evt.RoomID
-		log.Info().
-			Str("sender", evt.Sender.String()).
-			Str("type", evt.Type.String()).
-			Str("id", evt.ID.String()).
-			Str("body", evt.Content.AsMessage().Body).
-			Msg("Received message")
-	})
+
+	/*
+		syncer.OnEventType(event.EventMessage, func(ctx context.Context, evt *event.Event) {
+			if client.UserID != evt.Sender {
+				lastRoomID = evt.RoomID
+				log.Info().
+					Str("sender", evt.Sender.String()).
+					Str("type", evt.Type.String()).
+					Str("id", evt.ID.String()).
+					Str("body", evt.Content.AsMessage().Body).
+					Msg("Received message")
+			}
+		})
+	*/
+
 	syncer.OnEventType(event.StateMember, func(ctx context.Context, evt *event.Event) {
 		if evt.GetStateKey() == client.UserID.String() && evt.Content.AsMember().Membership == event.MembershipInvite {
 			_, err := client.JoinRoomByID(ctx, evt.RoomID)
@@ -94,19 +101,49 @@ func (s *gorramServer) setupMatrixClient() {
 	log.Info().Msg("Now running")
 
 	// Try to silence alerts
-	syncer.OnEventType(event.EventReaction, func(ctx context.Context, evt *event.Event) {
+	syncer.OnEventType(event.EventMessage, func(ctx context.Context, evt *event.Event) {
+		if evt.Sender == client.UserID {
+			return
+		}
 		lastRoomID = evt.RoomID
-		eventID := evt.Content.AsReaction().RelatesTo.EventID
 		log.Info().
 			Str("sender", evt.Sender.String()).
 			Str("type", evt.Type.String()).
 			Str("id", evt.ID.String()).
 			Str("body", evt.Content.AsMessage().Body).
 			Msg("Received message")
-		_, err := client.SendText(context.TODO(), lastRoomID, "Silencing alert #"+eventID.String())
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to send silence event")
+
+		// Silence all events if told to
+		if evt.Content.AsMessage().Body == "Silence all" {
+			s.alertsMap.muteAll(&s.alertsMap)
+			_, err := client.SendText(context.TODO(), lastRoomID, "Silencing all alerts for 6 hours")
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to send silence event")
+			}
 		}
+
+		/* TODO: Figure out how to use replies to mute; currently unable to figure out how to fetch
+		if evt.Content.AsMessage().OptionalGetRelatesTo() != nil {
+			log.Print("Thread reply detected")
+			// Get thread parent
+			oldEventID := evt.Content.AsMessage().GetRelatesTo().GetThreadParent()
+			oldResp, err := client.GetEvent(context.TODO(), evt.RoomID, oldEventID)
+			if err != nil {
+				log.Error().Err(err).Msg("error fetching original reply")
+			}
+			issueID, found := strings.CutPrefix(oldResp.Content.AsMessage().Body, "IssueID:")
+			if !found {
+				log.Info().Msg("alert ID not found:" + issueID)
+			}
+			s.alertsMap.mute(issueID)
+			log.Info().Msg("alert actually muted!")
+
+			_, err = client.SendText(context.TODO(), lastRoomID, "Silencing alert #"+issueID)
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to send silence event")
+			}
+		}
+		*/
 
 	})
 
@@ -137,9 +174,11 @@ func (s *gorramServer) sendToMatrix(issue *pb.Issue) error {
 
 	roomID := id.RoomID("!TKWpjUwOWJmHVsPyBc:matrix.org")
 
-	msg := issue.Host + " - " + issue.Title + "\n" + issue.Message
+	//msg := issue.Host + " - " + issue.Title + "\n" + issue.Message
 
-	resp, err := s.matrixbot.SendText(context.TODO(), roomID, msg)
+	msg := format.RenderMarkdown("IssueID:"+generateMapKey(issue)+" #"+issue.Host+"  ##"+issue.Title+"  "+issue.Message, true, false)
+
+	resp, err := s.matrixbot.SendMessageEvent(context.TODO(), roomID, event.EventMessage, msg)
 	if err != nil {
 		log.Error().Msg("Failed to send event")
 		return err

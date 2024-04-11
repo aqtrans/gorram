@@ -69,6 +69,7 @@ require (
 	github.com/shoenig/go-m1cpu v0.1.6 // indirect
 	github.com/tklauser/go-sysconf v0.3.11 // indirect
 	github.com/tklauser/numcpus v0.6.0 // indirect
+	github.com/yuin/goldmark v1.7.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.3 // indirect
 	go.mongodb.org/mongo-driver v1.14.0 // indirect
 	go.opentelemetry.io/otel v1.25.0 // indirect

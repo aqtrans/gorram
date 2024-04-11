@@ -828,6 +828,14 @@ func (a *alerts) mute(issueID string) {
 	a.Unlock()
 }
 
+func (a *alerts) muteAll(allAlerts *alerts) {
+	a.Lock()
+	for _, v := range a.m {
+		v.Muted = true
+	}
+	a.Unlock()
+}
+
 func (a *alerts) isMuted(issue *pb.Issue) bool {
 	var isIt bool
 	a.Lock()
@@ -1148,7 +1156,7 @@ func main() {
 
 	if *generateCAcert {
 		log.Infoln("Generating cacert.pem and cacert.key...")
-		certs.GenerateCACert(*&gs.cfg.SSLPath)
+		certs.GenerateCACert(gs.cfg.SSLPath)
 	}
 
 	/*
