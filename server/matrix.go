@@ -24,7 +24,7 @@ func (s *gorramServer) setupMatrixClient() {
 	var homeserver = &s.cfg.Matrix.Homeserver
 	var username = &s.cfg.Matrix.Username
 	var password = &s.cfg.Matrix.Password
-	//var database = &s.cfg.Matrix.SqliteDB
+	var database = &s.cfg.Matrix.SqliteDB
 	//var database = &s.cfg.Matrix.SqliteDB
 	//var debug = &s.cfg.Debug
 
@@ -74,7 +74,7 @@ func (s *gorramServer) setupMatrixClient() {
 		}
 	})
 
-	cryptoHelper, err := cryptohelper.NewCryptoHelper(client, []byte("meow"), "database.db")
+	cryptoHelper, err := cryptohelper.NewCryptoHelper(client, []byte("meow"), database)
 	if err != nil {
 		log.Fatal().Msg("error opening sqlitedb: " + err.Error())
 	}
