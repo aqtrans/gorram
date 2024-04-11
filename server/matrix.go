@@ -10,60 +10,38 @@ package main
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"sync"
-	"time"
 
 	pb "git.jba.io/go/gorram/proto"
-	"github.com/chzyer/readline"
-	_ "github.com/mattn/go-sqlite3"
-	"github.com/rs/zerolog"
-	"go.mau.fi/util/exzerolog"
-
+	"github.com/rs/zerolog/log"
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto/cryptohelper"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
-func (s *gorramServer) sendToMatrix(issue *pb.Issue) error {
+func (s *gorramServer) setupMatrixClient() {
 	var homeserver = &s.cfg.Matrix.Homeserver
 	var username = &s.cfg.Matrix.Username
 	var password = &s.cfg.Matrix.Password
 	//var database = &s.cfg.Matrix.SqliteDB
-	var database = &s.cfg.Matrix.SqliteDB
-	var debug = &s.cfg.Debug
+	//var database = &s.cfg.Matrix.SqliteDB
+	//var debug = &s.cfg.Debug
 
 	if *username == "" || *password == "" || *homeserver == "" {
-		return errors.New("matrix config is missing")
+		log.Fatal().Msg("matrix config is missing")
 	}
 
 	client, err := mautrix.NewClient(*homeserver, "", "")
 	if err != nil {
-		return err
+		log.Fatal().Msg(err.Error())
 	}
-	rl, err := readline.New("[no room]> ")
-	if err != nil {
-		return err
-	}
-	defer rl.Close()
-	log := zerolog.New(zerolog.NewConsoleWriter(func(w *zerolog.ConsoleWriter) {
-		w.Out = rl.Stdout()
-		w.TimeFormat = time.Stamp
-	})).With().Timestamp().Logger()
-	if !*debug {
-		log = log.Level(zerolog.InfoLevel)
-	}
-	exzerolog.SetupDefaults(&log)
-	client.Log = log
+	//client.Log = log
 
 	var lastRoomID id.RoomID
 
 	syncer := client.Syncer.(*mautrix.DefaultSyncer)
 	syncer.OnEventType(event.EventMessage, func(ctx context.Context, evt *event.Event) {
 		lastRoomID = evt.RoomID
-		rl.SetPrompt(fmt.Sprintf("%s> ", lastRoomID))
 		log.Info().
 			Str("sender", evt.Sender.String()).
 			Str("type", evt.Type.String()).
@@ -76,7 +54,6 @@ func (s *gorramServer) sendToMatrix(issue *pb.Issue) error {
 			_, err := client.JoinRoomByID(ctx, evt.RoomID)
 			if err == nil {
 				lastRoomID = evt.RoomID
-				rl.SetPrompt(fmt.Sprintf("%s> ", lastRoomID))
 				log.Info().
 					Str("room_id", evt.RoomID.String()).
 					Str("inviter", evt.Sender.String()).
@@ -90,9 +67,9 @@ func (s *gorramServer) sendToMatrix(issue *pb.Issue) error {
 		}
 	})
 
-	cryptoHelper, err := cryptohelper.NewCryptoHelper(client, []byte("meow"), database)
+	cryptoHelper, err := cryptohelper.NewCryptoHelper(client, []byte("meow"), "database.db")
 	if err != nil {
-		return errors.New("Error opening sqlitedb: " + err.Error())
+		log.Fatal().Msg("error opening sqlitedb: " + err.Error())
 	}
 
 	// You can also store the user/device IDs and access token and put them in the client beforehand instead of using LoginAs.
@@ -109,35 +86,16 @@ func (s *gorramServer) sendToMatrix(issue *pb.Issue) error {
 	//cryptoHelper.DBAccountID = ""
 	err = cryptoHelper.Init(context.TODO())
 	if err != nil {
-		return err
+		log.Fatal().Msg(err.Error())
 	}
 	// Set the client crypto helper in order to automatically encrypt outgoing messages
 	client.Crypto = cryptoHelper
 
 	log.Info().Msg("Now running")
-	syncCtx, cancelSync := context.WithCancel(context.Background())
-	var syncStopWait sync.WaitGroup
-	syncStopWait.Add(1)
-
-	go func() {
-		err = client.SyncWithContext(syncCtx)
-		defer syncStopWait.Done()
-		if err != nil && !errors.Is(err, context.Canceled) {
-			panic(err)
-		}
-	}()
-
-	line := issue.Host + " - " + issue.Title + "\n" + issue.Message
-
-	for lastRoomID == "" {
-		log.Println("Waiting for room invite")
-
-	}
 
 	// Try to silence alerts
 	syncer.OnEventType(event.EventReaction, func(ctx context.Context, evt *event.Event) {
 		lastRoomID = evt.RoomID
-		rl.SetPrompt(fmt.Sprintf("%s> ", lastRoomID))
 		eventID := evt.Content.AsReaction().RelatesTo.EventID
 		log.Info().
 			Str("sender", evt.Sender.String()).
@@ -147,22 +105,46 @@ func (s *gorramServer) sendToMatrix(issue *pb.Issue) error {
 			Msg("Received message")
 		_, err := client.SendText(context.TODO(), lastRoomID, "Silencing alert #"+eventID.String())
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to send event")
+			log.Error().Err(err).Msg("Failed to send silence event")
 		}
 
 	})
-	resp, err := client.SendText(context.TODO(), lastRoomID, line)
+
+	resp, err := client.SendText(context.TODO(), lastRoomID, "Hello!")
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to send event")
+		log.Error().Err(err).Msg("Failed to send hello event")
 	} else {
 		log.Info().Str("event_id", resp.EventID.String()).Msg("Event sent")
 	}
 
-	cancelSync()
-	syncStopWait.Wait()
-	err = cryptoHelper.Close()
+	go func() {
+		err = client.Sync()
+		if err != nil {
+			log.Print(err)
+			err = cryptoHelper.Close()
+			if err != nil {
+				log.Error().Err(err).Msg("Error closing database")
+			}
+			return
+		}
+	}()
+
+	s.matrixbot = client
+
+}
+
+func (s *gorramServer) sendToMatrix(issue *pb.Issue) error {
+
+	roomID := id.RoomID("!TKWpjUwOWJmHVsPyBc:matrix.org")
+
+	msg := issue.Host + " - " + issue.Title + "\n" + issue.Message
+
+	resp, err := s.matrixbot.SendText(context.TODO(), roomID, msg)
 	if err != nil {
-		log.Error().Err(err).Msg("Error closing database")
+		log.Error().Msg("Failed to send event")
+		return err
+	} else {
+		log.Print("event_id", resp.EventID.String()+"vent sent")
 	}
 	return nil
 }

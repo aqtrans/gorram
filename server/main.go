@@ -25,9 +25,11 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/twitchtv/twirp"
 	"google.golang.org/protobuf/proto"
+	"maunium.net/go/mautrix"
 
 	_ "net/http/pprof"
 
+	_ "github.com/mattn/go-sqlite3"
 	_ "github.com/tevjef/go-runtime-metrics/expvar"
 
 	"git.jba.io/go/gorram/certs"
@@ -72,6 +74,7 @@ type gorramServer struct {
 	cfg              serverConfig
 	connectedClients clients
 	alertsMap        alerts
+	matrixbot        *mautrix.Client
 	pb.Reporter
 	pb.Querier
 }
@@ -534,7 +537,12 @@ func (s *gorramServer) alert(client string, issue *pb.Issue) {
 			"client": client,
 			"check":  issue.Title,
 		}).Warnln("[MATRIX ALERT] ", issue.Message)
-		s.sendToMatrix(issue)
+		// Send alert itself to Matrix room
+		err := s.sendToMatrix(issue)
+		if err != nil {
+			log.Errorln("error sending alert to Matrix:", err)
+			return
+		}
 	}
 }
 
@@ -1200,6 +1208,18 @@ func main() {
 	gs.alertsMap.m = make(map[string]*pb.Alert)
 
 	gs.connectedClients.m.Clients = make(map[string]*pb.Client)
+
+	// Spin up a Matrix bot to send alerts if necessary:
+	if gs.cfg.AlertMethod == "matrix" {
+		gs.setupMatrixClient()
+		// Give Matrix bot 10 seconds to spin up
+		//time.Sleep(10 * time.Second)
+		if gs.matrixbot == (&mautrix.Client{}) {
+			log.Errorln("Matrix Client is empty")
+			return
+		}
+		//log.Println("Matrix Room ID: " + gs.matrixbot.UserID.URI().RoomID())
+	}
 
 	// Watch for config.yml changes
 	watcher, err := fsnotify.NewWatcher()
