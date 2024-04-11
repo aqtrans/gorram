@@ -1,0 +1,12 @@
+#!/bin/ksh
+
+daemon="/usr/local/bin/gorram-client"
+daemon_user="_gorram"
+daemon_flags="-conf /etc/gorram/client.yml "
+
+. /etc/rc.d/rc.subr
+
+## My Go apps don't daemonize themselves
+rc_bg="YES"
+rc_reload="NO"
+rc_cmd $1
