@@ -10,6 +10,7 @@ package main
 
 import (
 	"context"
+	"strings"
 
 	pb "git.jba.io/go/gorram/proto"
 	"github.com/rs/zerolog/log"
@@ -41,20 +42,6 @@ func (s *gorramServer) setupMatrixClient() {
 	var lastRoomID id.RoomID
 
 	syncer := client.Syncer.(*mautrix.DefaultSyncer)
-
-	/*
-		syncer.OnEventType(event.EventMessage, func(ctx context.Context, evt *event.Event) {
-			if client.UserID != evt.Sender {
-				lastRoomID = evt.RoomID
-				log.Info().
-					Str("sender", evt.Sender.String()).
-					Str("type", evt.Type.String()).
-					Str("id", evt.ID.String()).
-					Str("body", evt.Content.AsMessage().Body).
-					Msg("Received message")
-			}
-		})
-	*/
 
 	syncer.OnEventType(event.StateMember, func(ctx context.Context, evt *event.Event) {
 		if evt.GetStateKey() == client.UserID.String() && evt.Content.AsMember().Membership == event.MembershipInvite {
@@ -122,37 +109,50 @@ func (s *gorramServer) setupMatrixClient() {
 			}
 		}
 
-		/* TODO: Figure out how to use replies to mute; currently unable to figure out how to fetch
-		if evt.Content.AsMessage().OptionalGetRelatesTo() != nil {
-			log.Print("Thread reply detected")
-			// Get thread parent
-			oldEventID := evt.Content.AsMessage().GetRelatesTo().GetThreadParent()
-			oldResp, err := client.GetEvent(context.TODO(), evt.RoomID, oldEventID)
-			if err != nil {
-				log.Error().Err(err).Msg("error fetching original reply")
-			}
-			issueID, found := strings.CutPrefix(oldResp.Content.AsMessage().Body, "IssueID:")
-			if !found {
-				log.Info().Msg("alert ID not found:" + issueID)
-			}
+		body := evt.Content.AsMessage().Body
+		splitBody := strings.Fields(body)
+		issuePrefix := "IssueID:"
+		issueID, found := strings.CutPrefix(splitBody[2], issuePrefix)
+		if found {
+			log.Info().Msg("Muting:" + issueID)
 			s.alertsMap.mute(issueID)
-			log.Info().Msg("alert actually muted!")
-
-			_, err = client.SendText(context.TODO(), lastRoomID, "Silencing alert #"+issueID)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to send silence event")
-			}
+		} else {
+			log.Info().Msg("ISSUE ID NOT FOUND!")
 		}
-		*/
 
 	})
 
-	resp, err := client.SendText(context.TODO(), lastRoomID, "Hello!")
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to send hello event")
-	} else {
-		log.Info().Str("event_id", resp.EventID.String()).Msg("Event sent")
-	}
+	// Listen for replies
+	syncer.OnEventType(event.EventReaction, func(ctx context.Context, evt *event.Event) {
+		if client.UserID != evt.Sender {
+			lastRoomID = evt.RoomID
+			log.Info().
+				Str("sender", evt.Sender.String()).
+				Str("type", evt.Type.String()).
+				Str("id", evt.ID.String()).
+				Str("body", evt.Content.AsMessage().Body).
+				Msg("Received message")
+		}
+		body := evt.Content.AsMessage().Body
+		issuePrefix := "IssueID:"
+		issueID, found := strings.CutPrefix(body, issuePrefix)
+		if found {
+			log.Info().Msg("Muting:" + issueID)
+			s.alertsMap.mute(issueID)
+		} else {
+			log.Info().Msg("ISSUE ID NOT FOUND!!!!")
+		}
+
+	})
+
+	/*
+		resp, err := client.SendText(context.TODO(), lastRoomID, "Hello!")
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to send hello event")
+		} else {
+			log.Info().Str("event_id", resp.EventID.String()).Msg("Event sent")
+		}
+	*/
 
 	go func() {
 		err = client.Sync()
