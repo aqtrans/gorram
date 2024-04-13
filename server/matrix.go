@@ -13,7 +13,8 @@ import (
 	"strings"
 
 	pb "git.jba.io/go/gorram/proto"
-	"github.com/rs/zerolog/log"
+	log "github.com/sirupsen/logrus"
+
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto/cryptohelper"
 	"maunium.net/go/mautrix/event"
@@ -30,12 +31,12 @@ func (s *gorramServer) setupMatrixClient() {
 	//var debug = &s.cfg.Debug
 
 	if *username == "" || *password == "" || *homeserver == "" {
-		log.Fatal().Msg("matrix config is missing")
+		log.Fatalln("matrix config is missing")
 	}
 
 	client, err := mautrix.NewClient(*homeserver, "", "")
 	if err != nil {
-		log.Fatal().Msg(err.Error())
+		log.Fatalln(err.Error())
 	}
 	//client.Log = log
 
@@ -48,22 +49,16 @@ func (s *gorramServer) setupMatrixClient() {
 			_, err := client.JoinRoomByID(ctx, evt.RoomID)
 			if err == nil {
 				lastRoomID = evt.RoomID
-				log.Info().
-					Str("room_id", evt.RoomID.String()).
-					Str("inviter", evt.Sender.String()).
-					Msg("Joined room after invite")
+				log.Println("room_id", evt.RoomID.String(), "inviter", evt.Sender.String(), "Joined room after invite")
 			} else {
-				log.Error().Err(err).
-					Str("room_id", evt.RoomID.String()).
-					Str("inviter", evt.Sender.String()).
-					Msg("Failed to join room after invite")
+				log.Println("room_id", evt.RoomID.String(), "inviter", evt.Sender.String(), "Failed to join room after invite: ", err.Error())
 			}
 		}
 	})
 
 	cryptoHelper, err := cryptohelper.NewCryptoHelper(client, []byte("meow"), *database)
 	if err != nil {
-		log.Fatal().Msg("error opening sqlitedb: " + err.Error())
+		log.Fatalln("error opening sqlitedb: ", err.Error())
 	}
 
 	// You can also store the user/device IDs and access token and put them in the client beforehand instead of using LoginAs.
@@ -80,12 +75,12 @@ func (s *gorramServer) setupMatrixClient() {
 	//cryptoHelper.DBAccountID = ""
 	err = cryptoHelper.Init(context.TODO())
 	if err != nil {
-		log.Fatal().Msg(err.Error())
+		log.Fatalln(err.Error())
 	}
 	// Set the client crypto helper in order to automatically encrypt outgoing messages
 	client.Crypto = cryptoHelper
 
-	log.Info().Msg("Now running")
+	log.Println("Now running")
 
 	// Try to silence alerts
 	syncer.OnEventType(event.EventMessage, func(ctx context.Context, evt *event.Event) {
@@ -93,19 +88,14 @@ func (s *gorramServer) setupMatrixClient() {
 			return
 		}
 		lastRoomID = evt.RoomID
-		log.Info().
-			Str("sender", evt.Sender.String()).
-			Str("type", evt.Type.String()).
-			Str("id", evt.ID.String()).
-			Str("body", evt.Content.AsMessage().Body).
-			Msg("Received message")
+		log.Println("sender", evt.Sender.String(), "type", evt.Type.String(), "id", evt.ID.String(), "body", evt.Content.AsMessage().Body, "Received message")
 
 		// Silence all events if told to
 		if evt.Content.AsMessage().Body == "Silence all" {
 			s.alertsMap.muteAll(&s.alertsMap)
 			_, err := client.SendText(context.TODO(), lastRoomID, "Silencing all alerts for 6 hours")
 			if err != nil {
-				log.Error().Err(err).Msg("Failed to send silence event")
+				log.Errorln("Failed to send silence event")
 			}
 		}
 
@@ -114,10 +104,10 @@ func (s *gorramServer) setupMatrixClient() {
 		issuePrefix := "IssueID:"
 		issueID, found := strings.CutPrefix(splitBody[2], issuePrefix)
 		if found {
-			log.Info().Msg("Muting:" + issueID)
+			log.Println("Muting:" + issueID)
 			s.alertsMap.mute(issueID)
 		} else {
-			log.Info().Msg("ISSUE ID NOT FOUND!")
+			log.Errorln("ISSUE ID NOT FOUND!")
 		}
 
 	})
@@ -126,21 +116,16 @@ func (s *gorramServer) setupMatrixClient() {
 	syncer.OnEventType(event.EventReaction, func(ctx context.Context, evt *event.Event) {
 		if client.UserID != evt.Sender {
 			lastRoomID = evt.RoomID
-			log.Info().
-				Str("sender", evt.Sender.String()).
-				Str("type", evt.Type.String()).
-				Str("id", evt.ID.String()).
-				Str("body", evt.Content.AsMessage().Body).
-				Msg("Received message")
+			log.Println("sender", evt.Sender.String(), "type", evt.Type.String(), "id", evt.ID.String(), "body", evt.Content.AsMessage().Body, "Received message")
 		}
 		body := evt.Content.AsMessage().Body
 		issuePrefix := "IssueID:"
 		issueID, found := strings.CutPrefix(body, issuePrefix)
 		if found {
-			log.Info().Msg("Muting:" + issueID)
+			log.Println("Muting:" + issueID)
 			s.alertsMap.mute(issueID)
 		} else {
-			log.Info().Msg("ISSUE ID NOT FOUND!!!!")
+			log.Errorln("ISSUE ID NOT FOUND!!!!")
 		}
 
 	})
@@ -157,10 +142,10 @@ func (s *gorramServer) setupMatrixClient() {
 	go func() {
 		err = client.Sync()
 		if err != nil {
-			log.Print(err)
+			log.Errorln(err)
 			err = cryptoHelper.Close()
 			if err != nil {
-				log.Error().Err(err).Msg("Error closing database")
+				log.Fatalln("Error closing database")
 			}
 			return
 		}
@@ -180,10 +165,10 @@ func (s *gorramServer) sendToMatrix(issue *pb.Issue) error {
 
 	resp, err := s.matrixbot.SendMessageEvent(context.TODO(), roomID, event.EventMessage, msg)
 	if err != nil {
-		log.Error().Msg("Failed to send event")
+		log.Errorln("Failed to send event")
 		return err
 	} else {
-		log.Print("event_id", resp.EventID.String()+"vent sent")
+		log.Println("event_id", resp.EventID.String()+"event sent")
 	}
 	return nil
 }
