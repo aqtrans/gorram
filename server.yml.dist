@@ -1,27 +1,41 @@
-# Shared secret between the server and client
-secret_key: "omg123"
+# A shared secret used to negotiate the initial handshake
+shared_secret: "sharedsecret"
 
-# This is used to internally generate the client tokens after initial authentication
-## It must be 32 characters
-branca_key: "quaeNgaeph6ajaik1fei6EeNgidienge"
+# The address clients will connect to
+listen_address: "0.0.0.0:40000"
 
-# IP and port to listen on 
-listen_address: "127.0.0.1:50000"
-
-# How to alert. Currently either "log" or "pushover"
-alert_method: "log"
-
-# If pushover, the required app and user keys must be setup
-#alert_method: "pushover"
-#pushover: 
-#    app_key: "app-key-from-pushover"
-#    user_key: "user-key-from-pushover"
-
-# Debug logging
+# Additional debug logs
 debug: true
 
-# Full URL to the Gorram dashboard, if you plan on reverse proxying the dashboard
-## It is always listening on http://127.0.0.1:50001
-domain: "https://server.example/gorram/"
+# A basic HTML page is served, showing connected clients and allowing alert muting
+domain: "https://127.0.0.1/"
 
+# The following alert methods are available: 
+
+## Log to stdout
+alert_method: "log"
+
+## Push alerts to an AlertManager instance
+#alert_method: "alertmanager"
+#alertmanager_url: "https://alertmanager.example/"
+
+## Use https://pushover.net/ to forward alerts
+#alert_method: "pushover"
+#pushover:
+#    app_key: "agu2wbf8xjxyhpoiukom5zohrat5mi"
+#    user_key: "u85jAznd6E3z6VFXVzigMT7enchi4C"
+
+## Use a Matrix.org bot to fire alerts
+### This bot has the ability to silence alerts via replies
+#alert_method: "matrix"
+#matrix:
+#    username: "gorram"
+#    password: "example"
+#    homeserver: "matrix.org"
+#    mautrixdb: "/etc/gorram/matrix.db"
+
+# SSL certificate locations, in order to serve via TLS
+## HTTP may be used using the -insecure flag for gorram-server
+ssl_cert_path: "/etc/gorram/certificate.crt"
+ssl_cert_key_path: "/etc/gorram/certificate.key"
 

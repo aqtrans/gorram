@@ -2,11 +2,12 @@
 ## Must match the name of the YAML file on the server with the client's checks
 name: "clientname"
 
-# Shared secret between server and client
-secret_key: "omg123"
+# A shared secret used to negotiate the initial handshake
+shared_secret: "sharedsecret"
 
 # Full HTTP URL to the server
 server_address: "http://127.0.0.1:50000"
 
 # base64-encoded ed25519 private key of the client
-private_key: "6v7e9IUsxy5Rdli49mWX8glF0SCPSxr6zjfG_lN_NWo2405wsYYZzV3BZR3q3OXxDqxTyFAq-pt9LLnQxf9Rhg=="
+## Generate these using: /usr/bin/gorram-client -generate-keys 
+private_key: WhmrVbjjnXFihpS1EeA8WlPm-HvxvaNmsXHw05ujR-tclBjjZQ7HzlYr_OQsdL-zjjf3x3xSJV_AQE4qu1UjZA=="

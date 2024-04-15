@@ -6,6 +6,7 @@ required: true
 interval: 15
 
 # base64-encoded ed25519 public key of the client
+## Generate these using: /usr/bin/gorram-client -generate-keys 
 public_key: "rHhXGLBpkSMQcC2kpfjoq3dIwkH9gR0xr-sqICOjEZk="
 
 # Check Deluge torrent client for number of torrents downloading
