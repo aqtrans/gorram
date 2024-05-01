@@ -161,7 +161,7 @@ func (s *gorramServer) sendToMatrix(issue *pb.Issue) error {
 
 	//msg := issue.Host + " - " + issue.Title + "\n" + issue.Message
 
-	msg := format.RenderMarkdown("IssueID:"+generateMapKey(issue)+" #"+issue.Host+"  ##"+issue.Title+"  "+issue.Message, true, false)
+	msg := format.RenderMarkdown("IssueID:**"+generateMapKey(issue)+"**  # "+issue.Host+"  ## "+issue.Title+"   -"+issue.Message, true, false)
 
 	resp, err := s.matrixbot.SendMessageEvent(context.TODO(), roomID, event.EventMessage, msg)
 	if err != nil {
