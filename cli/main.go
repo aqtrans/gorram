@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/aqtrans/gorram/proto"
+	"git.sr.ht/~aqtrans/gorram/proto"
 	"github.com/twitchtv/twirp"
 )
 

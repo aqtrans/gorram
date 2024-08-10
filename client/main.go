@@ -14,9 +14,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/aqtrans/gorram/checks"
-	"github.com/aqtrans/gorram/common"
-	pb "github.com/aqtrans/gorram/proto"
+	"git.sr.ht/~aqtrans/gorram/checks"
+	"git.sr.ht/~aqtrans/gorram/common"
+	pb "git.sr.ht/~aqtrans/gorram/proto"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/goccy/go-yaml"

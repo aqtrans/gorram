@@ -47,7 +47,7 @@ buildGoModule rec {
 
   meta = with lib; {
     description = "A Gorram monitoring tool";
-    homepage = "https://github.com/aqtrans/gorram";
+    homepage = "https://git.sr.ht/~aqtrans/gorram";
     license = licenses.mit;
     maintainers = with maintainers; [ "aqtrans" ];
     platforms = platforms.linux;

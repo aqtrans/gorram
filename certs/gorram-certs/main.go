@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/aqtrans/gorram/certs"
+	"git.sr.ht/~aqtrans/gorram/certs"
 )
 
 func main() {

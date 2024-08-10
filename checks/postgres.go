@@ -6,7 +6,7 @@ import (
 	"log"
 	"sync"
 
-	"github.com/aqtrans/gorram/proto"
+	"git.sr.ht/~aqtrans/gorram/proto"
 	// Use pq for Postgres
 	_ "github.com/lib/pq"
 )

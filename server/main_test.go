@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	gorram "github.com/aqtrans/gorram/proto"
+	gorram "git.sr.ht/~aqtrans/gorram/proto"
 )
 
 var clientName = "testClient"

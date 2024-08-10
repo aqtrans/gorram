@@ -3,7 +3,7 @@ package checks
 import (
 	"errors"
 
-	"github.com/aqtrans/gorram/proto"
+	"git.sr.ht/~aqtrans/gorram/proto"
 	log "github.com/sirupsen/logrus"
 )
 

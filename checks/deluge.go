@@ -12,7 +12,7 @@ import (
 
 	delugeclient "github.com/gdm85/go-libdeluge"
 
-	pb "github.com/aqtrans/gorram/proto"
+	pb "git.sr.ht/~aqtrans/gorram/proto"
 )
 
 var badMsg string

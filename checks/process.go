@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync"
 
-	pb "github.com/aqtrans/gorram/proto"
+	pb "git.sr.ht/~aqtrans/gorram/proto"
 	"github.com/shirou/gopsutil/v3/process"
 	log "github.com/sirupsen/logrus"
 )

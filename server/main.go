@@ -24,8 +24,8 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	_ "github.com/tevjef/go-runtime-metrics/expvar"
 
-	"github.com/aqtrans/gorram/certs"
-	pb "github.com/aqtrans/gorram/proto"
+	"git.sr.ht/~aqtrans/gorram/certs"
+	pb "git.sr.ht/~aqtrans/gorram/proto"
 )
 
 var (

@@ -13,7 +13,7 @@ import (
 	"log"
 	"sync"
 
-	"github.com/aqtrans/gorram/proto"
+	"git.sr.ht/~aqtrans/gorram/proto"
 )
 
 type Gorram struct {

@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aqtrans/gorram/common"
-	pb "github.com/aqtrans/gorram/proto"
+	"git.sr.ht/~aqtrans/gorram/common"
+	pb "git.sr.ht/~aqtrans/gorram/proto"
 	"github.com/goccy/go-yaml"
 	"github.com/gregdel/pushover"
 	log "github.com/sirupsen/logrus"
