@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"sync"
 
-	pb "git.jba.io/go/gorram/proto"
+	pb "github.com/aqtrans/gorram/proto"
 )
 
 type getURL struct {

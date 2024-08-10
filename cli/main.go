@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"git.jba.io/go/gorram/proto"
+	"github.com/aqtrans/gorram/proto"
 	"github.com/twitchtv/twirp"
 )
 

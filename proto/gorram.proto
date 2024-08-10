@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package proto;
 
-option go_package = "git.jba.io/go/gorram/proto;proto";
+option go_package = "github.com/aqtrans/gorram/proto;proto";
 
 service Reporter {
     // Hello should be called once upon initial connection. It authenticates the client and stops any timers

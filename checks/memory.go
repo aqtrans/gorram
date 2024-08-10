@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	pb "git.jba.io/go/gorram/proto"
+	pb "github.com/aqtrans/gorram/proto"
 	"github.com/shirou/gopsutil/v3/mem"
 )
 

@@ -1,13 +1,13 @@
-module git.jba.io/go/gorram
+module github.com/aqtrans/gorram
 
 go 1.21
 
 replace (
-	git.jba.io/go/gorram/certs => ./certs
-	git.jba.io/go/gorram/checks => ./checks
-	git.jba.io/go/gorram/client => ./client
-	git.jba.io/go/gorram/proto => ./proto
-	git.jba.io/go/gorram/server => ./server
+	github.com/aqtrans/gorram/certs => ./certs
+	github.com/aqtrans/gorram/checks => ./checks
+	github.com/aqtrans/gorram/client => ./client
+	github.com/aqtrans/gorram/proto => ./proto
+	github.com/aqtrans/gorram/server => ./server
 )
 
 require (

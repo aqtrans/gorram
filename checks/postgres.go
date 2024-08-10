@@ -6,7 +6,7 @@ import (
 	"log"
 	"sync"
 
-	"git.jba.io/go/gorram/proto"
+	"github.com/aqtrans/gorram/proto"
 	// Use pq for Postgres
 	_ "github.com/lib/pq"
 )

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync"
 
-	pb "git.jba.io/go/gorram/proto"
+	pb "github.com/aqtrans/gorram/proto"
 	"github.com/shirou/gopsutil/v3/process"
 	log "github.com/sirupsen/logrus"
 )

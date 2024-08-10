@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	gorram "git.jba.io/go/gorram/proto"
+	gorram "github.com/aqtrans/gorram/proto"
 )
 
 var clientName = "testClient"

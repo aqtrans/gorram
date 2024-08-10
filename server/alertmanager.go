@@ -1,7 +1,7 @@
 package main
 
 import (
-	pb "git.jba.io/go/gorram/proto"
+	pb "github.com/aqtrans/gorram/proto"
 	"github.com/go-openapi/strfmt"
 	"github.com/prometheus/alertmanager/api/v2/client"
 	"github.com/prometheus/alertmanager/api/v2/client/alert"

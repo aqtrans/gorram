@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"git.jba.io/go/gorram/certs"
+	"github.com/aqtrans/gorram/certs"
 )
 
 func main() {

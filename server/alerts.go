@@ -4,7 +4,7 @@ import (
 	"encoding/base64"
 	"time"
 
-	pb "git.jba.io/go/gorram/proto"
+	pb "github.com/aqtrans/gorram/proto"
 	log "github.com/sirupsen/logrus"
 )
 
