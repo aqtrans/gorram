@@ -54,10 +54,10 @@ tasks:
       cd ${project}
       
       # Don't deploy server here
-      #scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no gorram-server B:/tmp/gorram-server
-      #ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no B "sudo /usr/bin/mv /tmp/gorram-server /usr/bin/gorram-server"
-      #ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no B "sudo /usr/bin/systemctl restart gorram-server"
+#      scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no gorram-server B:/tmp/gorram-server
+#      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no B "sudo /usr/bin/mv /tmp/gorram-server /usr/bin/gorram-server"
+#      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no B "sudo /usr/bin/systemctl restart gorram-server"
 
-      scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no gorram-client B:/tmp/gorram-client
-      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no B "sudo /usr/bin/mv /tmp/gorram-client /usr/bin/gorram-client"
-      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no B "sudo /usr/bin/systemctl restart gorram-client"
+#      scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no gorram-client B:/tmp/gorram-client
+#      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no B "sudo /usr/bin/mv /tmp/gorram-client /usr/bin/gorram-client"
+#      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no B "sudo /usr/bin/systemctl restart gorram-client"

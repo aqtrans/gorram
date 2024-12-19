@@ -42,9 +42,9 @@ tasks:
       fi
   - deploy: |
       cd ${project}
-      scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no gorram-server $remote:/tmp/gorram-server
-      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $remote "doas /bin/mv /tmp/gorram-server /usr/local/bin/gorram-server"
-      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $remote "doas /usr/sbin/rcctl restart gorram_server"
-      scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no gorram-client $remote:/tmp/gorram-client
-      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $remote "doas /bin/mv /tmp/gorram-client /usr/local/bin/gorram-client"
-      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $remote "doas /usr/sbin/rcctl restart gorram_client"
+#      scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no gorram-server $remote:/tmp/gorram-server
+#      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $remote "doas /bin/mv /tmp/gorram-server /usr/local/bin/gorram-server"
+#      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $remote "doas /usr/sbin/rcctl restart gorram_server"
+#      scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no gorram-client $remote:/tmp/gorram-client
+#      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $remote "doas /bin/mv /tmp/gorram-client /usr/local/bin/gorram-client"
+#      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $remote "doas /usr/sbin/rcctl restart gorram_client"

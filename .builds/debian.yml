@@ -65,5 +65,5 @@ tasks:
       echo -e "Host D\n         StrictHostKeyChecking no\n    UserKnownHostsFile=/dev/null\n    hostname rick.lan\n     ProxyJump B\n" >> ~/.ssh/config
 
       sshopts="ssh -o StrictHostKeyChecking=no"
-      scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ./gorram/gorram.deb deploy@D:gorram.deb
-      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no deploy@D "sudo dpkg -i gorram.deb"
+#      scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ./gorram/gorram.deb deploy@D:gorram.deb
+#      ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no deploy@D "sudo dpkg -i gorram.deb"
